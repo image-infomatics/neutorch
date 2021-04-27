@@ -2,7 +2,7 @@ import math
 from itertools import repeat
 import collections
 
-import torch.nn as nn
+from torch import nn
 import torch
 
 
@@ -139,7 +139,14 @@ class UpConvBlock(nn.Module):
         return x
 
 
-class RSUNet(nn.Module):
+class IsoRSUNet(nn.Module):
+    """Isotropic Residual Symmetric UNet
+    
+    Isotropic: the convolutional kernel size is isotropic, normally 3x3x3
+    Residual: there are residual blocks in convolutional chain.
+    Symmetric: the left and right side is the same
+    UNet: 3D UNet
+    """
     def __init__(self, width: list=WIDTH) -> None:
         super().__init__()
         assert len(width) > 1
@@ -220,8 +227,8 @@ class Model(nn.Sequential):
         in_channels = list(in_spec.values()[0][-4])
         # matches the RSUNet output
         out_channels = width[0] 
-        io_kernel = (1, 5, 5)
+        io_kernel = (3, 3, 3)
 
         self.add_module('in', InputBlock(in_channels, out_channels, io_kernel))
-        self.add_module('core', RSUNet(width=width))
+        self.add_module('core', IsoRSUNet(width=width))
         self.add_module('out', OutputBlock(out_channels, out_spec, io_kernel))
