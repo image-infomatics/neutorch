@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Union
 
 import numpy as np
 import h5py
@@ -16,11 +17,14 @@ def image_reader(path: str):
     return img, None
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, config_file: str, training_split_ratio: float = 0.9):
+    def __init__(self, config_file: str, training_split_ratio: float = 0.9,
+            patch_size: Union[int, tuple]=64, queue_length: int=8,
+            num_workers: int=4):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
+            patch_size (int or tuple): the patch size we are going to provide.
         """
         super().__init__()
         assert training_split_ratio > 0.
@@ -35,8 +39,7 @@ class Dataset(torch.utils.data.Dataset):
         
         # load all the datasets
         subjects = []
-        # self.datasets = []
-        # self.dataset_weights = []
+        # subject_weights = []
         # walkthrough the directory and find all the groundtruth files automatically
         for gt in meta.values():
             image_path = gt['image']
@@ -49,11 +52,15 @@ class Dataset(torch.utils.data.Dataset):
             with h5py.File(image_path, 'r') as file:
                 img = np.asarray(file['main'])
                 voxel_offset = np.asarray(file['voxel_offset'], dtype=np.uint32)
-            
+            # use the voxel number as the sampling weights
+            # subject_weights.append(len(img))
             with open(synapse_path, 'r') as file:
                 synapses = json.load(file)
             
-            bin_presyn, sampling_probability_map = self._annotation_to_volumes(
+            # use the number of T-bars as subject sampling weights
+            # subject_weights.append(len(synapses['presynapses']))
+
+            bin_presyn, sampling_map = self._annotation_to_volumes(
                 img, voxel_offset, synapses
             )
 
@@ -61,20 +68,34 @@ class Dataset(torch.utils.data.Dataset):
             img = torch.from_numpy(img)
             bin_presyn = np.expand_dims(bin_presyn, axis=0)
             bin_presyn = torch.from_numpy(bin_presyn)
-            sampling_probability_map = np.expand_dims(sampling_probability_map, axis=0)
-            sampling_probability_map = torch.from_numpy(sampling_probability_map)
+            sampling_map = np.expand_dims(sampling_map, axis=0)
+            sampling_map = torch.from_numpy(sampling_map)
             subject = tio.Subject(
                 img = tio.ScalarImage(tensor=img),
                 tbar = tio.LabelMap(tensor=bin_presyn),
-                sampling_probability_map = tio.Image(tensor=sampling_probability_map)
+                sampling_map = tio.Image(tensor=sampling_map, type=tio.SAMPLING_MAP)
             )
             subjects.append(subject)
             # self.datasets.append((img, synapses))
             # use the image voxel number as sampling weight
             # self.dataset_weights.append(len(img))
-        dataset = tio.SubjectsDataset(subjects, transform=self.transform)
-        print('number of volumes in dataset: ', len(dataset))
-        breakpoint()
+        subjects_dataset = tio.SubjectsDataset(subjects, transform=self.transform)
+        print('number of volumes in dataset: ', len(subjects_dataset))
+
+        patch_sampler = tio.data.WeightedSampler(patch_size, 'sampling_map')
+        self.patches_queue = tio.Queue(
+            subjects_dataset,
+            queue_length,
+            1,
+            patch_sampler,
+            num_workers=num_workers,
+        )
+        # only sample one subject, so replacement option could be ignored
+        # self.subject_sampler = torch.utils.data.WeightedRandomSampler(subject_weights, 1)
+
+    @property
+    def random_patches(self):
+        return self.patches_queue
                 
     def _annotation_to_volumes(self, img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
             sampling_distance: int = 22) -> tuple:
@@ -94,7 +115,7 @@ class Dataset(torch.utils.data.Dataset):
         assert synapses['order'] == ["x", "y", "z"]
         # assert synapses['resolution'] == [8, 8, 8]
         bin_presyn = np.zeros_like(img, dtype=np.float32)
-        sampling_probability_map = np.zeros_like(img, dtype=np.uint8)
+        sampling_map = np.zeros_like(img, dtype=np.uint8)
         for coordinate in synapses['presynapses'].values():
             # transform coordinate from xyz order to zyx
             coordinate = coordinate[::-1]
@@ -105,12 +126,12 @@ class Dataset(torch.utils.data.Dataset):
                 coordinate[1]-1 : coordinate[1]+1,
                 coordinate[2]-1 : coordinate[2]+1,
             ] = 1.
-            sampling_probability_map[
+            sampling_map[
                 coordinate[0]-sampling_distance : coordinate[0]+sampling_distance,
                 coordinate[1]-sampling_distance : coordinate[1]+sampling_distance,
                 coordinate[2]-sampling_distance : coordinate[2]+sampling_distance,
             ] += 1
-        return bin_presyn, sampling_probability_map
+        return bin_presyn, sampling_map
     
     @property
     def transform(self):
@@ -131,3 +152,11 @@ class Dataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     dataset = Dataset("~/Dropbox (Simons Foundation)/40_gt/tbar.toml")
+    n = 0
+    print('start generating random patches...')
+    for patch in dataset.random_patches:
+        breakpoint()
+        print(patch)
+        n += 1
+        if n>10:
+            break
