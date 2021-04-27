@@ -16,49 +16,67 @@ def image_reader(path: str):
     return img, None
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, path: str, training_split_ratio: float = 0.9):
+    def __init__(self, config_file: str, training_split_ratio: float = 0.9):
         """
         Parameters:
-            path (str): directory containing all the datasets
+            config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
         """
         super().__init__()
         assert training_split_ratio > 0.
         assert training_split_ratio < 1.
-        path = os.path.expanduser(path)
+        config_file = os.path.expanduser(config_file)
+        assert config_file.endswith('.toml'), "we use toml file as configuration format."
 
+        with open(config_file, 'r') as file:
+            meta = toml.load(file)
+
+        config_dir = os.path.dirname(config_file)
+        
         # load all the datasets
         subjects = []
         # self.datasets = []
         # self.dataset_weights = []
         # walkthrough the directory and find all the groundtruth files automatically
-        for dirpath, _, filenames in os.walk(path):
-            if "meta.toml" in filenames and "synapse" in os.path.basename(dirpath):
-                with open(os.path.join(dirpath, "meta.toml"), 'r') as file:
-                    meta = toml.load(file)
-                image_file_name = meta['synapse']['image']
-                with h5py.File(os.path.join(dirpath, image_file_name), 'r') as file:
-                    img = np.asarray(file['main'])
-                    voxel_offset = np.asarray(file['voxel_offset'], dtype=np.uint32)
-                synapses_file_name = meta['synapse']['annotation']
-                with open(synapses_file_name, 'r') as file:
-                    synapses = json.load(synapses_file_name)
-                bin_presyn, sampling_probability_map = self._annotation_to_volumes(
-                    img, voxel_offset, synapses
-                )
-                subject = tio.Subject(
-                    img = tio.ScalarImage(img),
-                    tbar = tio.LabelMap(bin_presyn),
-                    sampling_probability_map = tio.Image(sampling_probability_map)
-                )
-                subjects.append(subject)
-                # self.datasets.append((img, synapses))
-                # use the image voxel number as sampling weight
-                # self.dataset_weights.append(len(img))
+        for gt in meta.values():
+            image_path = gt['image']
+            synapse_path = gt['ground_truth']
+            assert image_path.endswith('.h5')
+            assert synapse_path.endswith('.json')
+            image_path = os.path.join(config_dir, image_path)
+            synapse_path = os.path.join(config_dir, synapse_path)
+
+            with h5py.File(image_path, 'r') as file:
+                img = np.asarray(file['main'])
+                voxel_offset = np.asarray(file['voxel_offset'], dtype=np.uint32)
+            
+            with open(synapse_path, 'r') as file:
+                synapses = json.load(file)
+            
+            bin_presyn, sampling_probability_map = self._annotation_to_volumes(
+                img, voxel_offset, synapses
+            )
+
+            img = np.expand_dims(img, axis=0)
+            img = torch.from_numpy(img)
+            bin_presyn = np.expand_dims(bin_presyn, axis=0)
+            bin_presyn = torch.from_numpy(bin_presyn)
+            sampling_probability_map = np.expand_dims(sampling_probability_map, axis=0)
+            sampling_probability_map = torch.from_numpy(sampling_probability_map)
+            subject = tio.Subject(
+                img = tio.ScalarImage(tensor=img),
+                tbar = tio.LabelMap(tensor=bin_presyn),
+                sampling_probability_map = tio.Image(tensor=sampling_probability_map)
+            )
+            subjects.append(subject)
+            # self.datasets.append((img, synapses))
+            # use the image voxel number as sampling weight
+            # self.dataset_weights.append(len(img))
         dataset = tio.SubjectsDataset(subjects, transform=self.transform)
         print('number of volumes in dataset: ', len(dataset))
+        breakpoint()
                 
-    def _annotation_to_volumes(img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
+    def _annotation_to_volumes(self, img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
             sampling_distance: int = 22) -> tuple:
         """transform point annotation to volumes
 
@@ -112,4 +130,4 @@ class Dataset(torch.utils.data.Dataset):
         ])
 
 if __name__ == '__main__':
-    dataset = Dataset('~/Dropbox\ \(Simons\ Foundation\)/40_gt/sample1')
+    dataset = Dataset("~/Dropbox (Simons Foundation)/40_gt/tbar.toml")

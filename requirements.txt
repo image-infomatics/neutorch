@@ -2,3 +2,4 @@ torch
 torchvision
 torchio
 toml
+h5py
