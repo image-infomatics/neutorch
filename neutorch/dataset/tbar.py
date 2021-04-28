@@ -1,11 +1,13 @@
 import json
 import os
 from typing import Union
+from time import time
 
 import numpy as np
 import h5py
 
 import torch
+import torchvision
 import torchio as tio
 import toml
 
@@ -19,7 +21,7 @@ def image_reader(path: str):
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, training_split_ratio: float = 0.9,
             patch_size: Union[int, tuple]=64, queue_length: int=8,
-            num_workers: int=4):
+            num_workers: int=4, sampling_distance: int = 22):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
@@ -61,7 +63,8 @@ class Dataset(torch.utils.data.Dataset):
             # subject_weights.append(len(synapses['presynapses']))
 
             bin_presyn, sampling_map = self._annotation_to_volumes(
-                img, voxel_offset, synapses
+                img, voxel_offset, synapses,
+                sampling_distance = sampling_distance
             )
 
             img = np.expand_dims(img, axis=0)
@@ -71,7 +74,7 @@ class Dataset(torch.utils.data.Dataset):
             sampling_map = np.expand_dims(sampling_map, axis=0)
             sampling_map = torch.from_numpy(sampling_map)
             subject = tio.Subject(
-                img = tio.ScalarImage(tensor=img),
+                image = tio.ScalarImage(tensor=img),
                 tbar = tio.LabelMap(tensor=bin_presyn),
                 sampling_map = tio.Image(tensor=sampling_map, type=tio.SAMPLING_MAP)
             )
@@ -136,27 +139,59 @@ class Dataset(torch.utils.data.Dataset):
     @property
     def transform(self):
         return tio.Compose([
-            tio.RandomMotion(p=0.2),
-            tio.RandomBiasField(p=0.3),
+            # tio.RandomMotion(p=0.2),
+            # tio.RandomBiasField(p=0.3),
             tio.RandomNoise(p=0.5),
             tio.RandomFlip(),
-            tio.OneOf({
-                tio.RandomAffine(): 0.3,
-                tio.RandomElasticDeformation(): 0.7
-            }),
+            # tio.OneOf({
+            #     tio.RandomAffine(): 0.3,
+            #     tio.RandomElasticDeformation(): 0.7
+            # }),
             tio.RandomGamma(p=0.1),
-            tio.RandomGhosting(p=0.1),
-            tio.RandomAnisotropy(p=0.2),
-            tio.RandomSpike(p=0.1),
+            # tio.RandomGhosting(p=0.1),
+            # tio.RandomAnisotropy(p=0.2),
+            # tio.RandomSpike(p=0.1),
         ])
 
 if __name__ == '__main__':
-    dataset = Dataset("~/Dropbox (Simons Foundation)/40_gt/tbar.toml")
+    dataset = Dataset(
+        "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
+        num_workers=1,
+        sampling_distance=4,
+    )
+    
+    training_batch_size = 5
+    patches_loader = torch.utils.data.DataLoader(
+        dataset.random_patches,
+        batch_size=training_batch_size
+    )
+    
+    model = torch.nn.Identity()
     n = 0
     print('start generating random patches...')
-    for patch in dataset.random_patches:
-        breakpoint()
-        print(patch)
+    ping = time()
+    for patches_batch in patches_loader:
+        print(f'generating a patch takes {int(time()-ping)} seconds.')
+        # print(patch)
+        image = patches_batch['image'][tio.DATA]
+        assert image.shape[0] == training_batch_size
+        image = image[:, :, 32, :, :]
+        tbar = patches_batch['tbar'][tio.DATA]
+        logits = model(image)
+        tbar, _ = torch.max(tbar, dim=2, keepdim=False)
+        # breakpoint()
+        slices = torch.cat((image, tbar))
+        image_path = os.path.expanduser('~/Downloads/patches.png')
+        print('save a batch of patches to ', image_path)
+        torchvision.utils.save_image(
+            slices,
+            image_path,
+            nrow=training_batch_size,
+            normalize=True,
+            scale_each=True,
+        )
+
+        ping = time()
         n += 1
-        if n>10:
+        if n>0:
             break
