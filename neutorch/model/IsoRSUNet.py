@@ -76,9 +76,10 @@ class TrilinearUp(nn.Module):
         self.register_buffer('weight', weight)
     
     def forward(self, x):
-        return nn.functional.conv_transpose3d(x, self.weight,
-            stride=(2,2,2), padding=(2,2,2), groups=self.groups
+        x = nn.functional.conv_transpose3d(x, self.weight,
+            stride=(2,2,2), padding=(1,1,1), groups=self.groups
         )
+        return x
 
 
 def conv(in_channels, out_channels, kernel_size: int = 3, stride: int = 1,
@@ -124,13 +125,15 @@ class UpBlock(nn.Module):
         )
 
     def forward(self, x, skip):
-        return self.up(x) + skip
+        x = self.up(x)
+        x += skip
+        return x
 
 
 class UpConvBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, up: tuple = (1, 2, 2)):
+    def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
-        self.up = UpBlock(in_channels, out_channels, up=up)
+        self.up = UpBlock(in_channels, out_channels)
         self.conv = ConvBlock(out_channels, out_channels)
 
     def forward(self, x, skip):
@@ -159,7 +162,7 @@ class IsoRSUNet(nn.Module):
         self.down_convs = nn.ModuleList()
         for d in range(depth):
             self.down_convs.append( nn.Sequential(
-                nn.MaxPool3d(1, 2, 2),
+                nn.MaxPool3d((2, 2, 2)),
                 ConvBlock(width[d], width[d+1])
             ))
         
@@ -178,10 +181,10 @@ class IsoRSUNet(nn.Module):
     def forward(self, x):
         x = self.input_conv(x)
         skip = []
-        for down_conv  in self.down_convs:
+        for down_conv in self.down_convs:
             skip.append(x)
             x = down_conv(x)
-
+        
         for up_conv in self.up_convs:
             x = up_conv(x, skip.pop())
         
@@ -195,40 +198,50 @@ class InputBlock(nn.Sequential):
 
 
 class OutputBlock(nn.Module):
-    def __init__(self, in_channels: int, out_spec: dict, kernel_size: tuple):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: tuple):
         super().__init__()
         self.norm = nn.BatchNorm3d(in_channels)
         self.relu = nn.ReLU(inplace=True)
 
-        spec = collections.OrderedDict(sorted(out_spec.items(), key=lambda x: x[0]))
-        outs = []
-        for k, v in spec.items():
-            out_channels = v[-4]
-            outs.append(
-                Conv(in_channels, out_channels, kernel_size, bias=True)
-            )
-        self.outs = nn.ModuleList(outs)
-        self.keys = spec.keys()
+        # spec = collections.OrderedDict(sorted(out_spec.items(), key=lambda x: x[0]))
+        # outs = []
+        # for k, v in spec.items():
+        #     out_channels = v[-4]
+        #     outs.append(
+        #         Conv(in_channels, out_channels, kernel_size, bias=True)
+        #     )
+        # self.outs = nn.ModuleList(outs)
+        # self.keys = spec.keys()
+        self.conv = Conv(in_channels, out_channels, kernel_size, bias=True)
 
     def forward(self, x):
         x = self.norm(x)
         x = self.relu(x)
-        return [out[x] for k, out in zip(self.keys, self.outs)]
+        # return [out[x] for k, out in zip(self.keys, self.outs)]
+        x = self.conv(x)
+        return x
 
 
 class Model(nn.Sequential):
     """
     Residule Symmetric U-Net with down/upsampling in/output.
     """
-    def __init__(self, in_spec: dict, out_spec: dict, width: list=WIDTH):
+    def __init__(self, in_channels: int, out_channels: int, width: list=WIDTH):
         super().__init__()
 
-        assert len(in_spec)==1, "model takes a single input"
-        in_channels = list(in_spec.values()[0][-4])
+        # assert len(in_spec)==1, "model takes a single input"
+        # in_channels = list(in_spec.values()[0][-4])
         # matches the RSUNet output
-        out_channels = width[0] 
+        # out_channels = width[0] 
         io_kernel = (3, 3, 3)
 
-        self.add_module('in', InputBlock(in_channels, out_channels, io_kernel))
+        self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
         self.add_module('core', IsoRSUNet(width=width))
-        self.add_module('out', OutputBlock(out_channels, out_spec, io_kernel))
+        self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))
+
+
+if __name__ == '__main__':
+    model = Model(1, 1)
+    input = torch.rand((1,1, 64, 64, 64), dtype=torch.float32)
+    logits = model(input)
+    assert logits.shape[1] == 1

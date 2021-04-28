@@ -15,8 +15,8 @@ def gunpowder_balance(label: torch.Tensor, mask: torch.Tensor=None, thresh: floa
         bmsk = torch.ones_like(label, dtype=torch.uint8)
         nmsk = np.prod(bmsk.size())
     
-    lpos = (torch.gt(labels, thresh) * bmsk).type(torch.float)
-    lneg = (torch.le(labels, thresh) * bmsk).type(torch.float)
+    lpos = (torch.gt(label, thresh) * bmsk).type(torch.float)
+    lneg = (torch.le(label, thresh) * bmsk).type(torch.float)
 
     npos = lpos.sum().item()
 
