@@ -1,5 +1,6 @@
 import json
 import os
+import math
 from typing import Union
 from time import time
 
@@ -7,6 +8,7 @@ import numpy as np
 import h5py
 
 import torch
+from torch.utils.data import random_split
 import torchvision
 import torchio as tio
 import toml
@@ -29,7 +31,7 @@ class Dataset(torch.utils.data.Dataset):
             patch_size (int or tuple): the patch size we are going to provide.
         """
         super().__init__()
-        assert training_split_ratio > 0.
+        assert training_split_ratio > 0.5
         assert training_split_ratio < 1.
         config_file = os.path.expanduser(config_file)
         assert config_file.endswith('.toml'), "we use toml file as configuration format."
@@ -52,7 +54,8 @@ class Dataset(torch.utils.data.Dataset):
             synapse_path = os.path.join(config_dir, synapse_path)
 
             with h5py.File(image_path, 'r') as file:
-                img = np.asarray(file['main'])
+                # normalize image to the range of [0, 1]
+                img = np.asarray(file['main'], dtype=np.float32) / 255.
                 voxel_offset = np.asarray(file['voxel_offset'], dtype=np.uint32)
             # use the voxel number as the sampling weights
             # subject_weights.append(len(img))
@@ -82,12 +85,27 @@ class Dataset(torch.utils.data.Dataset):
             # self.datasets.append((img, synapses))
             # use the image voxel number as sampling weight
             # self.dataset_weights.append(len(img))
-        subjects_dataset = tio.SubjectsDataset(subjects, transform=self.transform)
-        print('number of volumes in dataset: ', len(subjects_dataset))
+        
+        total_subjects_num = len(subjects)
+        validation_subjects_num = math.ceil(
+            total_subjects_num * (1-training_split_ratio))
+        training_subjects_num = total_subjects_num - validation_subjects_num
+        training_subjects, validation_subjects = random_split(
+            subjects, [training_subjects_num, validation_subjects_num])
+        training_subjects_dataset = tio.SubjectsDataset(training_subjects, transform=self.transform)
+        validation_subjects_dataset = tio.SubjectsDataset(validation_subjects, transform=self.transform)
+        print(f'number of volumes in training and validation: {training_subjects_num, validation_subjects_num}')
 
         patch_sampler = tio.data.WeightedSampler(patch_size, 'sampling_map')
-        self.patches_queue = tio.Queue(
-            subjects_dataset,
+        self.training_patches_queue = tio.Queue(
+            training_subjects_dataset,
+            queue_length,
+            1,
+            patch_sampler,
+            num_workers=num_workers,
+        )
+        self.validation_patches_queue = tio.Queue(
+            validation_subjects_dataset,
             queue_length,
             1,
             patch_sampler,
@@ -97,9 +115,13 @@ class Dataset(torch.utils.data.Dataset):
         # self.subject_sampler = torch.utils.data.WeightedRandomSampler(subject_weights, 1)
 
     @property
-    def random_patches(self):
-        return self.patches_queue
-                
+    def random_training_patches(self):
+        return self.training_patches_queue
+    
+    @property
+    def random_validation_patches(self):
+        return self.validation_patches_queue
+           
     def _annotation_to_volumes(self, img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
             sampling_distance: int = 22) -> tuple:
         """transform point annotation to volumes
@@ -162,7 +184,7 @@ if __name__ == '__main__':
     
     training_batch_size = 5
     patches_loader = torch.utils.data.DataLoader(
-        dataset.random_patches,
+        dataset.random_training_patches,
         batch_size=training_batch_size
     )
     
