@@ -1,7 +1,9 @@
 import random
 import os
+from time import time
 
 import click
+import numpy as np
 
 import torch
 from torch import nn
@@ -64,6 +66,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         num_workers=2,
         sampling_distance=4,
         training_split_ratio=training_split_ratio,
+        patch_size=patch_size,
     )
 
     training_patches_loader = torch.utils.data.DataLoader(
@@ -75,6 +78,8 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         batch_size=1
     )
 
+    patch_voxel_num = np.product(patch_size)
+    ping = time()
     for iter_idx in range(iter_start, iter_stop):
         patches_batch = next(iter(training_patches_loader))
         image = patches_batch['image'][tio.DATA]
@@ -88,9 +93,9 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f'training loss: {loss}')
+        print(f'iter {iter_idx} in {time()-ping} seconds: training loss {loss/patch_voxel_num}')
 
-        if iter_idx % 1000 == 0:
+        if iter_idx % 10 == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)
@@ -102,8 +107,10 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             with torch.no_grad():
                 logits = model(image)
                 loss = loss_module(logits, target)
-                print(f'validation loss: {loss}')
+                print(f'iter {iter_idx}: validation loss: {loss/patch_voxel_num}')
 
+        # reset timer
+        ping = time()
 
 
 
