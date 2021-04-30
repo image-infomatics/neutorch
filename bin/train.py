@@ -1,6 +1,7 @@
 import random
 import os
 from time import time
+import multiprocessing as mp
 
 import click
 import numpy as np
@@ -8,10 +9,13 @@ import numpy as np
 import torch
 from torch import nn
 import torchio as tio
+from torch.utils.tensorboard import SummaryWriter
+
 from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt
+from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.tbar import Dataset
+
 
 
 @click.command()
@@ -48,11 +52,30 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--learning-rate', '-l',
     type=float, default=0.001, help='learning rate'
 )
+@click.option('--worker-num', '-p',
+    type=int, default=None, help='number of worker processes in data provider.'
+)
+@click.option('--training-interval', '-t',
+    type=int, default=100, help='training interval to record stuffs.'
+)
+@click.option('--validation-interval', '-v',
+    type=int, default=1000, help='validation and saving interval iterations.'
+)
+@click.option('--sampling-distance', '-d',
+    type=int, default=32, help='sampling patch around the annotated point.'
+)
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
         iter_start: int, iter_stop: int, output_dir: str,
-        in_channels: int, out_channels: int, learning_rate: float):
+        in_channels: int, out_channels: int, learning_rate: float,
+        worker_num: int, training_interval: int, validation_interval: int,
+        sampling_distance: int):
     
     random.seed(seed)
+
+    if worker_num is None:
+        worker_num = mp.cpu_count() // 2
+
+    writer = SummaryWriter(log_dir=output_dir)
 
     model = Model(in_channels, out_channels)
     if torch.cuda.is_available():
@@ -63,8 +86,8 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
         "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
-        num_workers=2,
-        sampling_distance=4,
+        num_workers=worker_num,
+        sampling_distance=sampling_distance,
         training_split_ratio=training_split_ratio,
         patch_size=patch_size,
     )
@@ -93,9 +116,13 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f'iter {iter_idx} in {time()-ping} seconds: training loss {loss/patch_voxel_num}')
 
-        if iter_idx % 10 == 0:
+        if iter_idx % training_interval == 0:
+            per_voxel_loss = round((loss / patch_voxel_num).cpu().tolist(), 3)
+            print(f'iter {iter_idx} in {round(time()-ping, 3)} seconds: training loss {per_voxel_loss}')
+            writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
+
+        if iter_idx % validation_interval == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)
@@ -107,12 +134,17 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             with torch.no_grad():
                 logits = model(image)
                 loss = loss_module(logits, target)
-                print(f'iter {iter_idx}: validation loss: {loss/patch_voxel_num}')
+                per_voxel_loss = round((loss / patch_voxel_num).cpu().tolist(), 3)
+                print(f'iter {iter_idx}: validation loss: {per_voxel_loss}')
+                writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
+                log_tensor(writer, 'image', image, iter_idx)
+                log_tensor(writer, 'prediction', torch.sigmoid(logits), iter_idx)
+                log_tensor(writer, 'label', target, iter_idx)
 
         # reset timer
         ping = time()
 
-
+    writer.close()
 
 
 if __name__ == '__main__':

@@ -92,20 +92,20 @@ class Dataset(torch.utils.data.Dataset):
         training_subjects_num = total_subjects_num - validation_subjects_num
         training_subjects, validation_subjects = random_split(
             subjects, [training_subjects_num, validation_subjects_num])
-        training_subjects_dataset = tio.SubjectsDataset(training_subjects, transform=self.transform)
-        validation_subjects_dataset = tio.SubjectsDataset(validation_subjects, transform=self.transform)
+        self.training_subjects_dataset = tio.SubjectsDataset(training_subjects, transform=self.transform)
+        self.validation_subjects_dataset = tio.SubjectsDataset(validation_subjects, transform=self.transform)
         print(f'number of volumes in training and validation: {training_subjects_num, validation_subjects_num}')
 
         patch_sampler = tio.data.WeightedSampler(patch_size, 'sampling_map')
         self.training_patches_queue = tio.Queue(
-            training_subjects_dataset,
+            self.training_subjects_dataset,
             queue_length,
             1,
             patch_sampler,
             num_workers=num_workers,
         )
         self.validation_patches_queue = tio.Queue(
-            validation_subjects_dataset,
+            self.validation_subjects_dataset,
             queue_length,
             1,
             patch_sampler,
@@ -113,6 +113,14 @@ class Dataset(torch.utils.data.Dataset):
         )
         # only sample one subject, so replacement option could be ignored
         # self.subject_sampler = torch.utils.data.WeightedRandomSampler(subject_weights, 1)
+
+    @property
+    def training_subjects_num(self):
+        return len(self.training_subjects_dataset)
+
+    @property
+    def validation_subjects_num(self):
+        return len(self.validation_subjects_dataset)
 
     @property
     def random_training_patches(self):
@@ -180,9 +188,10 @@ if __name__ == '__main__':
         "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
         num_workers=1,
         sampling_distance=4,
+        training_split_ratio=0.99,
     )
-    
-    training_batch_size = 5
+    # we only left one subject as validation set
+    training_batch_size = dataset.training_subjects_num
     patches_loader = torch.utils.data.DataLoader(
         dataset.random_training_patches,
         batch_size=training_batch_size
