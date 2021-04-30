@@ -2,7 +2,7 @@ import json
 import os
 import math
 from typing import Union
-from time import time
+from time import time, sleep
 
 import numpy as np
 import h5py
@@ -131,7 +131,7 @@ class Dataset(torch.utils.data.Dataset):
         return self.validation_patches_queue
            
     def _annotation_to_volumes(self, img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
-            sampling_distance: int = 22) -> tuple:
+            sampling_distance: int = 22, expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
         Args:
@@ -140,6 +140,9 @@ class Dataset(torch.utils.data.Dataset):
             synapses (dict): the annotated synapses
             sampling_distance (int, optional): the maximum distance from the annotated point to 
                 the center of sampling patch. Defaults to 22.
+            expand_distance (int): expand the point annotation to a cube. 
+                This will help to got more positive voxels.
+                The expansion should be small enough to ensure that all the voxels are inside T-bar.
 
         Returns:
             bin_presyn: binary label of annotated position.
@@ -155,9 +158,9 @@ class Dataset(torch.utils.data.Dataset):
             coordinate = np.asarray(coordinate, dtype=np.uint32)
             coordinate -= voxel_offset
             bin_presyn[
-                coordinate[0]-1 : coordinate[0]+1,
-                coordinate[1]-1 : coordinate[1]+1,
-                coordinate[2]-1 : coordinate[2]+1,
+                coordinate[0]-expand_distance : coordinate[0]+expand_distance,
+                coordinate[1]-expand_distance : coordinate[1]+expand_distance,
+                coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 1.
             sampling_map[
                 coordinate[0]-sampling_distance : coordinate[0]+sampling_distance,
@@ -198,17 +201,17 @@ if __name__ == '__main__':
     )
     
     model = torch.nn.Identity()
-    n = 0
     print('start generating random patches...')
     ping = time()
-    for patches_batch in patches_loader:
+    for n in range(100):
+        patches_batch = next(iter(patches_loader))
         print(f'generating a patch takes {int(time()-ping)} seconds.')
         # print(patch)
         image = patches_batch['image'][tio.DATA]
+        logits = model(image)
         assert image.shape[0] == training_batch_size
         image = image[:, :, 32, :, :]
         tbar = patches_batch['tbar'][tio.DATA]
-        logits = model(image)
         tbar, _ = torch.max(tbar, dim=2, keepdim=False)
         # breakpoint()
         slices = torch.cat((image, tbar))
@@ -223,6 +226,3 @@ if __name__ == '__main__':
         )
 
         ping = time()
-        n += 1
-        if n>0:
-            break

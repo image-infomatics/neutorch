@@ -10,6 +10,8 @@ import torch
 from torch import nn
 import torchio as tio
 from torch.utils.tensorboard import SummaryWriter
+import torchvision
+
 
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
@@ -94,33 +96,54 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
 
     training_patches_loader = torch.utils.data.DataLoader(
         dataset.random_training_patches,
-        batch_size=1
+        batch_size=1,
+        prefetch_factor=2,
     )
     validation_patches_loader = torch.utils.data.DataLoader(
         dataset.random_validation_patches,
-        batch_size=1
+        batch_size=1,
+        prefetch_factor=2,
     )
 
     patch_voxel_num = np.product(patch_size)
     ping = time()
+    accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
-        patches_batch = next(iter(training_patches_loader))
-        image = patches_batch['image'][tio.DATA]
-        target = patches_batch['tbar'][tio.DATA]
+        training_patches_batch = next(iter(training_patches_loader))
+        image = training_patches_batch['image'][tio.DATA]
+        target = training_patches_batch['tbar'][tio.DATA]
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
         logits = model(image)
         loss = loss_module(logits, target)
+        accumulated_loss += loss.cpu().tolist()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         if iter_idx % training_interval == 0:
-            per_voxel_loss = round((loss / patch_voxel_num).cpu().tolist(), 3)
-            print(f'iter {iter_idx} in {round(time()-ping, 3)} seconds: training loss {per_voxel_loss}')
+            per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
+            accumulated_loss = 0.
+            print(f'iter {iter_idx} in {round(time()-ping, 3)} seconds: training loss {round(per_voxel_loss, 3)}')
+            predict = torch.sigmoid(logits)
             writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
+            log_tensor(writer, 'train/image', image, iter_idx)
+            log_tensor(writer, 'train/prediction', predict, iter_idx)
+            log_tensor(writer, 'train/target', target, iter_idx)
+
+            # target2d, _ =  torch.max(target, dim=2, keepdim=False)
+            # slices = torch.cat((image[:, :, 32, :, :], predict[:, :, 32, :, :], target2d))
+            # image_path = os.path.expanduser('~/Downloads/patches.png')
+            # print('save a batch of patches to ', image_path)
+            # torchvision.utils.save_image(
+            #     slices,
+            #     image_path,
+            #     nrow=1,
+            #     normalize=True,
+            #     scale_each=True,
+            # )
 
         if iter_idx % validation_interval == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
@@ -128,18 +151,19 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            patches_batch = next(iter(validation_patches_loader))
-            image = patches_batch['image'][tio.DATA]
-            target = patches_batch['tbar'][tio.DATA]
+            validation_patches_batch = next(iter(validation_patches_loader))
+            validation_image = validation_patches_batch['image'][tio.DATA]
+            validation_target = validation_patches_batch['tbar'][tio.DATA]
             with torch.no_grad():
-                logits = model(image)
-                loss = loss_module(logits, target)
-                per_voxel_loss = round((loss / patch_voxel_num).cpu().tolist(), 3)
-                print(f'iter {iter_idx}: validation loss: {per_voxel_loss}')
+                validation_logits = model(validation_image)
+                validation_predict = torch.sigmoid(validation_logits)
+                validation_loss = loss_module(validation_logits, validation_target)
+                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
-                log_tensor(writer, 'image', image, iter_idx)
-                log_tensor(writer, 'prediction', torch.sigmoid(logits), iter_idx)
-                log_tensor(writer, 'label', target, iter_idx)
+                log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
+                log_tensor(writer, 'evaluate/prediction', validation_predict, iter_idx)
+                log_tensor(writer, 'evaluate/target', validation_target, iter_idx)
 
         # reset timer
         ping = time()

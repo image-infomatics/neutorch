@@ -31,7 +31,7 @@ def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
 
 
 def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-        iter_idx: int, nrow: int=16):
+        iter_idx: int, nrow: int=8):
     """write a 5D tensor in tensorboard log
 
     Args:
@@ -45,7 +45,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     assert tensor.ndim >= 3
     # this should work for ndim >= 3
     tensor = tensor.cpu()
-    tensor = (tensor * 255.).type(torch.uint8)
+    # tensor = (tensor * 255.).type(torch.uint8)
     depth = tensor.shape[-3]
     height = tensor.shape[-2]
     width = tensor.shape[-1]
@@ -61,5 +61,4 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         col = z % nrow
         # print(col)
         img[row*height : (row+1)*height, col*width : (col+1)*width ] = torch.squeeze(tensor[...,z, :, :])
-    # breakpoint()
     writer.add_image(tag, img, iter_idx, dataformats='HW')
