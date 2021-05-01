@@ -167,6 +167,16 @@ class Dataset(torch.utils.data.Dataset):
                 coordinate[1]-sampling_distance : coordinate[1]+sampling_distance,
                 coordinate[2]-sampling_distance : coordinate[2]+sampling_distance,
             ] += 1
+        # do not sample outside the annotated region
+        # we cutout the image with some extension of annotated bounding box 
+        # to have some more patches, some of the patches will have image outside the bounding box
+        # but we do not want to sample outside this box since some positive examples are not being annotated
+        sampling_map[:100, :, :] = 0
+        sampling_map[:, :100, :] = 0
+        sampling_map[:, :, :100] = 0
+        sampling_map[-100:, :, :] = 0
+        sampling_map[:, -100:, :] = 0
+        sampling_map[:, :, -100:] = 0
         return bin_presyn, sampling_map
     
     @property

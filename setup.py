@@ -10,6 +10,10 @@ setup(
     author_email='jingpeng.wu@gmail.com',
     url='https://github.com/brain-connectome/neutorch',
     packages=find_packages(exclude=['bin']),
+    entry_points='''
+        [console_scripts]
+        neutrain=neutorch.cli.train:train
+    ''',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
