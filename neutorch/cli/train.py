@@ -38,8 +38,13 @@ from neutorch.dataset.tbar import Dataset
     help='the starting index of training iteration.'
 )
 @click.option('--iter-stop', '-e',
-    type=int, default=1000000,
+    type=int, default=200000,
     help='the stopping index of training iteration.'
+)
+@click.option('--dataset-config-file', '-d',
+    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
+    required=True,
+    help='dataset configuration file path.'
 )
 @click.option('--output-dir', '-o',
     type=click.Path(file_okay=False, dir_okay=True, writable=True, resolve_path=True),
@@ -63,11 +68,12 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--validation-interval', '-v',
     type=int, default=1000, help='validation and saving interval iterations.'
 )
-@click.option('--sampling-distance', '-d',
+@click.option('--sampling-distance', '-m',
     type=int, default=32, help='sampling patch around the annotated point.'
 )
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
-        iter_start: int, iter_stop: int, output_dir: str,
+        iter_start: int, iter_stop: int, dataset_config_file: str, 
+        output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
         worker_num: int, training_interval: int, validation_interval: int,
         sampling_distance: int):
@@ -87,7 +93,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
-        "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
+        dataset_config_file,
         num_workers=worker_num,
         sampling_distance=sampling_distance,
         training_split_ratio=training_split_ratio,
@@ -154,6 +160,11 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             validation_patches_batch = next(iter(validation_patches_loader))
             validation_image = validation_patches_batch['image'][tio.DATA]
             validation_target = validation_patches_batch['tbar'][tio.DATA]
+            # Transfer Data to GPU if available
+            if torch.cuda.is_available():
+                validation_image = validation_image.cuda()
+                validation_target = validation_target.cuda()
+
             with torch.no_grad():
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)

@@ -3,3 +3,4 @@ torchvision
 torchio
 toml
 h5py
+tensorboard
