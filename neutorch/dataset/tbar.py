@@ -171,19 +171,19 @@ class Dataset(torch.utils.data.Dataset):
         # we cutout the image with some extension of annotated bounding box 
         # to have some more patches, some of the patches will have image outside the bounding box
         # but we do not want to sample outside this box since some positive examples are not being annotated
-        sampling_map[:100, :, :] = 0
-        sampling_map[:, :100, :] = 0
-        sampling_map[:, :, :100] = 0
-        sampling_map[-100:, :, :] = 0
-        sampling_map[:, -100:, :] = 0
-        sampling_map[:, :, -100:] = 0
+        sampling_map[:120, :, :] = 0
+        sampling_map[:, :120, :] = 0
+        sampling_map[:, :, :120] = 0
+        sampling_map[-120:, :, :] = 0
+        sampling_map[:, -120:, :] = 0
+        sampling_map[:, :, -120:] = 0
         return bin_presyn, sampling_map
     
     @property
     def transform(self):
         return tio.Compose([
             # tio.RandomMotion(p=0.2),
-            # tio.RandomBiasField(p=0.3),
+            tio.RandomBiasField(p=0.3),
             tio.RandomNoise(p=0.5),
             tio.RandomFlip(),
             # tio.OneOf({
@@ -191,9 +191,9 @@ class Dataset(torch.utils.data.Dataset):
             #     tio.RandomElasticDeformation(): 0.7
             # }),
             tio.RandomGamma(p=0.1),
-            # tio.RandomGhosting(p=0.1),
-            # tio.RandomAnisotropy(p=0.2),
-            # tio.RandomSpike(p=0.1),
+            tio.RandomGhosting(p=0.1),
+            tio.RandomAnisotropy(p=0.2),
+            tio.RandomSpike(p=0.1),
         ])
 
 if __name__ == '__main__':

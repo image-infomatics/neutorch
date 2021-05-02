@@ -83,7 +83,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     if worker_num is None:
         worker_num = mp.cpu_count() // 2
 
-    writer = SummaryWriter(log_dir=output_dir)
+    writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
     model = Model(in_channels, out_channels)
     if torch.cuda.is_available():
@@ -116,6 +116,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
         training_patches_batch = next(iter(training_patches_loader))
+        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = training_patches_batch['image'][tio.DATA]
         target = training_patches_batch['tbar'][tio.DATA]
         # Transfer Data to GPU if available
@@ -124,15 +125,17 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             target = target.cuda()
         logits = model(image)
         loss = loss_module(logits, target)
-        accumulated_loss += loss.cpu().tolist()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        accumulated_loss += loss.cpu().tolist()
+        print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
+        ping = time()
 
         if iter_idx % training_interval == 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
+            print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
-            print(f'iter {iter_idx} in {round(time()-ping, 3)} seconds: training loss {round(per_voxel_loss, 3)}')
             predict = torch.sigmoid(logits)
             writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
             log_tensor(writer, 'train/image', image, iter_idx)
@@ -175,9 +178,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
                 log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
                 log_tensor(writer, 'evaluate/prediction', validation_predict, iter_idx)
                 log_tensor(writer, 'evaluate/target', validation_target, iter_idx)
-
-        # reset timer
-        ping = time()
 
     writer.close()
 
