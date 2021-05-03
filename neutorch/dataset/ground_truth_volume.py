@@ -7,20 +7,14 @@ import numpy as np
 class GroundTruthVolume(object):
     def __init__(self, image: np.ndarray, target: np.ndarray,
             patch_size: Union[tuple, int], 
-            forbbiden_distance_to_boundary: tuple = None,
-            annotation_points: np.ndarray = None,
-            max_sampling_distance: Union[int, tuple] = None) -> None:
+            forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
             target (np.ndarray): training target
             patch_size (Union[tuple, int]): output patch size
-            forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
-                from volume boundary. Defaults to None.
-            annotation_points (np.ndarray, optional): point annotations. Defaults to None.
         """
-        super().__init__()
         assert image.ndim == 3
         assert target.ndim >= 3
         assert image.shape == target.shape[-3:]
@@ -38,25 +32,13 @@ class GroundTruthVolume(object):
             # otherwise, the patch will go outside of the volume
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx]
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx]
-
-        if max_sampling_distance is None:
-            max_sampling_distance = tuple(ps // 2 for ps in patch_size)
-        if isinstance(max_sampling_distance, int):
-            max_sampling_distance = (max_sampling_distance, ) * 3
-        for idx in range(3):
-            max_sampling_distance[idx] <= patch_size[idx] // 2
-
-        if annotation_points is not None:
-            assert annotation_points.shape[1] == 3
-
+        
         self.image = image
         self.target = target
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
-        self.annotation_points = annotation_points
-        self.max_sampling_distance = max_sampling_distance
-
+    
     def _expand_to_5d(self, array: np.ndarray):
         if array.ndim == 3:
             return np.expand_dims(array, axis=(0, 1))
@@ -99,12 +81,47 @@ class GroundTruthVolume(object):
     def candidate_patch_num(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
 
+
+
+class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
+    def __init__(self, image: np.ndarray, target: np.ndarray,
+            patch_size: Union[tuple, int], 
+            forbbiden_distance_to_boundary: tuple = None,
+            annotation_points: np.ndarray = None,
+            max_sampling_distance: Union[int, tuple] = None) -> None:
+        """Image volume with ground truth annotations
+
+        Args:
+            image (np.ndarray): image normalized to 0-1
+            target (np.ndarray): training target
+            patch_size (Union[tuple, int]): output patch size
+            forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
+                from volume boundary. Defaults to None.
+            annotation_points (np.ndarray, optional): point annotations. Defaults to None.
+        """
+        super().__init__(
+            image, target, patch_size,
+            forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
+        )
+        
+        if max_sampling_distance is None:
+            max_sampling_distance = tuple(ps // 2 for ps in patch_size)
+        if isinstance(max_sampling_distance, int):
+            max_sampling_distance = (max_sampling_distance, ) * 3
+        for idx in range(3):
+            max_sampling_distance[idx] <= patch_size[idx] // 2
+
+        if annotation_points is not None:
+            assert annotation_points.shape[1] == 3
+
+        self.annotation_points = annotation_points
+        self.max_sampling_distance = max_sampling_distance
+
     @property
-    def random_patch_containing_point(self):
+    def random_patch(self):
         point_num = self.annotation_points.shape[0]
         idx = random.randrange(point_num)
         point = self.annotation_points[idx, :]
-        distance = random.randrange(self.max_sampling_distance)
         center_start = tuple(p - self.max_sampling_distance for p in point)
         center_stop = tuple(p + self.max_sampling_distance for p in point)
         center_start = tuple(
@@ -113,6 +130,7 @@ class GroundTruthVolume(object):
         center_stop = tuple(
             min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
         )
+        return self.random_patch_from_center_range(center_start, center_stop)
 
 
 
