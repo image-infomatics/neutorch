@@ -5,8 +5,9 @@ import numpy as np
 
 
 class GroundTruthVolume(object):
-    def __init__(self, image: np.ndarray, target: np.ndarray,
+    def __init__(self, image: np.ndarray, 
             patch_size: Union[tuple, int], 
+            target: np.ndarray = None,
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
@@ -16,7 +17,8 @@ class GroundTruthVolume(object):
             patch_size (Union[tuple, int]): output patch size
         """
         assert image.ndim == 3
-        assert target.ndim >= 3
+        if target is not None:
+            assert target.ndim >= 3
         assert image.shape == target.shape[-3:]
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
@@ -30,8 +32,8 @@ class GroundTruthVolume(object):
         for idx in range(3):
             # the center of random patch should not be too close to boundary
             # otherwise, the patch will go outside of the volume
-            assert forbbiden_distance_to_boundary[idx] >= patch_size[idx]
-            assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx]
+            assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
+            assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
         self.image = image
         self.target = target
@@ -54,6 +56,7 @@ class GroundTruthVolume(object):
         return self.random_patch_from_center_range(self.center_start, self.center_stop)
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
+        breakpoint()
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
@@ -78,14 +81,15 @@ class GroundTruthVolume(object):
         return image_patch, target_patch
     
     @property
-    def candidate_patch_num(self):
+    def volume_sampling_weight(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
 
 
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
-    def __init__(self, image: np.ndarray, target: np.ndarray,
+    def __init__(self, image: np.ndarray, 
             patch_size: Union[tuple, int], 
+            target: np.ndarray = None,
             forbbiden_distance_to_boundary: tuple = None,
             annotation_points: np.ndarray = None,
             max_sampling_distance: Union[int, tuple] = None) -> None:
@@ -93,14 +97,16 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            target (np.ndarray): training target
             patch_size (Union[tuple, int]): output patch size
+            target (np.ndarray): training target
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from volume boundary. Defaults to None.
             annotation_points (np.ndarray, optional): point annotations. Defaults to None.
+            max_sampling_distance (int, tuple): maximum distance from the annotated point 
+                to the center of random patch.
         """
         super().__init__(
-            image, target, patch_size,
+            image, patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
         
@@ -113,17 +119,18 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
 
         if annotation_points is not None:
             assert annotation_points.shape[1] == 3
-
         self.annotation_points = annotation_points
         self.max_sampling_distance = max_sampling_distance
+        if target is None:
+            self._points_to_target()
 
     @property
     def random_patch(self):
         point_num = self.annotation_points.shape[0]
         idx = random.randrange(point_num)
         point = self.annotation_points[idx, :]
-        center_start = tuple(p - self.max_sampling_distance for p in point)
-        center_stop = tuple(p + self.max_sampling_distance for p in point)
+        center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
+        center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
         center_start = tuple(
             max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
         )
@@ -132,5 +139,35 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         )
         return self.random_patch_from_center_range(center_start, center_stop)
 
+    @property
+    def volume_sampling_weight(self):
+        # use number of annotated points as weight
+        # to sample volume
+        return self.annotation_points.shape[0]
 
+    def _points_to_target(self, expand_distance: int = 2) -> tuple:
+        """transform point annotation to volumes
+
+        Args:
+            expand_distance (int): expand the point annotation to a cube. 
+                This will help to got more positive voxels.
+                The expansion should be small enough to ensure that all the voxels are inside T-bar.
+
+        Returns:
+            bin_presyn: binary label of annotated position.
+        """
+        # assert synapses['resolution'] == [8, 8, 8]
+        self.target = np.zeros_like(self.image.array, dtype=np.float32)
+        voxel_offset = np.asarray(self.image.voxel_offset, dtype=np.int64)
+        for coordinate in self.annotation_points:
+            # transform coordinate from xyz order to zyx
+            coordinate = coordinate[::-1]
+            coordinate = np.asarray(coordinate, dtype=np.int64)
+            coordinate -= voxel_offset
+            self.target[
+                coordinate[0]-expand_distance : coordinate[0]+expand_distance,
+                coordinate[1]-expand_distance : coordinate[1]+expand_distance,
+                coordinate[2]-expand_distance : coordinate[2]+expand_distance,
+            ] = 1.
+        return
 

@@ -11,12 +11,11 @@ import h5py
 from chunkflow.chunk import Chunk
 
 import torch
-from torch.utils.data import random_split
 import torchvision
 import torchio as tio
 import toml
 
-from .ground_truth_volume import GroundTruthVolume
+from .ground_truth_volume import GroundTruthVolumeWithPointAnnotation
 
 
 def image_reader(path: str):
@@ -27,13 +26,13 @@ def image_reader(path: str):
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=64, sampling_distance: int = 22):
+            patch_size: Union[int, tuple]=64, max_sampling_distance: int = 22):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
-            sampling_distance (int): sampling patches around the annotated T-bar point 
+            max_sampling_distance (int): sampling patches around the annotated T-bar point 
                 limited by a maximum distance.
         """
         super().__init__()
@@ -58,16 +57,17 @@ class Dataset(torch.utils.data.Dataset):
             synapse_path = os.path.join(config_dir, synapse_path)
 
             image = Chunk.from_h5(image_path)
+            voxel_offset = image.voxel_offset
             image = image.astype(np.float32) / 255.
             # use the voxel number as the sampling weights
             # subject_weights.append(len(img))
             with open(synapse_path, 'r') as file:
                 synapses = json.load(file)
-                assert synapses['order'] = ['x', 'y', 'z']
+                assert synapses['order'] == ['x', 'y', 'z']
             # use the number of T-bars as subject sampling weights
             # subject_weights.append(len(synapses['presynapses']))
             presynapses = synapses['presynapses']
-            tbar_points = np.zeros((len(presynapses), 3), dtype=np.unit32)
+            tbar_points = np.zeros((len(presynapses), 3), dtype=np.int64)
             for idx, point in  enumerate(presynapses.values()):
                 # transform xyz to zyx
                 tbar_points[idx, :] = point[::-1]
@@ -75,93 +75,62 @@ class Dataset(torch.utils.data.Dataset):
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
 
-            target = self._annotation_to_target_volume(
-                image, tbar_points
-            )
+            tbar_points -= voxel_offset
+            breakpoint()
 
-            ground_truth_volume = GroundTruthVolume(image, target,
+            ground_truth_volume = GroundTruthVolumeWithPointAnnotation(
+                image,
                 patch_size=patch_size,
-                annotation_points=tbar_points
+                annotation_points=tbar_points,
+                max_sampling_distance=max_sampling_distance,
             )
-            volumes.appen(ground_truth_volume)
+            volumes.append(ground_truth_volume)
         
         # shuffle the volume list and then split it to training and test
-        volumes = random.shuffle(self.volumes)
+        random.shuffle(volumes)
 
         # use the number of candidate patches as volume sampling weight
         volume_weights = []
         for volume in volumes:
-            volume_weights.append(volume.candidate_patch_num)
+            volume_weights.append(volume.volume_sampling_weight)
 
-        training_volume_num = math.floor(len(volumes) * training_split_ratio)
-        validation_volume_num = len(volumes) - training_volume_num
-        self.training_volumes = volumes[:training_volume_num]
-        self.validation_volumes = volumes[-validation_volume_num:]
-        self.training_volume_weights = volume_weights[:training_volume_num]
-        self.validation_volume_weights = volume_weights[-validation_volume_num]
+        self.training_volume_num = math.floor(len(volumes) * training_split_ratio)
+        self.validation_volume_num = len(volumes) - self.training_volume_num
+        self.training_volumes = volumes[:self.training_volume_num]
+        self.validation_volumes = volumes[-self.validation_volume_num:]
+        self.training_volume_weights = volume_weights[:self.training_volume_num]
+        self.validation_volume_weights = volume_weights[-self.validation_volume_num]
         
     @property
     def random_training_patch(self):
         # only sample one subject, so replacement option could be ignored
-        volume_index = torch.utils.data.WeightedRandomSampler(self.training_volume_weights, 1)
+        if self.training_volume_num == 1:
+            volume_index = 0
+        else:
+            volume_index = random.choices(
+                range(self.training_volume_num),
+                weights=self.training_volume_weights,
+                k=1,
+            )[0]
         volume = self.training_volumes[volume_index]
         return volume.random_patch
-    
+
     @property
     def random_validation_patch(self):
-        volume_index = torch.utils.data.WeightedRandomSampler(self.validation_volume_weights, 1)
+        if self.validation_volume_num == 1:
+            volume_index = 0
+        else:
+            volume_index = random.choices(
+                range(self.validation_volume_num),
+                weights=self.validation_volume_weights,
+                k=1,
+            )[0]
+        breakpoint()
         volume = self.validation_volumes[volume_index]
         return volume.random_patch
            
-    def _annotation_to_target_volume(self, image: Chunk, tbar_points: list,
-            expand_distance: int = 2) -> tuple:
-        """transform point annotation to volumes
-
-        Args:
-            img (np.ndarray): image volume
-            voxel_offset (np.ndarray): offset of image volume
-            synapses (dict): the annotated synapses
-            sampling_distance (int, optional): the maximum distance from the annotated point to 
-                the center of sampling patch. Defaults to 22.
-            expand_distance (int): expand the point annotation to a cube. 
-                This will help to got more positive voxels.
-                The expansion should be small enough to ensure that all the voxels are inside T-bar.
-
-        Returns:
-            bin_presyn: binary label of annotated position.
-            sampling_probability_map: the probability map of sampling
-        """
-        # assert synapses['resolution'] == [8, 8, 8]
-        bin_presyn = np.zeros_like(image.array, dtype=np.float32)
-        voxel_offset = np.asarray(image.voxel_offset, dtype=np.uint32)
-        for coordinate in tbar_points:
-            # transform coordinate from xyz order to zyx
-            coordinate = coordinate[::-1]
-            coordinate = np.asarray(coordinate, dtype=np.uint32)
-            coordinate -= voxel_offset
-            bin_presyn[
-                coordinate[0]-expand_distance : coordinate[0]+expand_distance,
-                coordinate[1]-expand_distance : coordinate[1]+expand_distance,
-                coordinate[2]-expand_distance : coordinate[2]+expand_distance,
-            ] = 1.
-        return bin_presyn
     
-    @property
-    def transform(self):
-        return tio.Compose([
-            # tio.RandomMotion(p=0.2),
-            tio.RandomBiasField(p=0.3),
-            tio.RandomNoise(p=0.5),
-            tio.RandomFlip(),
-            # tio.OneOf({
-            #     tio.RandomAffine(): 0.3,
-            #     tio.RandomElasticDeformation(): 0.7
-            # }),
-            tio.RandomGamma(p=0.1),
-            tio.RandomGhosting(p=0.1),
-            tio.RandomAnisotropy(p=0.2),
-            tio.RandomSpike(p=0.1),
-        ])
+
 
 if __name__ == '__main__':
     dataset = Dataset(
@@ -190,7 +159,6 @@ if __name__ == '__main__':
         image = image[:, :, 32, :, :]
         tbar = patches_batch['tbar'][tio.DATA]
         tbar, _ = torch.max(tbar, dim=2, keepdim=False)
-        # breakpoint()
         slices = torch.cat((image, tbar))
         image_path = os.path.expanduser('~/Downloads/patches.png')
         print('save a batch of patches to ', image_path)

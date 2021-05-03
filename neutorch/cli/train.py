@@ -59,29 +59,23 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--learning-rate', '-l',
     type=float, default=0.001, help='learning rate'
 )
-@click.option('--worker-num', '-p',
-    type=int, default=None, help='number of worker processes in data provider.'
-)
 @click.option('--training-interval', '-t',
     type=int, default=100, help='training interval to record stuffs.'
 )
 @click.option('--validation-interval', '-v',
     type=int, default=1000, help='validation and saving interval iterations.'
 )
-@click.option('--sampling-distance', '-m',
+@click.option('--max-sampling-distance', '-m',
     type=int, default=32, help='sampling patch around the annotated point.'
 )
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
         iter_start: int, iter_stop: int, dataset_config_file: str, 
         output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
-        worker_num: int, training_interval: int, validation_interval: int,
-        sampling_distance: int):
+        training_interval: int, validation_interval: int,
+        max_sampling_distance: int):
     
     random.seed(seed)
-
-    if worker_num is None:
-        worker_num = mp.cpu_count() // 2
 
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
@@ -94,31 +88,19 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
         dataset_config_file,
-        num_workers=worker_num,
-        sampling_distance=sampling_distance,
-        training_split_ratio=training_split_ratio,
         patch_size=patch_size,
-    )
-
-    training_patches_loader = torch.utils.data.DataLoader(
-        dataset.random_training_patches,
-        batch_size=1,
-        prefetch_factor=2,
-    )
-    validation_patches_loader = torch.utils.data.DataLoader(
-        dataset.random_validation_patches,
-        batch_size=1,
-        prefetch_factor=2,
+        max_sampling_distance=max_sampling_distance,
+        training_split_ratio=training_split_ratio,
     )
 
     patch_voxel_num = np.product(patch_size)
     ping = time()
     accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
-        training_patches_batch = next(iter(training_patches_loader))
+        image, target = dataset.random_training_patch
+        image = torch.from_numpy(image)
+        target = torch.from_numpy(target)
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-        image = training_patches_batch['image'][tio.DATA]
-        target = training_patches_batch['tbar'][tio.DATA]
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
@@ -160,9 +142,9 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            validation_patches_batch = next(iter(validation_patches_loader))
-            validation_image = validation_patches_batch['image'][tio.DATA]
-            validation_target = validation_patches_batch['tbar'][tio.DATA]
+            validation_image, validation_target = dataset.random_validation_patch
+            validation_image = torch.from_numpy(validation_image)
+            validation_target = torch.from_numpy(validation_target)
             # Transfer Data to GPU if available
             if torch.cuda.is_available():
                 validation_image = validation_image.cuda()
