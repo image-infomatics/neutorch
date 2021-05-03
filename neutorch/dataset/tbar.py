@@ -7,6 +7,7 @@ from time import time, sleep
 
 import numpy as np
 import h5py
+from numpy.lib import twodim_base
 
 from chunkflow.chunk import Chunk
 
@@ -75,13 +76,16 @@ class Dataset(torch.utils.data.Dataset):
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
 
+            # breakpoint()
             tbar_points -= voxel_offset
-            breakpoint()
+            assert np.all(tbar_points > 0)
+            # all the points should be inside the image
+            np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
 
             ground_truth_volume = GroundTruthVolumeWithPointAnnotation(
                 image,
-                patch_size=patch_size,
                 annotation_points=tbar_points,
+                patch_size=patch_size,
                 max_sampling_distance=max_sampling_distance,
             )
             volumes.append(ground_truth_volume)
@@ -125,7 +129,7 @@ class Dataset(torch.utils.data.Dataset):
                 weights=self.validation_volume_weights,
                 k=1,
             )[0]
-        breakpoint()
+        # breakpoint()
         volume = self.validation_volumes[volume_index]
         return volume.random_patch
            

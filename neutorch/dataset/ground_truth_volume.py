@@ -5,9 +5,8 @@ import numpy as np
 
 
 class GroundTruthVolume(object):
-    def __init__(self, image: np.ndarray, 
+    def __init__(self, image: np.ndarray, label: np.ndarray,
             patch_size: Union[tuple, int], 
-            target: np.ndarray = None,
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
@@ -17,9 +16,8 @@ class GroundTruthVolume(object):
             patch_size (Union[tuple, int]): output patch size
         """
         assert image.ndim == 3
-        if target is not None:
-            assert target.ndim >= 3
-        assert image.shape == target.shape[-3:]
+        assert label.ndim >= 3
+        assert image.shape == label.shape[-3:]
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
         else:
@@ -36,7 +34,7 @@ class GroundTruthVolume(object):
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
         self.image = image
-        self.target = target
+        self.label = label
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
@@ -56,7 +54,7 @@ class GroundTruthVolume(object):
         return self.random_patch_from_center_range(self.center_start, self.center_stop)
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
-        breakpoint()
+        # breakpoint()
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
@@ -71,13 +69,13 @@ class GroundTruthVolume(object):
             by : by + self.patch_size[1],
             bx : bx + self.patch_size[2]
         ]
-        target_patch = self.target[...,
+        label_patch = self.label[...,
             bz : bz + self.patch_size[0],
             by : by + self.patch_size[1],
             bx : bx + self.patch_size[2]
         ]
         image_patch = self._expand_to_5d(image_patch)
-        target_patch = self._expand_to_5d(target_patch)
+        target_patch = self._expand_to_5d(label_patch)
         return image_patch, target_patch
     
     @property
@@ -88,41 +86,37 @@ class GroundTruthVolume(object):
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     def __init__(self, image: np.ndarray, 
+            annotation_points: np.ndarray,
             patch_size: Union[tuple, int], 
-            target: np.ndarray = None,
             forbbiden_distance_to_boundary: tuple = None,
-            annotation_points: np.ndarray = None,
             max_sampling_distance: Union[int, tuple] = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
+            annotation_points (np.ndarray, optional): point annotations. Defaults to None.
             patch_size (Union[tuple, int]): output patch size
-            target (np.ndarray): training target
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from volume boundary. Defaults to None.
-            annotation_points (np.ndarray, optional): point annotations. Defaults to None.
             max_sampling_distance (int, tuple): maximum distance from the annotated point 
                 to the center of random patch.
         """
+
+        assert annotation_points.shape[1] == 3
+        self.annotation_points = annotation_points 
+        label = self._points_to_label(image)
         super().__init__(
-            image, patch_size,
+            image, label, patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
-        
+
         if max_sampling_distance is None:
             max_sampling_distance = tuple(ps // 2 for ps in patch_size)
         if isinstance(max_sampling_distance, int):
             max_sampling_distance = (max_sampling_distance, ) * 3
         for idx in range(3):
             max_sampling_distance[idx] <= patch_size[idx] // 2
-
-        if annotation_points is not None:
-            assert annotation_points.shape[1] == 3
-        self.annotation_points = annotation_points
         self.max_sampling_distance = max_sampling_distance
-        if target is None:
-            self._points_to_target()
 
     @property
     def random_patch(self):
@@ -131,6 +125,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         point = self.annotation_points[idx, :]
         center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
         center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
+        # breakpoint()
         center_start = tuple(
             max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
         )
@@ -145,7 +140,8 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         # to sample volume
         return self.annotation_points.shape[0]
 
-    def _points_to_target(self, expand_distance: int = 2) -> tuple:
+    def _points_to_label(self, image: np.ndarray,
+            expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
         Args:
@@ -157,17 +153,15 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             bin_presyn: binary label of annotated position.
         """
         # assert synapses['resolution'] == [8, 8, 8]
-        self.target = np.zeros_like(self.image.array, dtype=np.float32)
-        voxel_offset = np.asarray(self.image.voxel_offset, dtype=np.int64)
+        label = np.zeros_like(image, dtype=np.float32)
         for coordinate in self.annotation_points:
             # transform coordinate from xyz order to zyx
             coordinate = coordinate[::-1]
             coordinate = np.asarray(coordinate, dtype=np.int64)
-            coordinate -= voxel_offset
-            self.target[
+            label[
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 1.
-        return
+        return label
 
