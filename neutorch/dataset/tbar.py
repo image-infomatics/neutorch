@@ -1,17 +1,22 @@
 import json
 import os
 import math
+import random
 from typing import Union
 from time import time, sleep
 
 import numpy as np
 import h5py
 
+from chunkflow.chunk import Chunk
+
 import torch
 from torch.utils.data import random_split
 import torchvision
 import torchio as tio
 import toml
+
+from .ground_truth_volume import GroundTruthVolume
 
 
 def image_reader(path: str):
@@ -22,13 +27,14 @@ def image_reader(path: str):
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=64, queue_length: int=8,
-            num_workers: int=4, sampling_distance: int = 22):
+            patch_size: Union[int, tuple]=64, sampling_distance: int = 22):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
+            sampling_distance (int): sampling patches around the annotated T-bar point 
+                limited by a maximum distance.
         """
         super().__init__()
         assert training_split_ratio > 0.5
@@ -42,9 +48,7 @@ class Dataset(torch.utils.data.Dataset):
         config_dir = os.path.dirname(config_file)
         
         # load all the datasets
-        subjects = []
-        # subject_weights = []
-        # walkthrough the directory and find all the groundtruth files automatically
+        volumes = []
         for gt in meta.values():
             image_path = gt['image']
             synapse_path = gt['ground_truth']
@@ -53,85 +57,64 @@ class Dataset(torch.utils.data.Dataset):
             image_path = os.path.join(config_dir, image_path)
             synapse_path = os.path.join(config_dir, synapse_path)
 
-            with h5py.File(image_path, 'r') as file:
-                # normalize image to the range of [0, 1]
-                img = np.asarray(file['main'], dtype=np.float32) / 255.
-                voxel_offset = np.asarray(file['voxel_offset'], dtype=np.uint32)
+            image = Chunk.from_h5(image_path)
+            image = image.astype(np.float32) / 255.
             # use the voxel number as the sampling weights
             # subject_weights.append(len(img))
             with open(synapse_path, 'r') as file:
                 synapses = json.load(file)
-            
+                assert synapses['order'] = ['x', 'y', 'z']
             # use the number of T-bars as subject sampling weights
             # subject_weights.append(len(synapses['presynapses']))
+            presynapses = synapses['presynapses']
+            tbar_points = np.zeros((len(presynapses), 3), dtype=np.unit32)
+            for idx, point in  enumerate(presynapses.values()):
+                # transform xyz to zyx
+                tbar_points[idx, :] = point[::-1]
+                # tbar_points[idx, 0] = point[2]
+                # tbar_points[idx, 1] = point[1]
+                # tbar_points[idx, 2] = point[0]
 
-            bin_presyn, sampling_map = self._annotation_to_volumes(
-                img, voxel_offset, synapses,
-                sampling_distance = sampling_distance
+            target = self._annotation_to_target_volume(
+                image, tbar_points
             )
 
-            img = np.expand_dims(img, axis=0)
-            img = torch.from_numpy(img)
-            bin_presyn = np.expand_dims(bin_presyn, axis=0)
-            bin_presyn = torch.from_numpy(bin_presyn)
-            sampling_map = np.expand_dims(sampling_map, axis=0)
-            sampling_map = torch.from_numpy(sampling_map)
-            subject = tio.Subject(
-                image = tio.ScalarImage(tensor=img),
-                tbar = tio.LabelMap(tensor=bin_presyn),
-                sampling_map = tio.Image(tensor=sampling_map, type=tio.SAMPLING_MAP)
+            ground_truth_volume = GroundTruthVolume(image, target,
+                patch_size=patch_size,
+                annotation_points=tbar_points
             )
-            subjects.append(subject)
-            # self.datasets.append((img, synapses))
-            # use the image voxel number as sampling weight
-            # self.dataset_weights.append(len(img))
+            volumes.appen(ground_truth_volume)
         
-        total_subjects_num = len(subjects)
-        validation_subjects_num = math.ceil(
-            total_subjects_num * (1-training_split_ratio))
-        training_subjects_num = total_subjects_num - validation_subjects_num
-        training_subjects, validation_subjects = random_split(
-            subjects, [training_subjects_num, validation_subjects_num])
-        self.training_subjects_dataset = tio.SubjectsDataset(training_subjects, transform=self.transform)
-        self.validation_subjects_dataset = tio.SubjectsDataset(validation_subjects, transform=self.transform)
-        print(f'number of volumes in training and validation: {training_subjects_num, validation_subjects_num}')
+        # shuffle the volume list and then split it to training and test
+        volumes = random.shuffle(self.volumes)
 
-        patch_sampler = tio.data.WeightedSampler(patch_size, 'sampling_map')
-        self.training_patches_queue = tio.Queue(
-            self.training_subjects_dataset,
-            queue_length,
-            1,
-            patch_sampler,
-            num_workers=num_workers,
-        )
-        self.validation_patches_queue = tio.Queue(
-            self.validation_subjects_dataset,
-            queue_length,
-            1,
-            patch_sampler,
-            num_workers=num_workers,
-        )
+        # use the number of candidate patches as volume sampling weight
+        volume_weights = []
+        for volume in volumes:
+            volume_weights.append(volume.candidate_patch_num)
+
+        training_volume_num = math.floor(len(volumes) * training_split_ratio)
+        validation_volume_num = len(volumes) - training_volume_num
+        self.training_volumes = volumes[:training_volume_num]
+        self.validation_volumes = volumes[-validation_volume_num:]
+        self.training_volume_weights = volume_weights[:training_volume_num]
+        self.validation_volume_weights = volume_weights[-validation_volume_num]
+        
+    @property
+    def random_training_patch(self):
         # only sample one subject, so replacement option could be ignored
-        # self.subject_sampler = torch.utils.data.WeightedRandomSampler(subject_weights, 1)
-
-    @property
-    def training_subjects_num(self):
-        return len(self.training_subjects_dataset)
-
-    @property
-    def validation_subjects_num(self):
-        return len(self.validation_subjects_dataset)
-
-    @property
-    def random_training_patches(self):
-        return self.training_patches_queue
+        volume_index = torch.utils.data.WeightedRandomSampler(self.training_volume_weights, 1)
+        volume = self.training_volumes[volume_index]
+        return volume.random_patch
     
     @property
-    def random_validation_patches(self):
-        return self.validation_patches_queue
+    def random_validation_patch(self):
+        volume_index = torch.utils.data.WeightedRandomSampler(self.validation_volume_weights, 1)
+        volume = self.validation_volumes[volume_index]
+        return volume.random_patch
            
-    def _annotation_to_volumes(self, img: np.ndarray, voxel_offset: np.ndarray, synapses: dict,
-            sampling_distance: int = 22, expand_distance: int = 2) -> tuple:
+    def _annotation_to_target_volume(self, image: Chunk, tbar_points: list,
+            expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
         Args:
@@ -148,11 +131,10 @@ class Dataset(torch.utils.data.Dataset):
             bin_presyn: binary label of annotated position.
             sampling_probability_map: the probability map of sampling
         """
-        assert synapses['order'] == ["x", "y", "z"]
         # assert synapses['resolution'] == [8, 8, 8]
-        bin_presyn = np.zeros_like(img, dtype=np.float32)
-        sampling_map = np.zeros_like(img, dtype=np.uint8)
-        for coordinate in synapses['presynapses'].values():
+        bin_presyn = np.zeros_like(image.array, dtype=np.float32)
+        voxel_offset = np.asarray(image.voxel_offset, dtype=np.uint32)
+        for coordinate in tbar_points:
             # transform coordinate from xyz order to zyx
             coordinate = coordinate[::-1]
             coordinate = np.asarray(coordinate, dtype=np.uint32)
@@ -162,22 +144,7 @@ class Dataset(torch.utils.data.Dataset):
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 1.
-            sampling_map[
-                coordinate[0]-sampling_distance : coordinate[0]+sampling_distance,
-                coordinate[1]-sampling_distance : coordinate[1]+sampling_distance,
-                coordinate[2]-sampling_distance : coordinate[2]+sampling_distance,
-            ] += 1
-        # do not sample outside the annotated region
-        # we cutout the image with some extension of annotated bounding box 
-        # to have some more patches, some of the patches will have image outside the bounding box
-        # but we do not want to sample outside this box since some positive examples are not being annotated
-        sampling_map[:120, :, :] = 0
-        sampling_map[:, :120, :] = 0
-        sampling_map[:, :, :120] = 0
-        sampling_map[-120:, :, :] = 0
-        sampling_map[:, -120:, :] = 0
-        sampling_map[:, :, -120:] = 0
-        return bin_presyn, sampling_map
+        return bin_presyn
     
     @property
     def transform(self):
