@@ -15,6 +15,7 @@ class Patch(object):
                 information. For exampling, warping the image will
                 make boundary some black region.
         """
+        assert image.shape == label.shape
         self.image = image
         self.label = label
         self.delayed_shrink_size = delayed_shrink_size
@@ -46,3 +47,7 @@ class Patch(object):
             self.delayed_shrink_size[1]:y-self.delayed_shrink_size[4],
             self.delayed_shrink_size[2]:x-self.delayed_shrink_size[5],
         ]
+
+    @property
+    def shape(self):
+        return self.image.shape

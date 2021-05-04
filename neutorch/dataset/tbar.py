@@ -130,7 +130,7 @@ class Dataset(torch.utils.data.Dataset):
             )[0]
         volume = self.training_volumes[volume_index]
         patch = volume.random_patch
-        patch = self.transform(patch)
+        self.transform(patch)
         patch.apply_delayed_shrink_size()
         return patch
 
@@ -146,12 +146,18 @@ class Dataset(torch.utils.data.Dataset):
             )[0]
         volume = self.validation_volumes[volume_index]
         patch = volume.random_patch
-        patch = self.transform(patch)
+        self.transform(patch)
         return patch
            
     def _prepare_transform(self):
         self.transform = Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
             DropSection(probability=.5),
+            BlackBox(),
+            GaussianBlur2D(),
         ])
 
 
