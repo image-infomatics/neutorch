@@ -10,7 +10,6 @@ import torch
 from torch import nn
 import torchio as tio
 from torch.utils.tensorboard import SummaryWriter
-import torchvision
 
 
 from neutorch.model.IsoRSUNet import Model
@@ -143,7 +142,9 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            validation_image, validation_target = dataset.random_validation_patch
+            patch = dataset.random_validation_patch
+            validation_image = patch.image
+            validation_target = patch.label
             validation_image = torch.from_numpy(validation_image)
             validation_target = torch.from_numpy(validation_target)
             # Transfer Data to GPU if available

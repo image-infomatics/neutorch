@@ -89,7 +89,6 @@ class Dataset(torch.utils.data.Dataset):
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
 
-            # breakpoint()
             tbar_points -= voxel_offset
             assert np.all(tbar_points > 0)
             # all the points should be inside the image
@@ -131,7 +130,6 @@ class Dataset(torch.utils.data.Dataset):
             )[0]
         volume = self.training_volumes[volume_index]
         patch = volume.random_patch
-        breakpoint()
         patch = self.transform(patch)
         patch.apply_delayed_shrink_size()
         return patch
@@ -154,7 +152,7 @@ class Dataset(torch.utils.data.Dataset):
            
     def _prepare_transform(self):
         self.transform = Compose([
-            DropSection(probability=0.5),
+            DropSection(probability=1.),
         ])
 
 

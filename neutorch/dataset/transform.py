@@ -114,7 +114,6 @@ class DropSection(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        breakpoint()
         # since this transform really removes information
         # we do not delay the shrinking
         # make the first and last section missing is meaning less
@@ -126,6 +125,9 @@ class DropSection(SpatialTransform):
         label[..., :z, :, :] = patch.label[..., :z, :, :]
         image[..., z:, :, :] = patch.image[..., z+1, :, :]
         label[..., z:, :, :] = patch.label[..., z+1, :, :]
+        patch.image = image
+        patch.label = label
+        return patch
 
     @property
     def shrinking_size(self):
