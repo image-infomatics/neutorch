@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
+from os import replace
 import random
 
 import numpy as np
 
 from scipy.ndimage.filters import gaussian_filter
+from skimage.util import random_noise
 
 from .patch import Patch
 
@@ -58,7 +60,6 @@ class SpatialTransform(AbstractTransform):
         pass
     
     @property
-    @abstractmethod
     def shrink_size(self):
         """this transform might shrink the patch size.
         for example, droping a section will shrink the z axis.
@@ -217,3 +218,65 @@ class GaussianBlur2D(IntensityTransform):
 
     def transform(self, patch: Patch):
         gaussian_filter(patch.image, sigma=self.sigma, output=patch.image)
+
+
+class GaussianBlur3D(IntensityTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY,
+            sigma: tuple = (5., 5., 5.)):
+        super().__init__(probability=probability)
+        self.sigma = sigma
+
+    def transform(self, patch: Patch):
+        gaussian_filter(patch.image, sigma=self.sigma, output=patch.image)
+
+
+class Noise(IntensityTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY,
+            mode: str='gaussian', variance: float = 0.01):
+        super().__init__(probability=probability)
+        self.mode = mode  
+        self.variance = variance
+
+    def transform(self, patch: Patch):
+        random_noise(patch.image, mode=self.mode, var=self.variance)
+        np.clip(patch.image, 0., 1., out=patch.image)
+
+
+class Flip(SpatialTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    def transform(self, patch: Patch):
+        axis_num = random.randint(1, 4)
+        axis = random.sample(range(3), axis_num)
+        # the image and label is 5d
+        # the first two axises are batch and channel
+        axis5d = tuple(2+x for x in axis)
+        patch.image = np.flip(patch.image, axis=axis5d)
+        patch.label = np.flip(patch.label, axis=axis5d)
+
+        shrink = list(patch.delayed_shrink_size)
+        for ax in axis:
+            # swap the axis to be shrinked
+            shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
+        patch.delayed_shrink_size = tuple(shrink)
+
+
+class Transpose(SpatialTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    def transform(self, patch: Patch):
+        axis = [2,3,4]
+        random.shuffle(axis)
+        axis5d = (0, 1, *axis,)
+        patch.image = np.transpose(patch.image, axis5d)
+        patch.label = np.transpose(patch.label, axis5d)
+
+        shrink = list(patch.delayed_shrink_size)
+        for ax0, ax1 in enumerate(axis):
+            ax1 -= 2
+            # swap the axis to be shrinked
+            shrink[ax0] = patch.delayed_shrink_size[ax1]
+            shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
+        patch.delayed_shrink_size = tuple(shrink) 

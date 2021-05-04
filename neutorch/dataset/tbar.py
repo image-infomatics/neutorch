@@ -52,6 +52,7 @@ class Dataset(torch.utils.data.Dataset):
         self._prepare_transform()
         assert isinstance(self.transform, Compose)
 
+        self.patch_size = patch_size
         patch_size_before_transform = tuple(
             p + s0 + s1 for p, s0, s1 in zip(
                 patch_size, 
@@ -132,6 +133,8 @@ class Dataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
+        print('patch shape: ', patch.shape)
+        assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
         return patch
 
     @property
@@ -147,6 +150,7 @@ class Dataset(torch.utils.data.Dataset):
         volume = self.validation_volumes[volume_index]
         patch = volume.random_patch
         self.transform(patch)
+        patch.apply_delayed_shrink_size()
         return patch
            
     def _prepare_transform(self):
@@ -155,9 +159,12 @@ class Dataset(torch.utils.data.Dataset):
             AdjustBrightness(),
             AdjustContrast(),
             Gamma(),
-            DropSection(probability=.5),
-            BlackBox(),
+            Noise(),
             GaussianBlur2D(),
+            BlackBox(),
+            DropSection(),
+            Flip(),
+            Transpose(),
         ])
 
 

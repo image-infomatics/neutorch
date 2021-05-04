@@ -97,8 +97,10 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     for iter_idx in range(iter_start, iter_stop):
         ping = time()
         patch = dataset.random_training_patch
-        image = patch.image
-        target = patch.label
+        # pytorch do not work with array with negative stride
+        # we make copy to eliminate this and make it continuous
+        image = patch.image.copy()
+        target = patch.label.copy()
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = torch.from_numpy(image)
         target = torch.from_numpy(target)

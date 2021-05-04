@@ -47,6 +47,8 @@ class Patch(object):
             self.delayed_shrink_size[1]:y-self.delayed_shrink_size[4],
             self.delayed_shrink_size[2]:x-self.delayed_shrink_size[5],
         ]
+        # reset the shrink size to 0
+        self.delayed_shrink_size = (0, 0, 0, 0, 0, 0)
 
     @property
     def shape(self):
