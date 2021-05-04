@@ -17,6 +17,7 @@ import torchio as tio
 import toml
 
 from .ground_truth_volume import GroundTruthVolumeWithPointAnnotation
+from .transform import *
 
 
 def image_reader(path: str):
@@ -24,6 +25,7 @@ def image_reader(path: str):
         img = np.asarray(file['main'])
     # the last one is affine transformation matrix in torchio image type
     return img, None
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, training_split_ratio: float = 0.9,
@@ -46,6 +48,17 @@ class Dataset(torch.utils.data.Dataset):
             meta = toml.load(file)
 
         config_dir = os.path.dirname(config_file)
+
+        self._prepare_transform()
+        assert isinstance(self.transform, Compose)
+
+        patch_size_before_transform = tuple(
+            p + s0 + s1 for p, s0, s1 in zip(
+                patch_size, 
+                self.transform.shrinking_size[:3], 
+                self.transform.shrinking_size[-3:]
+            )
+        )
         
         # load all the datasets
         volumes = []
@@ -85,7 +98,7 @@ class Dataset(torch.utils.data.Dataset):
             ground_truth_volume = GroundTruthVolumeWithPointAnnotation(
                 image,
                 annotation_points=tbar_points,
-                patch_size=patch_size,
+                patch_size=patch_size_before_transform,
                 max_sampling_distance=max_sampling_distance,
             )
             volumes.append(ground_truth_volume)
@@ -117,7 +130,11 @@ class Dataset(torch.utils.data.Dataset):
                 k=1,
             )[0]
         volume = self.training_volumes[volume_index]
-        return volume.random_patch
+        patch = volume.random_patch
+        breakpoint()
+        patch = self.transform(patch)
+        patch.apply_delayed_shrink_size()
+        return patch
 
     @property
     def random_validation_patch(self):
@@ -131,9 +148,14 @@ class Dataset(torch.utils.data.Dataset):
             )[0]
         # breakpoint()
         volume = self.validation_volumes[volume_index]
-        return volume.random_patch
+        patch = volume.random_patch
+        patch = self.transform(patch)
+        return patch
            
-    
+    def _prepare_transform(self):
+        self.transform = Compose([
+            DropSection(probability=0.5),
+        ])
 
 
 if __name__ == '__main__':

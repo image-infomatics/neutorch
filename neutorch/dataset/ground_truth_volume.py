@@ -1,10 +1,27 @@
+from abc import ABC, abstractmethod
 import random
 from typing import Union
 
 import numpy as np
+from .patch import Patch
 
 
-class GroundTruthVolume(object):
+class AbstractGroundTruthVolume(ABC):
+    def __init__(self):
+        pass
+
+    @property
+    @abstractmethod
+    def random_patch(self):
+        pass
+
+    @property
+    @abstractmethod
+    def volume_sampling_weight(self):
+        pass
+
+
+class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
             patch_size: Union[tuple, int], 
             forbbiden_distance_to_boundary: tuple = None) -> None:
@@ -51,7 +68,8 @@ class GroundTruthVolume(object):
 
     @property
     def random_patch(self):
-        return self.random_patch_from_center_range(self.center_start, self.center_stop)
+        patch = self.random_patch_from_center_range(self.center_start, self.center_stop)
+        return patch
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
         # breakpoint()
@@ -76,12 +94,15 @@ class GroundTruthVolume(object):
         ]
         image_patch = self._expand_to_5d(image_patch)
         target_patch = self._expand_to_5d(label_patch)
-        return image_patch, target_patch
+        return Patch(image_patch, target_patch)
     
     @property
     def volume_sampling_weight(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
-
+    
+    @property
+    def transform(self):
+        pass
 
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):

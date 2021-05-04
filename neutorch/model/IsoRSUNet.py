@@ -91,7 +91,8 @@ def conv(in_channels, out_channels, kernel_size: int = 3, stride: int = 1,
 class BNReLUConv(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size=3):
         super().__init__()
-        self.add_module('norm', nn.BatchNorm3d(in_channels))
+        # self.add_module('norm', nn.BatchNorm3d(in_channels))
+        self.add_module('norm', nn.InstanceNorm3d(in_channels))
         self.add_module('relu', nn.ReLU(inplace=True))
         self.add_module('conv', conv(in_channels, out_channels, kernel_size=kernel_size))
 
@@ -200,7 +201,8 @@ class InputBlock(nn.Sequential):
 class OutputBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: tuple):
         super().__init__()
-        self.norm = nn.BatchNorm3d(in_channels)
+        # self.norm = nn.BatchNorm3d(in_channels)
+        self.norm = nn.InstanceNorm3d(in_channels)
         self.relu = nn.ReLU(inplace=True)
 
         # spec = collections.OrderedDict(sorted(out_spec.items(), key=lambda x: x[0]))

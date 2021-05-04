@@ -94,13 +94,15 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     )
 
     patch_voxel_num = np.product(patch_size)
-    ping = time()
     accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
-        image, target = dataset.random_training_patch
+        ping = time()
+        patch = dataset.random_training_patch
+        image = patch.image
+        target = patch.label
+        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = torch.from_numpy(image)
         target = torch.from_numpy(target)
-        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
@@ -112,7 +114,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         optimizer.step()
         accumulated_loss += loss.cpu().tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
-        ping = time()
 
         if iter_idx % training_interval == 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
