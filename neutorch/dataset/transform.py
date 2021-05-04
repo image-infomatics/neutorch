@@ -19,11 +19,14 @@ class AbstractTransform(ABC):
     def is_invertible(self):
         return hasattr(self, 'invert')
 
-    def __call__(self, patch):
+    def __call__(self, patch: Patch):
         if random.random() < self.probability:
             return self.transform(patch)
         else:
-            # do nothing if outside of probability 
+            # for spatial transform, we need to correct the size
+            # to make sure that the final patch size is correct 
+            if hasattr(self, 'shrink_size'):
+                patch.accumulate_delayed_shrink_size(self.shrink_size) 
             return patch
 
     @abstractmethod
@@ -52,12 +55,12 @@ class SpatialTransform(AbstractTransform):
     
     @property
     @abstractmethod
-    def shrinking_size(self):
+    def shrink_size(self):
         """this transform might shrink the patch size.
         for example, droping a section will shrink the z axis.
 
         Return:
-            shrinking_size (tuple): z0,y0,x0,z1,y1,x1
+            shrink_size (tuple): z0,y0,x0,z1,y1,x1
         """
         return (0, 0, 0, 0, 0, 0)
 
@@ -96,11 +99,11 @@ class Compose(object):
             transforms (list): list of transform instances
         """
         self.transforms = transforms
-        shrinking_size = np.zeros((6,), dtype=np.int64)
+        shrink_size = np.zeros((6,), dtype=np.int64)
         for transform in transforms:
             if isinstance(transform, SpatialTransform):
-                shrinking_size += np.asarray(transform.shrinking_size)
-        self.shrinking_size = tuple(x for x in shrinking_size)
+                shrink_size += np.asarray(transform.shrink_size)
+        self.shrink_size = tuple(x for x in shrink_size)
 
     def __call__(self, patch: tuple):
         for transform in self.transforms:
@@ -130,5 +133,5 @@ class DropSection(SpatialTransform):
         return patch
 
     @property
-    def shrinking_size(self):
+    def shrink_size(self):
         return (0, 0, 0, 1, 0, 0)

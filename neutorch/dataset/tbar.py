@@ -55,8 +55,8 @@ class Dataset(torch.utils.data.Dataset):
         patch_size_before_transform = tuple(
             p + s0 + s1 for p, s0, s1 in zip(
                 patch_size, 
-                self.transform.shrinking_size[:3], 
-                self.transform.shrinking_size[-3:]
+                self.transform.shrink_size[:3], 
+                self.transform.shrink_size[-3:]
             )
         )
         
@@ -144,7 +144,6 @@ class Dataset(torch.utils.data.Dataset):
                 weights=self.validation_volume_weights,
                 k=1,
             )[0]
-        # breakpoint()
         volume = self.validation_volumes[volume_index]
         patch = volume.random_patch
         patch = self.transform(patch)
@@ -152,7 +151,7 @@ class Dataset(torch.utils.data.Dataset):
            
     def _prepare_transform(self):
         self.transform = Compose([
-            DropSection(probability=1.),
+            DropSection(probability=.5),
         ])
 
 
