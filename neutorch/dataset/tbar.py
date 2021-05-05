@@ -16,8 +16,8 @@ import torchvision
 import torchio as tio
 import toml
 
-from .ground_truth_volume import GroundTruthVolumeWithPointAnnotation
-from .transform import *
+from neutorch.dataset.ground_truth_volume import GroundTruthVolumeWithPointAnnotation
+from neutorch.dataset.transform import *
 
 
 def image_reader(path: str):
@@ -28,8 +28,10 @@ def image_reader(path: str):
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, config_file: str, training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=64, max_sampling_distance: int = 22):
+    def __init__(self, config_file: str, 
+            training_split_ratio: float = 0.9,
+            patch_size: Union[int, tuple]=(64, 64, 64), 
+            max_sampling_distance: int = 22):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
@@ -135,6 +137,8 @@ class Dataset(torch.utils.data.Dataset):
         patch.apply_delayed_shrink_size()
         print('patch shape: ', patch.shape)
         assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
+        patch.image = patch.image.copy()
+        patch.label = patch.label.copy()
         return patch
 
     @property
@@ -165,35 +169,30 @@ class Dataset(torch.utils.data.Dataset):
             DropSection(),
             Flip(),
             Transpose(),
+            MissAlignment(),
         ])
 
 
 if __name__ == '__main__':
     dataset = Dataset(
         "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
-        num_workers=1,
-        sampling_distance=4,
+        max_sampling_distance=4,
         training_split_ratio=0.99,
-    )
-    # we only left one subject as validation set
-    training_batch_size = dataset.training_subjects_num
-    patches_loader = torch.utils.data.DataLoader(
-        dataset.random_training_patches,
-        batch_size=training_batch_size
     )
     
     model = torch.nn.Identity()
     print('start generating random patches...')
-    ping = time()
     for n in range(100):
-        patches_batch = next(iter(patches_loader))
+        ping = time()
+        patch = dataset.random_training_patch
         print(f'generating a patch takes {int(time()-ping)} seconds.')
+        image = patch.image
+        tbar = patch.label
+        image = torch.from_numpy(image)
+        tbar = torch.from_numpy(tbar)
         # print(patch)
-        image = patches_batch['image'][tio.DATA]
         logits = model(image)
-        assert image.shape[0] == training_batch_size
         image = image[:, :, 32, :, :]
-        tbar = patches_batch['tbar'][tio.DATA]
         tbar, _ = torch.max(tbar, dim=2, keepdim=False)
         slices = torch.cat((image, tbar))
         image_path = os.path.expanduser('~/Downloads/patches.png')
@@ -201,9 +200,9 @@ if __name__ == '__main__':
         torchvision.utils.save_image(
             slices,
             image_path,
-            nrow=training_batch_size,
+            nrow=8,
             normalize=True,
             scale_each=True,
         )
+        sleep(1)
 
-        ping = time()

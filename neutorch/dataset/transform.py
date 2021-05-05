@@ -10,7 +10,7 @@ from skimage.util import random_noise
 from .patch import Patch
 
 
-DEFAULT_PROBABILITY = 0.5
+DEFAULT_PROBABILITY = .5
 
 
 class AbstractTransform(ABC):
@@ -247,7 +247,7 @@ class Flip(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        axis_num = random.randint(1, 4)
+        axis_num = random.randint(1, 3)
         axis = random.sample(range(3), axis_num)
         # the image and label is 5d
         # the first two axises are batch and channel
@@ -280,3 +280,104 @@ class Transpose(SpatialTransform):
             shrink[ax0] = patch.delayed_shrink_size[ax1]
             shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
         patch.delayed_shrink_size = tuple(shrink) 
+
+    
+class MissAlignment(SpatialTransform):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY,
+            max_displacement: int=2):
+        """move part of volume alone x axis
+        We'll alwasy select a position alone z axis, and move the bottom part alone X axis.
+        By combining with transpose, flip and rotation, we can get other displacement automatically.
+
+        Args:
+            probability (float, optional): probability of this augmentation. Defaults to DEFAULT_PROBABILITY.
+            max_displacement (int, optional): maximum displacement. Defaults to 2.
+        """
+        super().__init__(probability=probability)
+        assert max_displacement > 0
+        assert max_displacement < 8
+        self.max_displacement = max_displacement
+
+    def transform(self, patch: Patch):
+        axis = random.randint(2, 4)
+        displacement = random.randint(1, self.max_displacement)
+        # random direction
+        # no need to use random direction because we can combine with rotation and flipping
+        # displacement *= random.choice([-1, 1])
+        _,_, sz, sy, sx = patch.shape
+        if axis == 2:
+            zloc = random.randint(1, sz-1)
+            patch.image[..., zloc:, 
+                self.max_displacement : sy-self.max_displacement,
+                self.max_displacement : sx-self.max_displacement,
+                ] = patch.image[..., zloc:, 
+                    self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                    self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                    ]
+            patch.label[..., zloc:, 
+                self.max_displacement : sy-self.max_displacement,
+                self.max_displacement : sx-self.max_displacement,
+                ] = patch.label[..., zloc:, 
+                    self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                    self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                    ]
+        elif axis == 3:
+            yloc = random.randint(1, sy-1)
+            
+            # print('right side shape: ', patch.image[...,  self.max_displacement+displacement : sz+displacement-self.max_displacement,yloc:,self.max_displacement+displacement : sx+displacement-self.max_displacement,].shape)
+
+            patch.image[..., 
+                self.max_displacement : sz-self.max_displacement,
+                yloc:, 
+                self.max_displacement : sx-self.max_displacement,
+                ] = patch.image[..., 
+                    self.max_displacement+displacement : sz+displacement-self.max_displacement, 
+                    yloc:, 
+                    self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                    ]
+            patch.label[..., 
+                self.max_displacement : sz-self.max_displacement,
+                yloc:,
+                self.max_displacement : sx-self.max_displacement,
+                ] = patch.label[..., 
+                    self.max_displacement+displacement : sz+displacement-self.max_displacement,
+                    yloc:, 
+                    self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                    ]
+        elif axis == 4:
+            xloc = random.randint(1, sx-1)
+            patch.image[..., 
+                self.max_displacement : sz-self.max_displacement,
+                self.max_displacement : sy-self.max_displacement,
+                xloc:, 
+                ] = patch.image[...,  
+                    self.max_displacement+displacement : sz+displacement-self.max_displacement,
+                    self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                    xloc:
+                    ]
+            patch.label[..., 
+                self.max_displacement : sz-self.max_displacement,
+                self.max_displacement : sy-self.max_displacement,
+                xloc:,
+                ] = patch.label[..., 
+                    self.max_displacement+displacement : sz+displacement-self.max_displacement,
+                    self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                    xloc:, 
+                    ] 
+
+        # only keep the central region         
+        patch.image = patch.image[...,
+            self.max_displacement:sz-self.max_displacement,
+            self.max_displacement:sy-self.max_displacement,
+            self.max_displacement:sx-self.max_displacement,
+            ]
+        patch.label = patch.label[...,
+            self.max_displacement:sz-self.max_displacement,
+            self.max_displacement:sy-self.max_displacement,
+            self.max_displacement:sx-self.max_displacement,
+            ]
+    
+    @property
+    def shrink_size(self):
+        # return (0, 0, 0, 0, 0, self.max_displacement)
+        return (self.max_displacement,) * 6
