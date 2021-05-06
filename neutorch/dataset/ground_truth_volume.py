@@ -3,6 +3,7 @@ import random
 from typing import Union
 
 import numpy as np
+from scipy.ndimage.measurements import label
 from .patch import Patch
 
 

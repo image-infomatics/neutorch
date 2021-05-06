@@ -146,8 +146,6 @@ class Dataset(torch.utils.data.Dataset):
         patch.apply_delayed_shrink_size()
         print('patch shape: ', patch.shape)
         assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
-        patch.image = patch.image.copy()
-        patch.label = patch.label.copy()
         return patch
 
     @property

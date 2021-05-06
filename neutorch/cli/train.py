@@ -98,10 +98,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         ping = time()
         patch = dataset.random_training_patch
         print('training patch shape: ', patch.shape)
-        # pytorch do not work with array with negative stride
-        # we make copy to eliminate this and make it continuous
-        image = patch.image.copy()
-        target = patch.label.copy()
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = torch.from_numpy(image)
         target = torch.from_numpy(target)
@@ -147,10 +143,8 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             print('evaluate prediction: ')
             patch = dataset.random_validation_patch
             print('evaluation patch shape: ', patch.shape)
-            validation_image = patch.image.copy()
-            validation_target = patch.label.copy()
-            validation_image = torch.from_numpy(validation_image)
-            validation_target = torch.from_numpy(validation_target)
+            validation_image = torch.from_numpy(patch.image)
+            validation_target = torch.from_numpy(patch.label)
             # Transfer Data to GPU if available
             if torch.cuda.is_available():
                 validation_image = validation_image.cuda()

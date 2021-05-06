@@ -113,6 +113,11 @@ class Compose(object):
     def __call__(self, patch: Patch):
         for transform in self.transforms:
             transform(patch)
+        # after the transformation, the stride of array
+        # could be negative, and pytorch could not tranform
+        # the array to Tensor. Copy can fix it.
+        patch.image = patch.image.copy()
+        patch.label = patch.label.copy()
 
 
 
