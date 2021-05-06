@@ -133,7 +133,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         )
 
         if max_sampling_distance is None:
-            max_sampling_distance = tuple(ps // 2 for ps in patch_size)
+            max_sampling_distance = tuple(ps-1  for ps in patch_size)
         if isinstance(max_sampling_distance, int):
             max_sampling_distance = (max_sampling_distance, ) * 3
         for idx in range(3):
@@ -178,8 +178,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         label = np.zeros_like(image, dtype=np.float32)
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
-            assert np.all(coordinate>0)
-            assert np.all(coordinate<600)
             label[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,

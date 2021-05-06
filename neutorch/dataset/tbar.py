@@ -31,18 +31,28 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, 
             training_split_ratio: float = 0.9,
             patch_size: Union[int, tuple]=(64, 64, 64), 
-            max_sampling_distance: int = 22):
+            max_sampling_distance: Union[int, tuple] = None):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
-            max_sampling_distance (int): sampling patches around the annotated T-bar point 
+            max_sampling_distance (int or tuple, optional): sampling patches around the annotated T-bar point 
                 limited by a maximum distance.
         """
         super().__init__()
         assert training_split_ratio > 0.5
         assert training_split_ratio < 1.
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * 3
+
+        if max_sampling_distance is None:
+            max_sampling_distance = tuple(p // 2 for p in patch_size)
+        elif isinstance(max_sampling_distance, int):
+            max_sampling_distance = (max_sampling_distance,) * 3
+        assert len(max_sampling_distance) == 3
+
         config_file = os.path.expanduser(config_file)
         assert config_file.endswith('.toml'), "we use toml file as configuration format."
 
@@ -175,7 +185,7 @@ class Dataset(torch.utils.data.Dataset):
 if __name__ == '__main__':
     dataset = Dataset(
         "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
-        max_sampling_distance=4,
+        max_sampling_distance=24,
         training_split_ratio=0.99,
     )
 
@@ -193,12 +203,12 @@ if __name__ == '__main__':
         print(f'generating a patch takes {int(time()-ping)} seconds.')
         image = patch.image
         label = patch.label
-        assert np.any(label > 0)
         with h5py.File('/tmp/image.h5', 'w') as file:
             file['main'] = image[0,0, ...]
         with h5py.File('/tmp/label.h5', 'w') as file:
             file['main'] = label[0,0, ...]
 
+        assert np.any(label > 0)
         print('number of nonzero voxels: ', np.count_nonzero(label))
         # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)

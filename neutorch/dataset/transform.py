@@ -179,24 +179,28 @@ class NormalizeTo01(IntensityTransform):
 
 class AdjustBrightness(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor: float = 0.3):
+            min_factor: float = 0.05,
+            max_factor: float = 0.3):
         super().__init__(probability=probability)
-        factor = np.clip(factor, 0, 2)
-        self.factor = factor
+        max_factor = np.clip(max_factor, 0, 2)
+        self.min_factor = min_factor
+        self.max_factor = max_factor
     
     def transform(self, patch: Patch):
-        patch.image += (random.random() - 0.5) * self.factor
+        patch.image += (random.random() - 0.5) * random.uniform(
+            self.min_factor, self.max_factor)
         np.clip(patch.image, 0., 1., out=patch.image)
 
 class AdjustContrast(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor: float = 0.2):
+            factor_range: tuple = (0.05, 0.2)):
         super().__init__(probability=probability)
-        factor = np.clip(factor, 0., 2.)
-        self.factor = factor
+        # factor_range = np.clip(factor_range, 0., 2.)
+        self.factor_range = factor_range
 
     def transform(self, patch: Patch):
-        factor = 1 + (random.random() - 0.5) * self.factor
+        factor = 1 + (random.random() - 0.5) * random.uniform(
+            self.factor_range[0], self.factor_range[1])
         patch.image *= factor
         np.clip(patch.image, 0., 1., out=patch.image)
 
@@ -206,7 +210,8 @@ class Gamma(IntensityTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        gamma = random.random() * 2. - 1.
+        # gamma = random.random() * 2. - 1.
+        gamma = random.uniform(-1., 1.)
         patch.image **= 2.** gamma
 
 
@@ -222,23 +227,25 @@ class GaussianBlur2D(IntensityTransform):
 
 class GaussianBlur3D(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            sigma: tuple = (1., 1., 1.)):
+            max_sigma: tuple = (1.2, 1.2, 1.2)):
         super().__init__(probability=probability)
-        self.sigma = sigma
+        self.max_sigma = max_sigma
 
     def transform(self, patch: Patch):
-        gaussian_filter(patch.image, sigma=self.sigma, output=patch.image)
+        sigma = tuple(random.uniform(0.2, s) for s in self.max_sigma)
+        gaussian_filter(patch.image, sigma=sigma, output=patch.image)
 
 
 class Noise(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            mode: str='gaussian', variance: float = 0.01):
+            mode: str='gaussian', max_variance: float = 0.02):
         super().__init__(probability=probability)
         self.mode = mode  
-        self.variance = variance
+        self.max_variance = max_variance
 
     def transform(self, patch: Patch):
-        random_noise(patch.image, mode=self.mode, var=self.variance)
+        variance = random.uniform(0.01, self.max_variance)
+        random_noise(patch.image, mode=self.mode, var=variance)
         np.clip(patch.image, 0., 1., out=patch.image)
 
 
