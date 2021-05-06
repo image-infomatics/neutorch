@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
-from os import replace
 import random
+from functools import lru_cache
 
 import numpy as np
 
 from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import affine_transform
+
+import cv2
+
 from skimage.util import random_noise
 
 from .patch import Patch
@@ -377,19 +381,77 @@ class MissAlignment(SpatialTransform):
                     xloc:, 
                     ] 
 
-        # only keep the central region         
-        patch.image = patch.image[...,
-            self.max_displacement:sz-self.max_displacement,
-            self.max_displacement:sy-self.max_displacement,
-            self.max_displacement:sx-self.max_displacement,
-            ]
-        patch.label = patch.label[...,
-            self.max_displacement:sz-self.max_displacement,
-            self.max_displacement:sy-self.max_displacement,
-            self.max_displacement:sx-self.max_displacement,
-            ]
+        # only keep the central region  
+        patch.shrink(self.shrink_size)       
     
     @property
+    @lru_cache
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
         return (self.max_displacement,) * 6
+
+
+class Perspective(SpatialTransform):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY,
+            corner_ratio: float=0.2):
+        """Warp image using Perspective transform
+
+        Args:
+            probability (float, optional): probability of this transformation. Defaults to DEFAULT_PROBABILITY.
+            corner_ratio (float, optional): We split the 2D image to four equal size rectangles.
+                For each axis in rectangle, we further divid it to four rectangles using this ratio.
+                The rectangle containing the image corner was used as a sampling point region.
+                This idea is inspired by this example:
+                https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_geometric_transformations/py_geometric_transformations.html#perspective-transformation
+                Defaults to 0.5.
+        """
+        super().__init__(probability=probability)
+        self.corner_ratio = corner_ratio
+
+    def transform(self, patch: Patch):
+        # matrix = np.eye(3)
+        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
+        for batch in range(patch.shape[0]):
+            for channel in range(patch.shape[1]):
+                for z in range(patch.shape[2]):
+                    patch.image[batch,channel,z,...] = self._transform2d(
+                        patch.image[batch, channel, z, ...], cv2.INTER_LINEAR
+                    )
+                    patch.image[batch,channel,z,...] = self._transform2d(
+                        patch.image[batch, channel, z, ...], cv2.INTER_NEAREST
+                    )
+                
+        patch.shrink(self.shrink_size)
+
+    def _transform2d(self, arr: np.ndarray, interpolation: int):
+        assert arr.ndim == 2
+        corner_ratio = random.uniform(0.02, self.corner_ratio)
+        # corner_ratio = self.corner_ratio
+        sy, sx = arr.shape
+        upper_left_point = [
+            random.randint(0, round(sy*corner_ratio/2)), 
+            random.randint(0, round(sx*corner_ratio/2))
+        ]
+        upper_right_point = [
+            random.randint(0, round(sy*corner_ratio/2)),
+            random.randint(sx-round(sx*corner_ratio/2), sx-1)
+        ]
+        lower_left_point = [
+            random.randint(sy-round(sy*corner_ratio/2), sy-1),
+            random.randint(0, round(sx*corner_ratio/2))
+        ]
+        lower_right_point = [
+            random.randint(sy-round(sy*corner_ratio/2), sy-1),
+            random.randint(sx-round(sx*corner_ratio/2), sx-1)
+        ]
+        pts1 = np.asarray([
+            upper_left_point, 
+            upper_right_point, 
+            lower_left_point, 
+            lower_right_point], dtype=np.float32)
+        
+        pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
+        M = cv2.getPerspectiveTransform(pts1, pts2)
+        dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
+        # breakpoint()
+        return dst
