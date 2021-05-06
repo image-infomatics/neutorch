@@ -1,3 +1,4 @@
+from functools import lru_cache
 import numpy as np
 
 
@@ -35,7 +36,7 @@ class Patch(object):
         self.shrink(self.delayed_shrink_size)
         
         # reset the shrink size to 0
-        self.delayed_shrink_size = (0, 0, 0, 0, 0, 0)
+        self.delayed_shrink_size = (0,) * 6
 
     def shrink(self, size: tuple):
         assert len(size) == 6
@@ -56,3 +57,8 @@ class Patch(object):
     @property
     def shape(self):
         return self.image.shape
+
+    @property
+    @lru_cache
+    def center(self):
+        return tuple(ps // 2 for ps in self.shape)

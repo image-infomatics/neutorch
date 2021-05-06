@@ -226,17 +226,18 @@ class Gamma(IntensityTransform):
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
-            sigma: float = 1.0):
+            sigma: float = 1.5):
         super().__init__(probability=probability)
         self.sigma = sigma
 
     def transform(self, patch: Patch):
-        gaussian_filter(patch.image, sigma=self.sigma, output=patch.image)
+        sigma = random.uniform(0.2, self.sigma)
+        gaussian_filter(patch.image, sigma=sigma, output=patch.image)
 
 
 class GaussianBlur3D(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            max_sigma: tuple = (1.2, 1.2, 1.2)):
+            max_sigma: tuple = (1.5, 1.5, 1.5)):
         super().__init__(probability=probability)
         self.max_sigma = max_sigma
 
@@ -453,5 +454,36 @@ class Perspective(SpatialTransform):
         pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
         M = cv2.getPerspectiveTransform(pts1, pts2)
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
-        # breakpoint()
         return dst
+
+
+class RotateScale(SpatialTransform):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY,
+            max_scaling: float=1.3):
+        super().__init__(probability=probability)
+        self.max_scaling = max_scaling
+
+    def transform(self, patch: Patch):
+        # because we do not know the rotation angle
+        # we should apply the shrinking first
+        patch.apply_delayed_shrink_size()
+
+        # if the rotation is close to diagnal, for example 45 degree
+        # the label could be outside the volume and be black!
+        angle = random.choice([0, 90, 180, -90, -180]) + random.randint(-5, 5)
+        # angle = random.randint(-180, 180)
+        scale = random.uniform(1.1, self.max_scaling)
+        center = patch.center[-2:]
+        mat = cv2.getRotationMatrix2D( center, angle, scale )
+        breakpoint()
+        for batch in range(patch.shape[0]):
+            for channel in range(patch.shape[1]):
+                for z in range(patch.shape[2]):
+                    patch.image[batch, channel, z, ...] = cv2.warpAffine(
+                        patch.image[batch, channel, z, ...],
+                        mat, patch.shape[-2:], flags=cv2.INTER_LINEAR
+                    ) 
+                    patch.label[batch, channel, z, ...] = cv2.warpAffine(
+                        patch.label[batch, channel, z, ...],
+                        mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
+                    ) 
