@@ -393,3 +393,9 @@ class MissAlignment(SpatialTransform):
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
         return (self.max_displacement,) * 6
+
+
+# class Affine(SpatialTransform):
+#     def __init__(self, probability: float = DEFAULT_PROBABILITY,
+#             scale: tuple = ()):
+#         super().__init__(probability=probability)

@@ -1,6 +1,7 @@
 torch 
 torchvision
-torchio
 toml
 h5py
 tensorboard
+scikit-image
+pybind11
