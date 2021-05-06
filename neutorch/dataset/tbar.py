@@ -165,7 +165,7 @@ class Dataset(torch.utils.data.Dataset):
             Noise(),
             GaussianBlur2D(),
             BlackBox(),
-            # DropSection(),
+            DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),

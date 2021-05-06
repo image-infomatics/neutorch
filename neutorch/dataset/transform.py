@@ -124,14 +124,14 @@ class DropSection(SpatialTransform):
         # since this transform really removes information
         # we do not delay the shrinking
         # make the first and last section missing is meaning less
-        b0, c0, z0, y0, x0 = patch.image.shape
-        z = random.randrange(1, z0-1)
+        b0, c0, z0, y0, x0 = patch.shape
+        z = random.randint(1, z0-1)
         image = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.image.dtype)
         label = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.label.dtype)
         image[..., :z, :, :] = patch.image[..., :z, :, :]
         label[..., :z, :, :] = patch.label[..., :z, :, :]
-        image[..., z:, :, :] = patch.image[..., z+1, :, :]
-        label[..., z:, :, :] = patch.label[..., z+1, :, :]
+        image[..., z:, :, :] = patch.image[..., z+1:, :, :]
+        label[..., z:, :, :] = patch.label[..., z+1:, :, :]
         patch.image = image
         patch.label = label
 
@@ -190,7 +190,7 @@ class AdjustBrightness(IntensityTransform):
 
 class AdjustContrast(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor: float = 0.3):
+            factor: float = 0.2):
         super().__init__(probability=probability)
         factor = np.clip(factor, 0., 2.)
         self.factor = factor
