@@ -84,16 +84,15 @@ class Dataset(torch.utils.data.Dataset):
             # use the number of T-bars as subject sampling weights
             # subject_weights.append(len(synapses['presynapses']))
             presynapses = synapses['presynapses']
+            assert len(presynapses) > 0
             tbar_points = np.zeros((len(presynapses), 3), dtype=np.int64)
             for idx, point in  enumerate(presynapses.values()):
                 # transform xyz to zyx
-                tbar_points[idx, :] = point[::-1]
+                tbar_points[idx, :] = point[::-1] 
                 # tbar_points[idx, 0] = point[2]
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
-
             tbar_points -= voxel_offset
-            assert np.all(tbar_points > 0)
             # all the points should be inside the image
             np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
 
@@ -106,7 +105,7 @@ class Dataset(torch.utils.data.Dataset):
             volumes.append(ground_truth_volume)
         
         # shuffle the volume list and then split it to training and test
-        random.shuffle(volumes)
+        # random.shuffle(volumes)
 
         # use the number of candidate patches as volume sampling weight
         volume_weights = []
@@ -166,7 +165,7 @@ class Dataset(torch.utils.data.Dataset):
             Noise(),
             GaussianBlur2D(),
             BlackBox(),
-            DropSection(),
+            # DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),
@@ -179,30 +178,47 @@ if __name__ == '__main__':
         max_sampling_distance=4,
         training_split_ratio=0.99,
     )
+
+    from torch.utils.tensorboard import SummaryWriter
+    from neutorch.model.io import log_tensor
+    writer = SummaryWriter(log_dir='/tmp/log')
+
+    import h5py
     
     model = torch.nn.Identity()
     print('start generating random patches...')
-    for n in range(100):
+    for n in range(10000):
         ping = time()
         patch = dataset.random_training_patch
         print(f'generating a patch takes {int(time()-ping)} seconds.')
         image = patch.image
-        tbar = patch.label
+        label = patch.label
+        assert np.any(label > 0)
+        with h5py.File('/tmp/image.h5', 'w') as file:
+            file['main'] = image[0,0, ...]
+        with h5py.File('/tmp/label.h5', 'w') as file:
+            file['main'] = label[0,0, ...]
+
+        print('number of nonzero voxels: ', np.count_nonzero(label))
+        # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)
-        tbar = torch.from_numpy(tbar)
-        # print(patch)
-        logits = model(image)
-        image = image[:, :, 32, :, :]
-        tbar, _ = torch.max(tbar, dim=2, keepdim=False)
-        slices = torch.cat((image, tbar))
-        image_path = os.path.expanduser('~/Downloads/patches.png')
-        print('save a batch of patches to ', image_path)
-        torchvision.utils.save_image(
-            slices,
-            image_path,
-            nrow=8,
-            normalize=True,
-            scale_each=True,
-        )
+        label = torch.from_numpy(label)
+        log_tensor(writer, 'train/image', image, n)
+        log_tensor(writer, 'train/label', label, n)
+
+        # # print(patch)
+        # logits = model(image)
+        # image = image[:, :, 32, :, :]
+        # tbar, _ = torch.max(tbar, dim=2, keepdim=False)
+        # slices = torch.cat((image, tbar))
+        # image_path = os.path.expanduser('~/Downloads/patches.png')
+        # print('save a batch of patches to ', image_path)
+        # torchvision.utils.save_image(
+        #     slices,
+        #     image_path,
+        #     nrow=8,
+        #     normalize=True,
+        #     scale_each=True,
+        # )
         sleep(1)
 

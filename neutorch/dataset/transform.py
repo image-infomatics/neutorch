@@ -143,7 +143,7 @@ class DropSection(SpatialTransform):
 class BlackBox(IntensityTransform):
     def __init__(self,
             probability: float = DEFAULT_PROBABILITY,
-            max_box_size: tuple = (4,4,4),
+            max_box_size: tuple = (8,8,8),
             max_box_num: int = 3):
         """make some black cubes in image patch
 
@@ -212,7 +212,7 @@ class Gamma(IntensityTransform):
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
-            sigma: float = 5.0):
+            sigma: float = 1.0):
         super().__init__(probability=probability)
         self.sigma = sigma
 
@@ -222,7 +222,7 @@ class GaussianBlur2D(IntensityTransform):
 
 class GaussianBlur3D(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            sigma: tuple = (5., 5., 5.)):
+            sigma: tuple = (1., 1., 1.)):
         super().__init__(probability=probability)
         self.sigma = sigma
 

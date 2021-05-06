@@ -79,22 +79,23 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         return self.patch_from_center((cz, cy, cx)) 
 
     def patch_from_center(self, center: tuple):
-        bz = center[0] - self.patch_size[0] // 2
-        by = center[1] - self.patch_size[1] // 2
-        bx = center[2] - self.patch_size[2] // 2
-        image_patch = self.image[
-            bz : bz + self.patch_size[0],
-            by : by + self.patch_size[1],
-            bx : bx + self.patch_size[2]
+        bz = center[0] - self.patch_size[-3] // 2
+        by = center[1] - self.patch_size[-2] // 2
+        bx = center[2] - self.patch_size[-1] // 2
+        print('center: ', center)
+        image_patch = self.image[...,
+            bz : bz + self.patch_size[-3],
+            by : by + self.patch_size[-2],
+            bx : bx + self.patch_size[-1]
         ]
         label_patch = self.label[...,
-            bz : bz + self.patch_size[0],
-            by : by + self.patch_size[1],
-            bx : bx + self.patch_size[2]
+            bz : bz + self.patch_size[-3],
+            by : by + self.patch_size[-2],
+            bx : bx + self.patch_size[-1]
         ]
         image_patch = self._expand_to_5d(image_patch)
-        target_patch = self._expand_to_5d(label_patch)
-        return Patch(image_patch, target_patch)
+        label_patch = self._expand_to_5d(label_patch)
+        return Patch(image_patch, label_patch)
     
     @property
     def volume_sampling_weight(self):
@@ -115,7 +116,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            annotation_points (np.ndarray, optional): point annotations. Defaults to None.
+            annotation_points (np.ndarray): point annotations with zyx order.
             patch_size (Union[tuple, int]): output patch size
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from volume boundary. Defaults to None.
@@ -142,7 +143,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     @property
     def random_patch(self):
         point_num = self.annotation_points.shape[0]
-        idx = random.randrange(point_num)
+        idx = random.randint(0, point_num-1)
         point = self.annotation_points[idx, :]
         center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
         center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
@@ -175,11 +176,11 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         """
         # assert synapses['resolution'] == [8, 8, 8]
         label = np.zeros_like(image, dtype=np.float32)
-        for coordinate in self.annotation_points:
-            # transform coordinate from xyz order to zyx
-            coordinate = coordinate[::-1]
-            coordinate = np.asarray(coordinate, dtype=np.int64)
-            label[
+        for idx in range(self.annotation_points.shape[0]):
+            coordinate = self.annotation_points[idx, :]
+            assert np.all(coordinate>0)
+            assert np.all(coordinate<600)
+            label[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
