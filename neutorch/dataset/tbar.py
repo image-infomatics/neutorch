@@ -167,18 +167,18 @@ class Dataset(torch.utils.data.Dataset):
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            # AdjustBrightness(),
-            # AdjustContrast(),
-            # Gamma(),
-            # Noise(),
-            # GaussianBlur2D(),
-            # BlackBox(),
-            # Perspective(),
-            RotateScale(probability=1.),
-            # DropSection(),
-            # Flip(),
-            # Transpose(),
-            # MissAlignment(),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            Noise(),
+            GaussianBlur2D(),
+            BlackBox(),
+            Perspective(),
+            # RotateScale(probability=1.),
+            DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
         ])
 
 

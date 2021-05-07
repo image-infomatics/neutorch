@@ -470,12 +470,12 @@ class RotateScale(SpatialTransform):
 
         # if the rotation is close to diagnal, for example 45 degree
         # the label could be outside the volume and be black!
-        angle = random.choice([0, 90, 180, -90, -180]) + random.randint(-5, 5)
-        # angle = random.randint(-180, 180)
+        # angle = random.choice([0, 90, 180, -90, -180]) + random.randint(-5, 5)
+        angle = random.randint(0, 180)
         scale = random.uniform(1.1, self.max_scaling)
         center = patch.center[-2:]
         mat = cv2.getRotationMatrix2D( center, angle, scale )
-        breakpoint()
+        # breakpoint()
         for batch in range(patch.shape[0]):
             for channel in range(patch.shape[1]):
                 for z in range(patch.shape[2]):

@@ -99,8 +99,8 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         patch = dataset.random_training_patch
         print('training patch shape: ', patch.shape)
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-        image = torch.from_numpy(image)
-        target = torch.from_numpy(target)
+        image = torch.from_numpy(patch.image)
+        target = torch.from_numpy(patch.label)
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
