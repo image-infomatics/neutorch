@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 from typing import Union
+from copy import deepcopy
 
 import numpy as np
 from scipy.ndimage.measurements import label
@@ -94,8 +95,10 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        image_patch = self._expand_to_5d(image_patch)
-        label_patch = self._expand_to_5d(label_patch)
+        # if we do not copy here, the augmentation will change our 
+        # image and label volume!
+        image_patch = self._expand_to_5d(image_patch).copy()
+        label_patch = self._expand_to_5d(label_patch).copy()
         return Patch(image_patch, label_patch)
     
     @property
