@@ -155,6 +155,10 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         center_stop = tuple(
             min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
         )
+        for ct, cp in zip(center_start, center_stop):
+            if ct >= cp:
+                breakpoint()
+
         return self.random_patch_from_center_range(center_start, center_stop)
 
     @property
