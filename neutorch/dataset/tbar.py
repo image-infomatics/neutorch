@@ -170,10 +170,12 @@ class Dataset(torch.utils.data.Dataset):
             AdjustBrightness(),
             AdjustContrast(),
             Gamma(),
-            Noise(),
-            GaussianBlur2D(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
             BlackBox(),
-            Perspective(),
+            Perspective2D(),
             # RotateScale(probability=1.),
             DropSection(),
             Flip(),
@@ -200,7 +202,7 @@ if __name__ == '__main__':
     for n in range(10000):
         ping = time()
         patch = dataset.random_training_patch
-        print(f'generating a patch takes {int(time()-ping)} seconds.')
+        print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
         image = patch.image
         label = patch.label
         with h5py.File('/tmp/image.h5', 'w') as file:

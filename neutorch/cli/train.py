@@ -123,18 +123,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-            # target2d, _ =  torch.max(target, dim=2, keepdim=False)
-            # slices = torch.cat((image[:, :, 32, :, :], predict[:, :, 32, :, :], target2d))
-            # image_path = os.path.expanduser('~/Downloads/patches.png')
-            # print('save a batch of patches to ', image_path)
-            # torchvision.utils.save_image(
-            #     slices,
-            #     image_path,
-            #     nrow=1,
-            #     normalize=True,
-            #     scale_each=True,
-            # )
-
         if iter_idx % validation_interval == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
