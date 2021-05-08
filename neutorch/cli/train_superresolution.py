@@ -12,8 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.tbar import Dataset
-
+# from neutorch.dataset.tbar import Dataset
+from neutorch.dataset.superresolution import Dataset
 
 
 @click.command()
@@ -61,15 +61,11 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--validation-interval', '-v',
     type=int, default=1000, help='validation and saving interval iterations.'
 )
-@click.option('--max-sampling-distance', '-m',
-    type=int, default=32, help='sampling patch around the annotated point.'
-)
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
         iter_start: int, iter_stop: int, dataset_config_file: str, 
         output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
-        training_interval: int, validation_interval: int,
-        max_sampling_distance: int):
+        training_interval: int, validation_interval: int):
     
     random.seed(seed)
 
@@ -85,7 +81,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     dataset = Dataset(
         dataset_config_file,
         patch_size=patch_size,
-        max_sampling_distance=max_sampling_distance,
         training_split_ratio=training_split_ratio,
     )
 

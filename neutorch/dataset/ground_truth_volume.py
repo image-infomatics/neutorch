@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import random
 from typing import Union
-from copy import deepcopy
 
 import numpy as np
 from scipy.ndimage.measurements import label
@@ -151,7 +150,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         point = self.annotation_points[idx, :]
         center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
         center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-        # breakpoint()
         center_start = tuple(
             max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
         )
