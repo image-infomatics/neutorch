@@ -11,6 +11,7 @@ from scipy.ndimage import affine_transform
 import cv2
 
 from skimage.util import random_noise
+from skimage.transform import swirl
 
 from .patch import Patch
 
@@ -518,3 +519,19 @@ class Perspective2D(SpatialTransform):
 #                         patch.label[batch, channel, z, ...],
 #                         mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
 #                     ) 
+
+
+class Swirl(SpatialTransform):
+    def __init__(self, max_rotation: int = 5, max_strength: int = 3, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+        self.max_strength = max_strength
+        self.max_rotation = max_rotation
+    
+    def transform(self, patch: Patch):
+        for z in range(patch.shape[-3]):
+            patch.image[..., z, :, :] = swirl(
+                patch.image[..., z, :, :],
+                rotation=random.randint(1, self.max_rotation),
+                strength=random.randint(1, self.max_strength),
+                radius = (patch.shape[-1] + patch.shape[-2]) // 4,
+            ) 

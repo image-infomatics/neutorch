@@ -110,7 +110,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         accumulated_loss += loss.cpu().tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-        if iter_idx % training_interval == 0:
+        if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
@@ -120,7 +120,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-        if iter_idx % validation_interval == 0:
+        if iter_idx % validation_interval == 0 and iter_idx > 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)

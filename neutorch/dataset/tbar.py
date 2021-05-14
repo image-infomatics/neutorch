@@ -100,6 +100,8 @@ class Dataset(torch.utils.data.Dataset):
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
             tbar_points -= voxel_offset
+            print(f'min offset: {np.min(tbar_points, axis=0)}')
+            print(f'max offset: {np.max(tbar_points, axis=0)}')
             # all the points should be inside the image
             np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
 
