@@ -30,8 +30,15 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            target (np.ndarray): training target
+            label (np.ndarray): training label
             patch_size (Union[tuple, int]): output patch size
+            forbbiden_distance_to_boundary (Union[tuple, int]): 
+                the distance from patch center to volume boundary that is not allowed to sample 
+                the order is z,y,x,-z,-y,-x
+                if this is an integer, then all dimension is the same.
+                if this is a tuple of three integers, the positive and negative is the same
+                if this is a tuple of six integers, the positive and negative 
+                direction is defined separately. 
         """
         assert image.ndim == 3
         assert label.ndim >= 3
@@ -74,9 +81,9 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
         # breakpoint()
-        cz = random.randrange(center_start[0], center_stop[0])
-        cy = random.randrange(center_start[1], center_stop[1])
-        cx = random.randrange(center_start[2], center_stop[2])
+        cz = random.randint(center_start[0], center_stop[0])
+        cy = random.randint(center_start[1], center_stop[1])
+        cx = random.randint(center_start[2], center_stop[2])
         return self.patch_from_center((cz, cy, cx)) 
 
     def patch_from_center(self, center: tuple):
@@ -104,10 +111,6 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
     def volume_sampling_weight(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
     
-    @property
-    def transform(self):
-        pass
-
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     def __init__(self, image: np.ndarray, 
@@ -143,24 +146,27 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             max_sampling_distance[idx] <= patch_size[idx] // 2
         self.max_sampling_distance = max_sampling_distance
 
-    @property
-    def random_patch(self):
-        point_num = self.annotation_points.shape[0]
-        idx = random.randint(0, point_num-1)
-        point = self.annotation_points[idx, :]
-        center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
-        center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-        center_start = tuple(
-            max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
-        )
-        center_stop = tuple(
-            min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
-        )
-        for ct, cp in zip(center_start, center_stop):
-            if ct >= cp:
-                breakpoint()
+    # it turns out that this sampling is biased to patches containing T-bar
+    # the net will always try to find at least one T-bar in the input patch.
+    # the result will have a low precision containing a lot of false positive prediction.
+    # @property
+    # def random_patch(self):
+    #     point_num = self.annotation_points.shape[0]
+    #     idx = random.randint(0, point_num-1)
+    #     point = self.annotation_points[idx, :]
+    #     center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
+    #     center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
+    #     center_start = tuple(
+    #         max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
+    #     )
+    #     center_stop = tuple(
+    #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
+    #     )
+    #     for ct, cp in zip(center_start, center_stop):
+    #         if ct >= cp:
+    #             breakpoint()
 
-        return self.random_patch_from_center_range(center_start, center_stop)
+    #     return self.random_patch_from_center_range(center_start, center_stop)
 
     @property
     def volume_sampling_weight(self):
