@@ -116,8 +116,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     def __init__(self, image: np.ndarray, 
             annotation_points: np.ndarray,
             patch_size: Union[tuple, int], 
-            forbbiden_distance_to_boundary: tuple = None,
-            max_sampling_distance: Union[int, tuple] = None) -> None:
+            forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -126,8 +125,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             patch_size (Union[tuple, int]): output patch size
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from volume boundary. Defaults to None.
-            max_sampling_distance (int, tuple): maximum distance from the annotated point 
-                to the center of random patch.
         """
 
         assert annotation_points.shape[1] == 3
@@ -138,13 +135,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
-        if max_sampling_distance is None:
-            max_sampling_distance = tuple(ps-1  for ps in patch_size)
-        if isinstance(max_sampling_distance, int):
-            max_sampling_distance = (max_sampling_distance, ) * 3
-        for idx in range(3):
-            max_sampling_distance[idx] <= patch_size[idx] // 2
-        self.max_sampling_distance = max_sampling_distance
 
     # it turns out that this sampling is biased to patches containing T-bar
     # the net will always try to find at least one T-bar in the input patch.
@@ -188,12 +178,15 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         """
         # assert synapses['resolution'] == [8, 8, 8]
         label = np.zeros_like(image, dtype=np.float32)
+        # adjust target to 0.05-0.95 for better regularization
+        # the effect might be similar with Focal loss!
+        label += 0.05
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
             label[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
-            ] = 1.
+            ] = 0.95
         return label
 

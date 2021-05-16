@@ -534,4 +534,4 @@ class Swirl(SpatialTransform):
                 rotation=random.randint(1, self.max_rotation),
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
-            ) 
+            )

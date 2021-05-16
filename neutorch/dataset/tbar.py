@@ -28,14 +28,12 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, config_file: str, 
             training_split_ratio: float = 0.9,
             patch_size: Union[int, tuple]=(64, 64, 64), 
-            max_sampling_distance: Union[int, tuple] = None):
+            ):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
-            max_sampling_distance (int or tuple, optional): sampling patches around the annotated T-bar point 
-                limited by a maximum distance.
         """
         super().__init__()
         assert training_split_ratio > 0.5
@@ -43,12 +41,6 @@ class Dataset(torch.utils.data.Dataset):
 
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
-
-        if max_sampling_distance is None:
-            max_sampling_distance = tuple(p // 2 for p in patch_size)
-        elif isinstance(max_sampling_distance, int):
-            max_sampling_distance = (max_sampling_distance,) * 3
-        assert len(max_sampling_distance) == 3
 
         config_file = os.path.expanduser(config_file)
         assert config_file.endswith('.toml'), "we use toml file as configuration format."
@@ -103,13 +95,12 @@ class Dataset(torch.utils.data.Dataset):
             print(f'min offset: {np.min(tbar_points, axis=0)}')
             print(f'max offset: {np.max(tbar_points, axis=0)}')
             # all the points should be inside the image
-            np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
+            # np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
 
             ground_truth_volume = GroundTruthVolumeWithPointAnnotation(
                 image,
                 annotation_points=tbar_points,
                 patch_size=patch_size_before_transform,
-                max_sampling_distance=max_sampling_distance,
             )
             volumes.append(ground_truth_volume)
         
@@ -176,7 +167,7 @@ class Dataset(torch.utils.data.Dataset):
             BlackBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
-            DropSection(),
+            #DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),
@@ -186,7 +177,6 @@ class Dataset(torch.utils.data.Dataset):
 if __name__ == '__main__':
     dataset = Dataset(
         "~/Dropbox (Simons Foundation)/40_gt/tbar.toml",
-        max_sampling_distance=24,
         training_split_ratio=0.99,
     )
 
@@ -209,7 +199,6 @@ if __name__ == '__main__':
         with h5py.File('/tmp/label.h5', 'w') as file:
             file['main'] = label[0,0, ...]
 
-        assert np.any(label > 0)
         print('number of nonzero voxels: ', np.count_nonzero(label))
         # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)
