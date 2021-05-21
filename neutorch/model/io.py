@@ -44,6 +44,10 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     """
     assert torch.is_tensor(tensor)
     assert tensor.ndim >= 3
+    # normalize from 0 to 1
+    tensor -= tensor.min()
+    tensor /= tensor.max()
+    
     # this should work for ndim >= 3
     tensor = tensor.cpu()
     # tensor = (tensor * 255.).type(torch.uint8)

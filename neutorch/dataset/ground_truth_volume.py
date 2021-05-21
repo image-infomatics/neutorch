@@ -158,11 +158,11 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
 
     #     return self.random_patch_from_center_range(center_start, center_stop)
 
-    @property
-    def volume_sampling_weight(self):
-        # use number of annotated points as weight
-        # to sample volume
-        return self.annotation_points.shape[0]
+    # @property
+    # def volume_sampling_weight(self):
+    #     # use number of annotated points as weight
+    #     # to sample volume
+    #     return self.annotation_points.shape[0]
 
     def _points_to_label(self, image: np.ndarray,
             expand_distance: int = 2) -> tuple:
