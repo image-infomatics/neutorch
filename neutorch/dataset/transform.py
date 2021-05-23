@@ -216,20 +216,21 @@ class AdjustBrightness(IntensityTransform):
         self.max_factor = max_factor
     
     def transform(self, patch: Patch):
-        patch.image += (random.random() - 0.5) * random.uniform(
+        patch.image += random.uniform(-0.5, 0.5) * random.uniform(
             self.min_factor, self.max_factor)
         np.clip(patch.image, 0., 1., out=patch.image)
 
 class AdjustContrast(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor_range: tuple = (0.05, 0.2)):
+            factor_range: tuple = (0.05, 2.)):
         super().__init__(probability=probability)
         # factor_range = np.clip(factor_range, 0., 2.)
         self.factor_range = factor_range
 
     def transform(self, patch: Patch):
-        factor = 1 + (random.random() - 0.5) * random.uniform(
-            self.factor_range[0], self.factor_range[1])
+        #factor = 1 + random.uniform(-0.5, 0.5) * random.uniform(
+        #    self.factor_range[0], self.factor_range[1])
+        factor = random.uniform(self.factor_range[0], self.factor_range[1])
         patch.image *= factor
         np.clip(patch.image, 0., 1., out=patch.image)
 
