@@ -1,22 +1,19 @@
 import random
 import os
 from time import time
-import multiprocessing as mp
 
 import click
 import numpy as np
 
 import torch
-from torch import nn
-import torchio as tio
 from torch.utils.tensorboard import SummaryWriter
 
 
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.tbar import Dataset
-
+# from neutorch.dataset.tbar import Dataset
+from neutorch.dataset.superresolution import Dataset
 
 
 @click.command()
@@ -64,15 +61,11 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--validation-interval', '-v',
     type=int, default=1000, help='validation and saving interval iterations.'
 )
-@click.option('--max-sampling-distance', '-m',
-    type=int, default=32, help='sampling patch around the annotated point.'
-)
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
         iter_start: int, iter_stop: int, dataset_config_file: str, 
         output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
-        training_interval: int, validation_interval: int,
-        max_sampling_distance: int):
+        training_interval: int, validation_interval: int):
     
     random.seed(seed)
 
@@ -88,7 +81,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     dataset = Dataset(
         dataset_config_file,
         patch_size=patch_size,
-        max_sampling_distance=max_sampling_distance,
         training_split_ratio=training_split_ratio,
     )
 
@@ -99,8 +91,8 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         patch = dataset.random_training_patch
         print('training patch shape: ', patch.shape)
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-        image = torch.from_numpy(image)
-        target = torch.from_numpy(target)
+        image = torch.from_numpy(patch.image)
+        target = torch.from_numpy(patch.label)
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
@@ -122,18 +114,6 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             log_tensor(writer, 'train/image', image, iter_idx)
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
-
-            # target2d, _ =  torch.max(target, dim=2, keepdim=False)
-            # slices = torch.cat((image[:, :, 32, :, :], predict[:, :, 32, :, :], target2d))
-            # image_path = os.path.expanduser('~/Downloads/patches.png')
-            # print('save a batch of patches to ', image_path)
-            # torchvision.utils.save_image(
-            #     slices,
-            #     image_path,
-            #     nrow=1,
-            #     normalize=True,
-            #     scale_each=True,
-            # )
 
         if iter_idx % validation_interval == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')

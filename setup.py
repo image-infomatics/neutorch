@@ -53,7 +53,8 @@ setup(
     ],
     entry_points='''
         [console_scripts]
-        neutrain=neutorch.cli.train:train
+        neutrain-tbar=neutorch.cli.train_tbar:train
+        neutrain-superresolution=neutorch.cli.train_superresolution:train
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

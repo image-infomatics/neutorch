@@ -3,5 +3,6 @@ torchvision
 toml
 h5py
 tensorboard
-scikit-image
 pybind11
+scikit-image
+opencv-python

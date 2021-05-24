@@ -26,7 +26,8 @@ def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
 def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
     print("LOAD CHECKPOINT: {} iters.".format(chkpt_num))
     fname = os.path.join(fpath, "model_{}.chkpt".format(chkpt_num))
-    model.load(fname)
+    checkpoint = torch.load(fname)
+    model.load_state_dict(checkpoint['state_dict'])
     return model
 
 
@@ -43,6 +44,10 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     """
     assert torch.is_tensor(tensor)
     assert tensor.ndim >= 3
+    # normalize from 0 to 1
+    tensor -= tensor.min()
+    tensor /= tensor.max()
+    
     # this should work for ndim >= 3
     tensor = tensor.cpu()
     # tensor = (tensor * 255.).type(torch.uint8)

@@ -30,8 +30,15 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            target (np.ndarray): training target
+            label (np.ndarray): training label
             patch_size (Union[tuple, int]): output patch size
+            forbbiden_distance_to_boundary (Union[tuple, int]): 
+                the distance from patch center to volume boundary that is not allowed to sample 
+                the order is z,y,x,-z,-y,-x
+                if this is an integer, then all dimension is the same.
+                if this is a tuple of three integers, the positive and negative is the same
+                if this is a tuple of six integers, the positive and negative 
+                direction is defined separately. 
         """
         assert image.ndim == 3
         assert label.ndim >= 3
@@ -74,9 +81,9 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
         # breakpoint()
-        cz = random.randrange(center_start[0], center_stop[0])
-        cy = random.randrange(center_start[1], center_stop[1])
-        cx = random.randrange(center_start[2], center_stop[2])
+        cz = random.randint(center_start[0], center_stop[0])
+        cy = random.randint(center_start[1], center_stop[1])
+        cx = random.randint(center_start[2], center_stop[2])
         return self.patch_from_center((cz, cy, cx)) 
 
     def patch_from_center(self, center: tuple):
@@ -94,25 +101,22 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        image_patch = self._expand_to_5d(image_patch)
-        label_patch = self._expand_to_5d(label_patch)
+        # if we do not copy here, the augmentation will change our 
+        # image and label volume!
+        image_patch = self._expand_to_5d(image_patch).copy()
+        label_patch = self._expand_to_5d(label_patch).copy()
         return Patch(image_patch, label_patch)
     
     @property
     def volume_sampling_weight(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
     
-    @property
-    def transform(self):
-        pass
-
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     def __init__(self, image: np.ndarray, 
             annotation_points: np.ndarray,
             patch_size: Union[tuple, int], 
-            forbbiden_distance_to_boundary: tuple = None,
-            max_sampling_distance: Union[int, tuple] = None) -> None:
+            forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -121,8 +125,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             patch_size (Union[tuple, int]): output patch size
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from volume boundary. Defaults to None.
-            max_sampling_distance (int, tuple): maximum distance from the annotated point 
-                to the center of random patch.
         """
 
         assert annotation_points.shape[1] == 3
@@ -133,35 +135,34 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
-        if max_sampling_distance is None:
-            max_sampling_distance = tuple(ps-1  for ps in patch_size)
-        if isinstance(max_sampling_distance, int):
-            max_sampling_distance = (max_sampling_distance, ) * 3
-        for idx in range(3):
-            max_sampling_distance[idx] <= patch_size[idx] // 2
-        self.max_sampling_distance = max_sampling_distance
 
-    @property
-    def random_patch(self):
-        point_num = self.annotation_points.shape[0]
-        idx = random.randint(0, point_num-1)
-        point = self.annotation_points[idx, :]
-        center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
-        center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-        # breakpoint()
-        center_start = tuple(
-            max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
-        )
-        center_stop = tuple(
-            min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
-        )
-        return self.random_patch_from_center_range(center_start, center_stop)
+    # it turns out that this sampling is biased to patches containing T-bar
+    # the net will always try to find at least one T-bar in the input patch.
+    # the result will have a low precision containing a lot of false positive prediction.
+    # @property
+    # def random_patch(self):
+    #     point_num = self.annotation_points.shape[0]
+    #     idx = random.randint(0, point_num-1)
+    #     point = self.annotation_points[idx, :]
+    #     center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
+    #     center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
+    #     center_start = tuple(
+    #         max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
+    #     )
+    #     center_stop = tuple(
+    #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
+    #     )
+    #     for ct, cp in zip(center_start, center_stop):
+    #         if ct >= cp:
+    #             breakpoint()
 
-    @property
-    def volume_sampling_weight(self):
-        # use number of annotated points as weight
-        # to sample volume
-        return self.annotation_points.shape[0]
+    #     return self.random_patch_from_center_range(center_start, center_stop)
+
+    # @property
+    # def volume_sampling_weight(self):
+    #     # use number of annotated points as weight
+    #     # to sample volume
+    #     return self.annotation_points.shape[0]
 
     def _points_to_label(self, image: np.ndarray,
             expand_distance: int = 2) -> tuple:
@@ -177,12 +178,15 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         """
         # assert synapses['resolution'] == [8, 8, 8]
         label = np.zeros_like(image, dtype=np.float32)
+        # adjust target to 0.05-0.95 for better regularization
+        # the effect might be similar with Focal loss!
+        label += 0.05
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
             label[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
-            ] = 1.
+            ] = 0.95
         return label
 
