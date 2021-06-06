@@ -15,9 +15,7 @@ from skimage.transform import swirl
 
 from .patch import Patch
 
-
-DEFAULT_PROBABILITY = .5
-
+DEFAULT_PROBABILITY = 1
 
 class AbstractTransform(ABC):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
@@ -35,11 +33,6 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
-        else:
-            # for spatial transform, we need to correct the size
-            # to make sure that the final patch size is correct 
-            if hasattr(self, 'shrink_size'):
-                patch.accumulate_delayed_shrink_size(self.shrink_size) 
 
     @abstractmethod
     def transform(self, patch: Patch):
@@ -49,41 +42,6 @@ class AbstractTransform(ABC):
             patch (Patch): image and label
         """
         pass
-
-    
-class SpatialTransform(AbstractTransform):
-    """Modify image voxel position and reinterprete."""
-    def __init__(self, probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability=probability)
-
-    @abstractmethod
-    def transform(self, patch: Patch):
-        """transform the image and label together
-
-        Args:
-            patch (tuple): image and label pair
-        """
-        pass
-    
-    @property
-    def shrink_size(self):
-        """this transform might shrink the patch size.
-        for example, droping a section will shrink the z axis.
-
-        Return:
-            shrink_size (tuple): z0,y0,x0,z1,y1,x1
-        """
-        return (0, 0, 0, 0, 0, 0)
-
-class IntensityTransform(AbstractTransform):
-    """change image intensity only"""
-    def __init__(self, probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability=probability)
-
-    @abstractmethod
-    def transform(self, patch: Patch):
-        pass
-
 
 class SectionTransform(AbstractTransform):
     """change a random section only."""
@@ -110,11 +68,6 @@ class Compose(object):
             transforms (list): list of transform instances
         """
         self.transforms = transforms
-        shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
-            if isinstance(transform, SpatialTransform):
-                shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
 
     def __call__(self, patch: Patch):
         for transform in self.transforms:
@@ -125,7 +78,6 @@ class Compose(object):
         patch.image = patch.image.copy()
         patch.label = patch.label.copy()
 
-
 class OneOf(AbstractTransform):
     def __init__(self, transforms: list, 
             probability: float = DEFAULT_PROBABILITY) -> None:
@@ -133,41 +85,23 @@ class OneOf(AbstractTransform):
         assert len(transforms) > 1
         self.transforms = transforms
 
-        shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
-            if isinstance(transform, SpatialTransform):
-                shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
-
     def transform(self, patch: Patch):
         # select one of the transforms
         transform = random.choice(self.transforms)
         transform(patch)
 
+##########################
+## Intensity Transforms ##
+##########################
 
-class DropSection(SpatialTransform):
+class IntensityTransform(AbstractTransform):
+    """change image intensity only"""
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
 
+    @abstractmethod
     def transform(self, patch: Patch):
-        # since this transform really removes information
-        # we do not delay the shrinking
-        # make the first and last section missing is meaning less
-        b0, c0, z0, y0, x0 = patch.shape
-        z = random.randint(1, z0-1)
-        image = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.image.dtype)
-        label = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.label.dtype)
-        image[..., :z, :, :] = patch.image[..., :z, :, :]
-        label[..., :z, :, :] = patch.label[..., :z, :, :]
-        image[..., z:, :, :] = patch.image[..., z+1:, :, :]
-        label[..., z:, :, :] = patch.label[..., z+1:, :, :]
-        patch.image = image
-        patch.label = label
-
-    @property
-    def shrink_size(self):
-        return (0, 0, 0, 1, 0, 0)
-
+        pass
 
 class BlackBox(IntensityTransform):
     def __init__(self,
@@ -234,7 +168,6 @@ class AdjustContrast(IntensityTransform):
         patch.image *= factor
         np.clip(patch.image, 0., 1., out=patch.image)
 
-
 class Gamma(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
@@ -243,7 +176,6 @@ class Gamma(IntensityTransform):
         # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
         patch.image **= 2.** gamma
-
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
@@ -255,7 +187,6 @@ class GaussianBlur2D(IntensityTransform):
         sigma = random.uniform(0.2, self.sigma)
         gaussian_filter(patch.image, sigma=sigma, output=patch.image)
 
-
 class GaussianBlur3D(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
             max_sigma: tuple = (1.5, 1.5, 1.5)):
@@ -265,7 +196,6 @@ class GaussianBlur3D(IntensityTransform):
     def transform(self, patch: Patch):
         sigma = tuple(random.uniform(0.2, s) for s in self.max_sigma)
         gaussian_filter(patch.image, sigma=sigma, output=patch.image)
-
 
 class Noise(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
@@ -279,10 +209,60 @@ class Noise(IntensityTransform):
         random_noise(patch.image, mode=self.mode, var=variance)
         np.clip(patch.image, 0., 1., out=patch.image)
 
+##########################
+## Spatial Transforms ##
+##########################
+
+class SpatialTransform(AbstractTransform):
+    """Modify image voxel position and reinterprete."""
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    @abstractmethod
+    def transform(self, patch: Patch):
+        """transform the image and label together
+
+        Args:
+            patch (tuple): image and label pair
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def edge_loss(self):
+        """this keeps track of the maximum amount of -1  
+        that the transform might introduce along some edge of the patch
+        """
+        pass
+
+class DropAlongAxis(SpatialTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY, drop_amount: int=2):
+        super().__init__(probability=probability)
+        self.drop_amount = drop_amount
+
+    def edge_loss(self):
+        return self.drop_amount
+
+    def transform(self, patch: Patch):
+        drop_amount = self.drop_amount
+        b0, c0, z0, y0, x0 = patch.shape
+        z = random.randint(1, z0-1)
+        image = np.ones((b0, c0, z0, y0, x0), dtype=patch.image.dtype) * -1
+        label = np.ones((b0, c0, z0, y0, x0), dtype=patch.label.dtype) * -1
+        image[..., :, :z, :] = patch.image[..., :, :z, :]
+        label[..., :, :z, :] = patch.label[..., :, :z, :]
+        image[..., :, z:z0-drop_amount, :] = patch.image[..., :, z+drop_amount:, :]
+        label[..., :, z:z0-drop_amount,  :] = patch.label[..., :, z+drop_amount:,  :]
+        patch.image = image
+        patch.label = label
+
 
 class Flip(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
+
+    def edge_loss(self):
+        return 0
 
     def transform(self, patch: Patch):
         axis_num = random.randint(1, 3)
@@ -293,16 +273,12 @@ class Flip(SpatialTransform):
         patch.image = np.flip(patch.image, axis=axis5d)
         patch.label = np.flip(patch.label, axis=axis5d)
 
-        shrink = list(patch.delayed_shrink_size)
-        for ax in axis:
-            # swap the axis to be shrinked
-            shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
-        patch.delayed_shrink_size = tuple(shrink)
-
-
 class Transpose(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
+
+    def edge_loss(self):
+        return 0
 
     def transform(self, patch: Patch):
         axis = [2,3,4]
@@ -311,20 +287,11 @@ class Transpose(SpatialTransform):
         patch.image = np.transpose(patch.image, axis5d)
         patch.label = np.transpose(patch.label, axis5d)
 
-        shrink = list(patch.delayed_shrink_size)
-        for ax0, ax1 in enumerate(axis):
-            ax1 -= 2
-            # swap the axis to be shrinked
-            shrink[ax0] = patch.delayed_shrink_size[ax1]
-            shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
-        patch.delayed_shrink_size = tuple(shrink) 
-
-    
 class MissAlignment(SpatialTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY,
             max_displacement: int=2):
         """move part of volume alone x axis
-        We'll alwasy select a position alone z axis, and move the bottom part alone X axis.
+        We'll alwasy select a position along z axis, and move the bottom part alone X axis.
         By combining with transpose, flip and rotation, we can get other displacement automatically.
 
         Args:
@@ -336,6 +303,9 @@ class MissAlignment(SpatialTransform):
         assert max_displacement < 8
         self.max_displacement = max_displacement
 
+    def edge_loss(self):
+        return 0
+        
     def transform(self, patch: Patch):
         axis = random.randint(2, 4)
         displacement = random.randint(1, self.max_displacement)
@@ -361,9 +331,6 @@ class MissAlignment(SpatialTransform):
                     ]
         elif axis == 3:
             yloc = random.randint(1, sy-1)
-            
-            # print('right side shape: ', patch.image[...,  self.max_displacement+displacement : sz+displacement-self.max_displacement,yloc:,self.max_displacement+displacement : sx+displacement-self.max_displacement,].shape)
-
             patch.image[..., 
                 self.max_displacement : sz-self.max_displacement,
                 yloc:, 
@@ -403,16 +370,6 @@ class MissAlignment(SpatialTransform):
                     xloc:, 
                     ] 
 
-        # only keep the central region  
-        patch.shrink(self.shrink_size)       
-    
-    @property
-    @lru_cache
-    def shrink_size(self):
-        # return (0, 0, 0, 0, 0, self.max_displacement)
-        return (self.max_displacement,) * 6
-
-
 class Perspective2D(SpatialTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY,
             corner_ratio: float=0.2):
@@ -429,26 +386,24 @@ class Perspective2D(SpatialTransform):
         """
         super().__init__(probability=probability)
         self.corner_ratio = corner_ratio
-
+        
+    def edge_loss(self):
+        return 0
+        
     def transform(self, patch: Patch):
-        # matrix = np.eye(3)
-        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
         for batch in range(patch.shape[0]):
             for channel in range(patch.shape[1]):
                 for z in range(patch.shape[2]):
                     patch.image[batch,channel,z,...] = self._transform2d(
                         patch.image[batch, channel, z, ...], cv2.INTER_LINEAR
                     )
-                    patch.image[batch,channel,z,...] = self._transform2d(
-                        patch.image[batch, channel, z, ...], cv2.INTER_NEAREST
+                    patch.label[batch,channel,z,...] = self._transform2d(
+                        patch.label[batch, channel, z, ...], cv2.INTER_NEAREST
                     )
-                
-        patch.shrink(self.shrink_size)
 
     def _transform2d(self, arr: np.ndarray, interpolation: int):
         assert arr.ndim == 2
         corner_ratio = random.uniform(0.02, self.corner_ratio)
-        # corner_ratio = self.corner_ratio
         sy, sx = arr.shape
         upper_left_point = [
             random.randint(0, round(sy*corner_ratio/2)), 
@@ -472,6 +427,7 @@ class Perspective2D(SpatialTransform):
             lower_left_point, 
             lower_right_point
         ]
+
         # push the list order to get rotation effect
         # for example, push one position will rotate about 90 degrees
         # push_index = random.randint(0, 3)
@@ -488,7 +444,6 @@ class Perspective2D(SpatialTransform):
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
         return dst
 
-
 # class RotateScale(SpatialTransform):
 #     def __init__(self, probability: float=DEFAULT_PROBABILITY,
 #             max_scaling: float=1.3):
@@ -497,9 +452,6 @@ class Perspective2D(SpatialTransform):
 #         self.max_scaling = max_scaling
 
 #     def transform(self, patch: Patch):
-#         # because we do not know the rotation angle
-#         # we should apply the shrinking first
-#         patch.apply_delayed_shrink_size()
 
 #         # if the rotation is close to diagnal, for example 45 degree
 #         # the label could be outside the volume and be black!
@@ -521,7 +473,6 @@ class Perspective2D(SpatialTransform):
 #                         mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
 #                     ) 
 
-
 class Swirl(SpatialTransform):
     def __init__(self, max_rotation: int = 5, max_strength: int = 3, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
@@ -536,3 +487,4 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
+

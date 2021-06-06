@@ -5,7 +5,7 @@ from typing import Union
 import numpy as np
 from scipy.ndimage.measurements import label
 from .patch import Patch
-
+from .patch import AffinityPatch
 
 class AbstractGroundTruthVolume(ABC):
     def __init__(self):
@@ -40,6 +40,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
         """
+
         assert image.ndim == 3
         assert label.ndim >= 3
         assert image.shape == label.shape[-3:]
@@ -101,11 +102,11 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        # if we do not copy here, the augmentation will change our 
-        # image and label volume!
+        print('init shape: ', image_patch.shape, label_patch.shape)
+        # if we do not copy here, the augmentation will change our image and label volume!
         image_patch = self._expand_to_5d(image_patch).copy()
         label_patch = self._expand_to_5d(label_patch).copy()
-        return Patch(image_patch, label_patch)
+        return AffinityPatch(image_patch, label_patch)
     
     @property
     def volume_sampling_weight(self):

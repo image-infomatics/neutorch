@@ -1,7 +1,6 @@
 from functools import lru_cache
 import numpy as np
 
-
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
         delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
@@ -53,6 +52,74 @@ class Patch(object):
             size[1]:y-size[4],
             size[2]:x-size[5],
         ]
+
+    @property
+    def shape(self):
+        return self.image.shape
+
+    @property
+    @lru_cache
+    def center(self):
+        return tuple(ps // 2 for ps in self.shape)
+
+
+class AffinityPatch(object):
+    def __init__(self, image: np.ndarray, label: np.ndarray,):
+        """A patch of volume containing both image and label
+
+        Args:
+            image (np.ndarray): image
+            label (np.ndarray): label
+        """
+    
+
+        assert image.shape == label.shape
+        self.image = image # EM volume
+        self.label = label # segmentation label
+        self.target = label # init target to current label
+
+
+    # def shrink(self, size: tuple):
+    #     assert len(size) == 6
+    #     _, _, z, y, x = self.shape
+    #     self.image = self.image[
+    #         ...,
+    #         size[0]:z-size[3],
+    #         size[1]:y-size[4],
+    #         size[2]:x-size[5],
+    #     ]
+    #     self.label = self.label[
+    #         ...,
+    #         size[0]:z-size[3],
+    #         size[1]:y-size[4],
+    #         size[2]:x-size[5],
+    #     ]
+    #     self.target = self.target[
+    #         ...,
+    #         size[0]:z-size[3],
+    #         size[1]:y-size[4],
+    #         size[2]:x-size[5],
+    #     ]
+
+    def compute_target(self):
+        print("cur label shape", self.label.shape)
+        affinity = self.compute_affinity(self.label) # affinity map
+        # self.LSD # local shape descriptor
+
+        self.target = affinity # learning target
+
+    # segmentation label into affinty map
+    def compute_affinity(self, label):
+        b0, c0, z0, y0, x0 = self.shape
+
+        # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
+        cur_label = label[..., 1:, 1:, 1:]
+        offset_label = label[..., 0:-1, 0:-1, 0:-1]
+
+        newlabel = np.zeros((b0, c0, z0-1, y0-1, x0-1), dtype=label.dtype)
+        newlabel[..., :, :, :] = cur_label == offset_label
+
+        return newlabel
 
     @property
     def shape(self):
