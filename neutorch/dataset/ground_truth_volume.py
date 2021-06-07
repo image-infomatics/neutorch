@@ -64,16 +64,6 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
-    
-    def _expand_to_5d(self, array: np.ndarray):
-        if array.ndim == 3:
-            return np.expand_dims(array, axis=(0, 1))
-        elif array.ndim == 4:
-            return np.expand_dims(array, axis=0)
-        elif array.ndim == 5:
-            return array
-        else:
-            raise ValueError('only support 3 to 5 dimensional array.')
 
     @property
     def random_patch(self):
@@ -91,7 +81,6 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         bz = center[0] - self.patch_size[-3] // 2
         by = center[1] - self.patch_size[-2] // 2
         bx = center[2] - self.patch_size[-1] // 2
-        print('center: ', center)
         image_patch = self.image[...,
             bz : bz + self.patch_size[-3],
             by : by + self.patch_size[-2],
@@ -102,10 +91,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        print('init shape: ', image_patch.shape, label_patch.shape)
-        # if we do not copy here, the augmentation will change our image and label volume!
-        image_patch = self._expand_to_5d(image_patch).copy()
-        label_patch = self._expand_to_5d(label_patch).copy()
+
         return AffinityPatch(image_patch, label_patch)
     
     @property

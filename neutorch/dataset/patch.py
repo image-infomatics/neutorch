@@ -1,9 +1,12 @@
 from functools import lru_cache
 import numpy as np
+import torchio as tio
+import time
+
 
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
-        delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
+                 delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
         """A patch of volume containing both image and label
 
         Args:
@@ -33,7 +36,7 @@ class Patch(object):
         # elif len(self.delayed_shrink_size) == 6:
         #     margin
         self.shrink(self.delayed_shrink_size)
-        
+
         # reset the shrink size to 0
         self.delayed_shrink_size = (0,) * 6
 
@@ -71,59 +74,49 @@ class AffinityPatch(object):
             image (np.ndarray): image
             label (np.ndarray): label
         """
-    
-
         assert image.shape == label.shape
-        self.image = image # EM volume
-        self.label = label # segmentation label
-        self.target = label # init target to current label
 
+        image_tensor = np.expand_dims(image, axis=0)
+        label_tensor = np.expand_dims(label, axis=0)
+        affinity_tensor = self.compute_affinity(label)
 
-    # def shrink(self, size: tuple):
-    #     assert len(size) == 6
-    #     _, _, z, y, x = self.shape
-    #     self.image = self.image[
-    #         ...,
-    #         size[0]:z-size[3],
-    #         size[1]:y-size[4],
-    #         size[2]:x-size[5],
-    #     ]
-    #     self.label = self.label[
-    #         ...,
-    #         size[0]:z-size[3],
-    #         size[1]:y-size[4],
-    #         size[2]:x-size[5],
-    #     ]
-    #     self.target = self.target[
-    #         ...,
-    #         size[0]:z-size[3],
-    #         size[1]:y-size[4],
-    #         size[2]:x-size[5],
-    #     ]
+        tio_image = tio.ScalarImage(tensor=image_tensor)
+        tio_label = tio.LabelMap(tensor=label_tensor)
+        tio_affinty = tio.LabelMap(tensor=affinity_tensor)
 
-    def compute_target(self):
-        print("cur label shape", self.label.shape)
-        affinity = self.compute_affinity(self.label) # affinity map
-        # self.LSD # local shape descriptor
-
-        self.target = affinity # learning target
+        self.subject = tio.Subject(
+            image=tio_image, label=tio_label, affinity=tio_affinty)
 
     # segmentation label into affinty map
     def compute_affinity(self, label):
-        b0, c0, z0, y0, x0 = self.shape
+        z0, y0, x0 = label.shape
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
-        cur_label = label[..., 1:, 1:, 1:]
-        offset_label = label[..., 0:-1, 0:-1, 0:-1]
+        affinty = np.zeros((3, z0, y0, x0), dtype=label.dtype)
+        affinty[0, 0:-1, :, :] = label[..., 1:, :,
+                                       :] == label[..., 0:-1, :, :]  # z channel
+        affinty[1, :, 0:-1, :] = label[..., :, 1:,
+                                       :] == label[..., :, 0:-1, :]  # y channel
+        affinty[2, :, :, 0:-1] = label[..., :, :,
+                                       1:] == label[..., :, :, 0:-1]  # x channel
 
-        newlabel = np.zeros((b0, c0, z0-1, y0-1, x0-1), dtype=label.dtype)
-        newlabel[..., :, :, :] = cur_label == offset_label
+        return affinty
 
-        return newlabel
+    @property
+    def image(self):
+        return self.subject.image.tensor.numpy()
+
+    @property
+    def label(self):
+        return self.subject.label.tensor.numpy()
+
+    @property
+    def affinity(self):
+        return self.subject.affinity.tensor.numpy()
 
     @property
     def shape(self):
-        return self.image.shape
+        return self.subject.image.tensor.shape
 
     @property
     @lru_cache

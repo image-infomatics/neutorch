@@ -1,9 +1,6 @@
-import json
-import os
-import math
 import random
 from typing import Union
-from time import time, sleep
+import time
 
 import numpy as np
 import h5py
@@ -11,24 +8,16 @@ import h5py
 from chunkflow.chunk import Chunk
 
 import torch
-import toml
 
 from .ground_truth_volume import GroundTruthVolume
-from .transform import *
-
-
-def image_reader(path: str):
-    with h5py.File(path, 'r') as file:
-        img = np.asarray(file['main'])
-    # the last one is affine transformation matrix in torchio image type
-    return img, None
+import torchio as tio
 
 
 class CremiDataset(torch.utils.data.Dataset):
-    def __init__(self, 
-            training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=(64, 64, 64), 
-            ):
+    def __init__(self,
+                 training_split_ratio: float = 0.9,
+                 patch_size: Union[int, tuple] = (64, 64, 64),
+                 ):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
@@ -43,32 +32,32 @@ class CremiDataset(torch.utils.data.Dataset):
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
 
-        self._prepare_transform()
-        assert isinstance(self.transform, Compose)
-
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
-        over_sample = 4
-        patch_size_oversized = tuple(x+over_sample for x in patch_size)
+        self.over_sample = 4
+        patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
+
+        self._prepare_transform()
 
         # load all the datasets
         fileA = './data/cremi/sample_A.hdf'
         fileB = './data/cremi/sample_B.hdf'
         fileC = './data/cremi/sample_C.hdf'
 
-        files = [fileA]#, fileB, fileC]
+        files = [fileA]  # , fileB, fileC]
         volumes = []
         for file in files:
             image = Chunk.from_h5(file, dataset_path='volumes/raw')
-            label = Chunk.from_h5(file, dataset_path='volumes/labels/neuron_ids')
+            label = Chunk.from_h5(
+                file, dataset_path='volumes/labels/neuron_ids')
 
             image = image.astype(np.float32) / 255.
-            ground_truth_volume = GroundTruthVolume(image,label,patch_size=patch_size_oversized)
+            ground_truth_volume = GroundTruthVolume(
+                image, label, patch_size=patch_size_oversized)
             volumes.append(ground_truth_volume)
-        
-        self.training_volumes = volumes # volumes[1:]
-        self.validation_volumes = [volumes[0]]
 
+        self.training_volumes = volumes  # volumes[1:]
+        self.validation_volumes = [volumes[0]]
 
     @property
     def random_training_patch(self):
@@ -78,40 +67,50 @@ class CremiDataset(torch.utils.data.Dataset):
     def random_validation_patch(self):
         return self.select_random_patch(self.validation_volumes)
 
-
     def select_random_patch(self, collection):
         volume = random.choice(collection)
         patch = volume.random_patch
-        self.transform(patch)
-        patch.compute_target()
-        print('patch shape: ', patch.shape)
-        # assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
+        patch.subject = self.transform(patch.subject)
         return patch
-           
+
     def _prepare_transform(self):
-        self.transform = Compose([
-            NormalizeTo01(probability=1.0),
 
-            # Intensity Transforms
-            # AdjustBrightness(),
-            # AdjustContrast(),
-            # Gamma(),
-            # OneOf([
-            #     Noise(),
-            #     GaussianBlur2D(),
-            # ]),
-            # BlackBox(),
+        # Normalization
+        rescale = tio.RescaleIntensity(out_min_max=(0, 1))
 
-            # Spatial Transforms
-            # RotateScale(probability=1.),
+        # Spatial
+        elastic = tio.RandomElasticDeformation(locked_borders=2)
+        flip = tio.RandomFlip(axes=(0, 1, 2))
 
-            # MissAlignment(),
-            # DropAlongAxis(),
-            # Flip(),
-            # Transpose(),
-            Perspective2D(),
+        none = (0, 0.1)
+        affine = tio.RandomAffine(
+            center='image')
+        spatial = tio.OneOf({
+            affine: 0.2,
+            # elastic: 0.2, this is a very slow transformation
+            flip: 0.8,
+        },
+            p=0.25,
+        )
+        # Intensity
+        intensity = tio.OneOf({
+            tio.RandomBiasField(): 0.3,
+            tio.RandomNoise(): 0.2,
+            tio.RandomGamma(): 0.1,
+            tio.RandomSpike(): 0.2,
+            tio.RandomGhosting(): 0.1,
 
-        ])
+        },
+            p=0.25,
+        )
+
+        # Crop down to true patch size
+        crop = tio.Crop(bounds_parameters=self.over_sample//2)
+
+        transforms = [rescale, intensity, spatial, crop]
+        transforms = [rescale, affine, crop]
+
+        self.transform = tio.Compose(transforms)
 
 
 if __name__ == '__main__':
@@ -122,7 +121,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir='/tmp/log')
 
     import h5py
-    
+
     model = torch.nn.Identity()
     print('start generating random patches...')
     for n in range(10000):
@@ -132,9 +131,9 @@ if __name__ == '__main__':
         image = patch.image
         label = patch.label
         with h5py.File('/tmp/image.h5', 'w') as file:
-            file['main'] = image[0,0, ...]
+            file['main'] = image[0, 0, ...]
         with h5py.File('/tmp/label.h5', 'w') as file:
-            file['main'] = label[0,0, ...]
+            file['main'] = label[0, 0, ...]
 
         print('number of nonzero voxels: ', np.count_nonzero(label))
         # assert np.count_nonzero(tbar) == 8
@@ -157,5 +156,3 @@ if __name__ == '__main__':
         #     normalize=True,
         #     scale_each=True,
         # )
-        sleep(1)
-
