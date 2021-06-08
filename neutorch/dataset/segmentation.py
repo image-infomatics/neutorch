@@ -1,6 +1,6 @@
 import random
 from typing import Union
-import time
+from time import time
 
 import numpy as np
 import h5py
@@ -34,7 +34,7 @@ class CremiDataset(torch.utils.data.Dataset):
 
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
-        self.over_sample = 4
+        self.over_sample = 16
         patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
 
         self._prepare_transform()
@@ -70,7 +70,10 @@ class CremiDataset(torch.utils.data.Dataset):
     def select_random_patch(self, collection):
         volume = random.choice(collection)
         patch = volume.random_patch
+        ping = time()
         patch.subject = self.transform(patch.subject)
+        print(f'transform takes {round(time()-ping, 4)} seconds.')
+
         return patch
 
     def _prepare_transform(self):
@@ -81,14 +84,20 @@ class CremiDataset(torch.utils.data.Dataset):
         # Spatial
         elastic = tio.RandomElasticDeformation(locked_borders=2)
         flip = tio.RandomFlip(axes=(0, 1, 2))
-
-        none = (0, 0.1)
         affine = tio.RandomAffine(
-            center='image')
+            center='image',
+            # these values are selected empirically such that
+            # in combination with patch_size and oversampling (64, 16)
+            # the affine transformation does not introduce
+            # any undefined values at the border of the image
+            scales=(1.2, 1.5),
+            translation=(-5, 5),
+            degrees=(-8, 8),
+        )
         spatial = tio.OneOf({
-            affine: 0.2,
+            affine: 0.3,
             # elastic: 0.2, this is a very slow transformation
-            flip: 0.8,
+            flip: 0.7,
         },
             p=0.25,
         )
@@ -99,16 +108,14 @@ class CremiDataset(torch.utils.data.Dataset):
             tio.RandomGamma(): 0.1,
             tio.RandomSpike(): 0.2,
             tio.RandomGhosting(): 0.1,
-
         },
             p=0.25,
         )
 
-        # Crop down to true patch size
+        # crop down from over sample to true patch size
         crop = tio.Crop(bounds_parameters=self.over_sample//2)
 
         transforms = [rescale, intensity, spatial, crop]
-        transforms = [rescale, affine, crop]
 
         self.transform = tio.Compose(transforms)
 

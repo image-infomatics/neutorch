@@ -9,6 +9,7 @@ from numpy.lib.stride_tricks import as_strided
 
 logger = logging.getLogger(__name__)
 
+
 def get_local_shape_descriptors(
         segmentation,
         sigma,
@@ -61,6 +62,7 @@ def get_local_shape_descriptors(
         voxel_size,
         roi,
         labels)
+
 
 class LsdExtractor(object):
 
@@ -147,8 +149,8 @@ class LsdExtractor(object):
 
         # prepare full-res descriptor volumes for roi
         descriptors = np.zeros(
-                (channels,) + roi.get_shape(),
-                dtype=np.float32)
+            (channels,) + roi.get_shape(),
+            dtype=np.float32)
 
         # get sub-sampled shape, roi, voxel size and sigma
         df = self.downsample
@@ -161,11 +163,12 @@ class LsdExtractor(object):
 
         assert sub_roi*df == roi, (
             "Segmentation shape %s is not a multiple of downsampling factor "
-            "%d (sub_roi=%s, roi=%s)."%(
+            "%d (sub_roi=%s, roi=%s)." % (
                 segmentation.shape, self.downsample,
                 sub_roi, roi))
         sub_voxel_size = tuple(v*df for v in voxel_size)
-        sub_sigma_voxel = tuple(s/v for s, v in zip(self.sigma, sub_voxel_size))
+        sub_sigma_voxel = tuple(
+            s/v for s, v in zip(self.sigma, sub_voxel_size))
 
         logger.debug("Downsampled shape: %s", sub_shape)
         logger.debug("Downsampled voxel size: %s", sub_voxel_size)
@@ -179,19 +182,25 @@ class LsdExtractor(object):
             try:
                 # 3d by default
                 grid = np.meshgrid(
-                        np.arange(0, sub_shape[0]*sub_voxel_size[0], sub_voxel_size[0]),
-                        np.arange(0, sub_shape[1]*sub_voxel_size[1], sub_voxel_size[1]),
-                        np.arange(0, sub_shape[2]*sub_voxel_size[2], sub_voxel_size[2]),
-                        indexing='ij')
+                    np.arange(
+                        0, sub_shape[0]*sub_voxel_size[0], sub_voxel_size[0]),
+                    np.arange(
+                        0, sub_shape[1]*sub_voxel_size[1], sub_voxel_size[1]),
+                    np.arange(
+                        0, sub_shape[2]*sub_voxel_size[2], sub_voxel_size[2]),
+                    indexing='ij')
 
             except:
 
                 grid = np.meshgrid(
-                        np.arange(0, sub_shape[0]*sub_voxel_size[0], sub_voxel_size[0]),
-                        np.arange(0, sub_shape[1]*sub_voxel_size[1], sub_voxel_size[1]),
-                        indexing='ij')
+                    np.arange(
+                        0, sub_shape[0]*sub_voxel_size[0], sub_voxel_size[0]),
+                    np.arange(
+                        0, sub_shape[1]*sub_voxel_size[1], sub_voxel_size[1]),
+                    indexing='ij')
 
-            self.coords[(sub_shape, sub_voxel_size)] = np.array(grid, dtype=np.float32)
+            self.coords[(sub_shape, sub_voxel_size)] = np.array(
+                grid, dtype=np.float32)
 
         coords = self.coords[(sub_shape, sub_voxel_size)]
 
@@ -203,11 +212,11 @@ class LsdExtractor(object):
 
             logger.debug("Creating shape descriptors for label %d", label)
 
-            mask = (segmentation==label).astype(np.float32)
+            mask = (segmentation == label).astype(np.float32)
             logger.debug("Label mask %s", mask.shape)
 
             try:
-                #3d by default
+                # 3d by default
                 sub_mask = mask[::df, ::df, ::df]
 
             except:
@@ -225,7 +234,7 @@ class LsdExtractor(object):
                 sub_mean_offset,
                 sub_variance,
                 sub_pearson,
-                sub_count[None,:]])
+                sub_count[None, :]])
 
             logger.debug("Upscaling descriptors...")
             start = time.time()
@@ -261,7 +270,8 @@ class LsdExtractor(object):
             # size = [10]
 
             # mean offsets in [0, 1]
-            descriptors[[0, 1, 2]] = descriptors[[0, 1, 2]]/max_distance[:, None, None, None]*0.5 + 0.5
+            descriptors[[0, 1, 2]] = descriptors[[0, 1, 2]] / \
+                max_distance[:, None, None, None]*0.5 + 0.5
             # pearsons in [0, 1]
             descriptors[[6, 7, 8]] = descriptors[[6, 7, 8]]*0.5 + 0.5
             # reset background to 0
@@ -275,7 +285,8 @@ class LsdExtractor(object):
             # size = [5]
 
             # mean offsets in [0, 1]
-            descriptors[[0, 1]] = descriptors[[0, 1]]/max_distance[:, None, None]*0.5 + 0.5
+            descriptors[[0, 1]] = descriptors[[0, 1]] / \
+                max_distance[:, None, None]*0.5 + 0.5
             # pearsons in [0, 1]
             descriptors[[4]] = descriptors[[4]]*0.5 + 0.5
             # reset background to 0
@@ -299,7 +310,7 @@ class LsdExtractor(object):
         count_len = len(count.shape)
 
         # avoid division by zero
-        count[count==0] = 1
+        count[count == 0] = 1
         logger.debug("%f seconds", time.time() - start)
 
         # mean
@@ -326,19 +337,19 @@ class LsdExtractor(object):
         coords_outer = self.__outer_product(masked_coords)
 
         # remove duplicate entries in covariance
-        entries = [0,4,8,1,2,5] if count_len == 3 else [0,3,1]
+        entries = [0, 4, 8, 1, 2, 5] if count_len == 3 else [0, 3, 1]
 
         covariance = np.array([
             self.__aggregate(coords_outer[d], sigma_voxel, self.mode, roi)
 
             # 3d:
-                # 0 1 2
-                # 3 4 5
-                # 6 7 8
+            # 0 1 2
+            # 3 4 5
+            # 6 7 8
 
             # 2d:
-                # 0 1
-                # 2 3
+            # 0 1
+            # 2 3
 
             for d in entries])
 
@@ -356,7 +367,7 @@ class LsdExtractor(object):
             pearson = covariance[[3, 4, 5]]
 
             # normalize Pearson correlation coefficient
-            variance[variance<1e-3] = 1e-3 # numerical stability
+            variance[variance < 1e-3] = 1e-3  # numerical stability
             pearson[0] /= np.sqrt(variance[0]*variance[1])
             pearson[1] /= np.sqrt(variance[0]*variance[2])
             pearson[2] /= np.sqrt(variance[1]*variance[2])
@@ -375,7 +386,7 @@ class LsdExtractor(object):
             pearson = covariance[[2]]
 
             # normalize Pearson correlation coefficient
-            variance[variance<1e-3] = 1e-3 # numerical stability
+            variance[variance < 1e-3] = 1e-3  # numerical stability
             pearson /= np.sqrt(variance[0]*variance[1])
 
             # normalize variances to interval [0, 1]
@@ -423,10 +434,9 @@ class LsdExtractor(object):
                 cval=0.0)[roi_slices]
 
         else:
-            raise RuntimeError("Unknown mode %s"%mode)
+            raise RuntimeError("Unknown mode %s" % mode)
 
     def get_context(self):
-
         '''Return the context needed to compute the LSDs.'''
 
         if self.mode == 'gaussian':
@@ -435,7 +445,6 @@ class LsdExtractor(object):
             return self.sigma
 
     def __outer_product(self, array):
-
         '''Computes the unique values of the outer products of the first dimension
         of ``array``. If ``array`` has shape ``(k, d, h, w)``, for example, the
         output will be of shape ``(k*(k+1)/2, d, h, w)``.
@@ -457,9 +466,9 @@ class LsdExtractor(object):
             sh = (shape[0], shape[1], f, shape[2], f)
             st = (stride[0], stride[1], 0, stride[2], 0)
 
-        view = as_strided(array,sh,st)
+        view = as_strided(array, sh, st)
 
         l = [shape[0]]
-        [l.append(shape[i+1]*f) for i,j in enumerate(shape[1:])]
+        [l.append(shape[i+1]*f) for i, j in enumerate(shape[1:])]
 
         return view.reshape(l)

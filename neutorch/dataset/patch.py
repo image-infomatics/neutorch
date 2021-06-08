@@ -1,7 +1,8 @@
 from functools import lru_cache
 import numpy as np
 import torchio as tio
-import time
+from time import time
+from .local_shape_descriptor import get_local_shape_descriptors
 
 
 class Patch(object):
@@ -78,17 +79,29 @@ class AffinityPatch(object):
 
         image_tensor = np.expand_dims(image, axis=0)
         label_tensor = np.expand_dims(label, axis=0)
-        affinity_tensor = self.compute_affinity(label)
 
+        ping = time()
+        affinity_tensor = self.__compute_affinity(label)
+        print(f'compute_affinity takes {round(time()-ping, 4)} seconds.')
+
+        ping = time()
+        sigma = int(label.shape[0] * 0.15)  # set sigma as percentage of size
+        lsd_tensor = self.__compute_lsd(label, sigma)
+        print(f'compute_lsd takes {round(time()-ping, 4)} seconds.')
+
+        ping = time()
         tio_image = tio.ScalarImage(tensor=image_tensor)
         tio_label = tio.LabelMap(tensor=label_tensor)
         tio_affinty = tio.LabelMap(tensor=affinity_tensor)
+        tio_lsd = tio.LabelMap(tensor=lsd_tensor)
 
         self.subject = tio.Subject(
-            image=tio_image, label=tio_label, affinity=tio_affinty)
+            image=tio_image, label=tio_label, affinity=tio_affinty, lsd=tio_lsd)
+
+        print(f'init_tio_objects takes {round(time()-ping, 4)} seconds.')
 
     # segmentation label into affinty map
-    def compute_affinity(self, label):
+    def __compute_affinity(self, label):
         z0, y0, x0 = label.shape
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
@@ -102,6 +115,18 @@ class AffinityPatch(object):
 
         return affinty
 
+    # segmentation label into lsd
+    def __compute_lsd(self, label, sigma):
+
+        sigma_tuple = (sigma,)*3
+        lsd = get_local_shape_descriptors(np.squeeze(label), sigma_tuple)
+
+        return lsd
+
+    @property
+    def shape(self):
+        return self.subject.image.tensor.shape
+
     @property
     def image(self):
         return self.subject.image.tensor.numpy()
@@ -114,9 +139,16 @@ class AffinityPatch(object):
     def affinity(self):
         return self.subject.affinity.tensor.numpy()
 
-    @property
-    def shape(self):
-        return self.subject.image.tensor.shape
+    def get_lsd_channel(self, channel):
+        lsd = self.subject.lsd.tensor.numpy()
+        if channel == 0:
+            return np.moveaxis(lsd[0:3, :, :, :], 0, 3)
+        if channel == 1:
+            return np.moveaxis(lsd[3:6, :, :, :], 0, 3)
+        if channel == 2:
+            return np.moveaxis(lsd[6:9, :, :, :], 0, 3)
+        if channel == 3:
+            return lsd[9, :, :, :]
 
     @property
     @lru_cache
