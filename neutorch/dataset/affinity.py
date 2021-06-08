@@ -8,13 +8,13 @@ import h5py
 from chunkflow.chunk import Chunk
 
 import torch
-from .custom_transforms import DropAlongAxis, ZeroAlongAxis
+from .tio_transforms import DropAlongAxis, ZeroAlongAxis
 
 from .ground_truth_volume import GroundTruthVolume
 import torchio as tio
 
 
-class CremiDataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  training_split_ratio: float = 0.9,
                  patch_size: Union[int, tuple] = (64, 64, 64),
@@ -80,7 +80,7 @@ class CremiDataset(torch.utils.data.Dataset):
         # crop down from over sample to true patch size, crop after compute affinity
         crop = tio.Crop(bounds_parameters=self.over_sample//2)
         patch.subject = crop(patch.subject)
-        print(f'transform takes {round(time()-ping, 4)} seconds.')
+        # print(f'transform takes {round(time()-ping, 4)} seconds.')
 
         return patch
 
@@ -122,7 +122,7 @@ class CremiDataset(torch.utils.data.Dataset):
             tio.RandomBlur(): 0.2,
             tio.RandomMotion(): 0.1
         },
-            p=0.3,
+            p=0.5,
         )
 
         transforms = [rescale, intensity, spatial]
@@ -131,7 +131,7 @@ class CremiDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    dataset = CremiDataset(training_split_ratio=0.99)
+    dataset = Dataset(training_split_ratio=0.99)
 
     from torch.utils.tensorboard import SummaryWriter
     from neutorch.model.io import log_tensor
