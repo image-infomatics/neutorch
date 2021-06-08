@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 import random
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 from scipy.ndimage.measurements import label
 from .patch import Patch
 from .patch import AffinityPatch
+
 
 class AbstractGroundTruthVolume(ABC):
     def __init__(self):
@@ -24,8 +25,9 @@ class AbstractGroundTruthVolume(ABC):
 
 class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
-            patch_size: Union[tuple, int], 
-            forbbiden_distance_to_boundary: tuple = None) -> None:
+                 patch_size: Union[tuple, int],
+                 forbbiden_distance_to_boundary: tuple = None,
+                 lsd_label: Optional[np.ndarray] = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -39,6 +41,8 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 if this is a tuple of three integers, the positive and negative is the same
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
+            lsd_label Optional[np.ndarray]:
+                an auxiliary label such as LSD which is treated similarly to normal label 
         """
 
         assert image.ndim == 3
@@ -48,62 +52,74 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             patch_size = (patch_size,) * 3
         else:
             assert len(patch_size) == 3
-        
+
         if forbbiden_distance_to_boundary is None:
-            forbbiden_distance_to_boundary = tuple(ps // 2 for ps in patch_size)
-        assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
-        
+            forbbiden_distance_to_boundary = tuple(
+                ps // 2 for ps in patch_size)
+        assert len(forbbiden_distance_to_boundary) == 3 or len(
+            forbbiden_distance_to_boundary) == 6
+
         for idx in range(3):
             # the center of random patch should not be too close to boundary
             # otherwise, the patch will go outside of the volume
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
-        
+
         self.image = image
         self.label = label
+        self.lsd_label = lsd_label
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
-        self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
+        self.center_stop = tuple(
+            s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
 
     @property
     def random_patch(self):
-        patch = self.random_patch_from_center_range(self.center_start, self.center_stop)
+        patch = self.random_patch_from_center_range(
+            self.center_start, self.center_stop)
         return patch
-    
+
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
         # breakpoint()
         cz = random.randint(center_start[0], center_stop[0])
         cy = random.randint(center_start[1], center_stop[1])
         cx = random.randint(center_start[2], center_stop[2])
-        return self.patch_from_center((cz, cy, cx)) 
+        return self.patch_from_center((cz, cy, cx))
 
     def patch_from_center(self, center: tuple):
         bz = center[0] - self.patch_size[-3] // 2
         by = center[1] - self.patch_size[-2] // 2
         bx = center[2] - self.patch_size[-1] // 2
         image_patch = self.image[...,
-            bz : bz + self.patch_size[-3],
-            by : by + self.patch_size[-2],
-            bx : bx + self.patch_size[-1]
-        ]
+                                 bz: bz + self.patch_size[-3],
+                                 by: by + self.patch_size[-2],
+                                 bx: bx + self.patch_size[-1]
+                                 ]
         label_patch = self.label[...,
-            bz : bz + self.patch_size[-3],
-            by : by + self.patch_size[-2],
-            bx : bx + self.patch_size[-1]
-        ]
+                                 bz: bz + self.patch_size[-3],
+                                 by: by + self.patch_size[-2],
+                                 bx: bx + self.patch_size[-1]
+                                 ]
+        lsd_label = self.lsd_label
+        if lsd_label is not None:
+            lsd_label = self.lsd_label[...,
+                                       bz: bz + self.patch_size[-3],
+                                       by: by + self.patch_size[-2],
+                                       bx: bx + self.patch_size[-1]
+                                       ]
 
-        return AffinityPatch(image_patch, label_patch)
-    
+        return AffinityPatch(image_patch, label_patch, lsd_label=lsd_label)
+
     @property
     def volume_sampling_weight(self):
         return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
-    
+
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
-    def __init__(self, image: np.ndarray, 
-            annotation_points: np.ndarray,
-            patch_size: Union[tuple, int], 
-            forbbiden_distance_to_boundary: tuple = None) -> None:
+    def __init__(self, image: np.ndarray,
+                 annotation_points: np.ndarray,
+                 patch_size: Union[tuple, int],
+                 forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -115,13 +131,12 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         """
 
         assert annotation_points.shape[1] == 3
-        self.annotation_points = annotation_points 
+        self.annotation_points = annotation_points
         label = self._points_to_label(image)
         super().__init__(
             image, label, patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
-
 
     # it turns out that this sampling is biased to patches containing T-bar
     # the net will always try to find at least one T-bar in the input patch.
@@ -152,7 +167,7 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     #     return self.annotation_points.shape[0]
 
     def _points_to_label(self, image: np.ndarray,
-            expand_distance: int = 2) -> tuple:
+                         expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
         Args:
@@ -171,9 +186,8 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
             label[...,
-                coordinate[0]-expand_distance : coordinate[0]+expand_distance,
-                coordinate[1]-expand_distance : coordinate[1]+expand_distance,
-                coordinate[2]-expand_distance : coordinate[2]+expand_distance,
-            ] = 0.95
+                  coordinate[0]-expand_distance: coordinate[0]+expand_distance,
+                  coordinate[1]-expand_distance: coordinate[1]+expand_distance,
+                  coordinate[2]-expand_distance: coordinate[2]+expand_distance,
+                  ] = 0.95
         return label
-

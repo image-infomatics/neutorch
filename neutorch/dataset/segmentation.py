@@ -8,6 +8,7 @@ import h5py
 from chunkflow.chunk import Chunk
 
 import torch
+from .custom_transforms import DropAlongAxis, ZeroAlongAxis
 
 from .ground_truth_volume import GroundTruthVolume
 import torchio as tio
@@ -51,9 +52,12 @@ class CremiDataset(torch.utils.data.Dataset):
             label = Chunk.from_h5(
                 file, dataset_path='volumes/labels/neuron_ids')
 
+            lsd_label = np.array([label, label, label, label,
+                                  label, label, label, label, label, label])
+
             image = image.astype(np.float32) / 255.
             ground_truth_volume = GroundTruthVolume(
-                image, label, patch_size=patch_size_oversized)
+                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label)
             volumes.append(ground_truth_volume)
 
         self.training_volumes = volumes  # volumes[1:]
@@ -72,6 +76,10 @@ class CremiDataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         ping = time()
         patch.subject = self.transform(patch.subject)
+        patch.compute_affinity()
+        # crop down from over sample to true patch size, crop after compute affinity
+        crop = tio.Crop(bounds_parameters=self.over_sample//2)
+        patch.subject = crop(patch.subject)
         print(f'transform takes {round(time()-ping, 4)} seconds.')
 
         return patch
@@ -82,6 +90,8 @@ class CremiDataset(torch.utils.data.Dataset):
         rescale = tio.RescaleIntensity(out_min_max=(0, 1))
 
         # Spatial
+        drop = DropAlongAxis()
+        zero = ZeroAlongAxis()
         elastic = tio.RandomElasticDeformation(locked_borders=2)
         flip = tio.RandomFlip(axes=(0, 1, 2))
         affine = tio.RandomAffine(
@@ -95,27 +105,27 @@ class CremiDataset(torch.utils.data.Dataset):
             degrees=(-8, 8),
         )
         spatial = tio.OneOf({
-            affine: 0.3,
+            affine: 0.2,
             # elastic: 0.2, this is a very slow transformation
             flip: 0.7,
+            drop: 0.2,
+            zero: 0.3,
         },
-            p=0.25,
+            p=0.3,
         )
         # Intensity
         intensity = tio.OneOf({
             tio.RandomBiasField(): 0.3,
-            tio.RandomNoise(): 0.2,
-            tio.RandomGamma(): 0.1,
-            tio.RandomSpike(): 0.2,
+            tio.RandomNoise(): 0.1,
+            tio.RandomGamma(): 0.2,
             tio.RandomGhosting(): 0.1,
+            tio.RandomBlur(): 0.2,
+            tio.RandomMotion(): 0.1
         },
-            p=0.25,
+            p=0.3,
         )
 
-        # crop down from over sample to true patch size
-        crop = tio.Crop(bounds_parameters=self.over_sample//2)
-
-        transforms = [rescale, intensity, spatial, crop]
+        transforms = [rescale, intensity, spatial]
 
         self.transform = tio.Compose(transforms)
 

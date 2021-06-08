@@ -1,6 +1,7 @@
 from functools import lru_cache
 import numpy as np
 import torchio as tio
+from typing import Optional
 from time import time
 from .local_shape_descriptor import get_local_shape_descriptors
 
@@ -68,60 +69,49 @@ class Patch(object):
 
 
 class AffinityPatch(object):
-    def __init__(self, image: np.ndarray, label: np.ndarray,):
+    def __init__(self, image: np.ndarray, label: np.ndarray,
+                 lsd_label: Optional[np.ndarray] = None):
         """A patch of volume containing both image and label
 
         Args:
             image (np.ndarray): image
             label (np.ndarray): label
+            lsd_label (np.ndarray): auxiliary label such as LSD
         """
         assert image.shape == label.shape
 
         image_tensor = np.expand_dims(image, axis=0)
         label_tensor = np.expand_dims(label, axis=0)
 
-        ping = time()
-        affinity_tensor = self.__compute_affinity(label)
-        print(f'compute_affinity takes {round(time()-ping, 4)} seconds.')
-
-        ping = time()
-        sigma = int(label.shape[0] * 0.15)  # set sigma as percentage of size
-        lsd_tensor = self.__compute_lsd(label, sigma)
-        print(f'compute_lsd takes {round(time()-ping, 4)} seconds.')
-
-        ping = time()
         tio_image = tio.ScalarImage(tensor=image_tensor)
         tio_label = tio.LabelMap(tensor=label_tensor)
-        tio_affinty = tio.LabelMap(tensor=affinity_tensor)
-        tio_lsd = tio.LabelMap(tensor=lsd_tensor)
+        subject = tio.Subject(
+            image=tio_image, label=tio_label)
 
-        self.subject = tio.Subject(
-            image=tio_image, label=tio_label, affinity=tio_affinty, lsd=tio_lsd)
+        if lsd_label is not None:
+            tio_lsd = tio.LabelMap(tensor=lsd_label)
+            subject.add_image(tio_lsd, 'lsd')
 
-        print(f'init_tio_objects takes {round(time()-ping, 4)} seconds.')
+        self.subject = subject
 
     # segmentation label into affinty map
-    def __compute_affinity(self, label):
+
+    def compute_affinity(self):
+
+        label = np.squeeze(self.subject.label.tensor)
         z0, y0, x0 = label.shape
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
-        affinty = np.zeros((3, z0, y0, x0), dtype=label.dtype)
-        affinty[0, 0:-1, :, :] = label[..., 1:, :,
-                                       :] == label[..., 0:-1, :, :]  # z channel
-        affinty[1, :, 0:-1, :] = label[..., :, 1:,
-                                       :] == label[..., :, 0:-1, :]  # y channel
-        affinty[2, :, :, 0:-1] = label[..., :, :,
-                                       1:] == label[..., :, :, 0:-1]  # x channel
+        affinity = np.zeros((3, z0, y0, x0))
+        affinity[2, 0:-1, :, :] = label[..., 1:, :,
+                                        :] == label[..., 0:-1, :, :]  # z channel
+        affinity[1, :, 0:-1, :] = label[..., :, 1:,
+                                        :] == label[..., :, 0:-1, :]  # y channel
+        affinity[0, :, :, 0:-1] = label[..., :, :,
+                                        1:] == label[..., :, :, 0:-1]  # x channel
 
-        return affinty
-
-    # segmentation label into lsd
-    def __compute_lsd(self, label, sigma):
-
-        sigma_tuple = (sigma,)*3
-        lsd = get_local_shape_descriptors(np.squeeze(label), sigma_tuple)
-
-        return lsd
+        tio_affinity = tio.LabelMap(tensor=affinity)
+        self.subject.add_image(tio_affinity, 'affinity')
 
     @property
     def shape(self):
