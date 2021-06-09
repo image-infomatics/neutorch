@@ -7,6 +7,7 @@ import logging
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage.filters import convolve
 from numpy.lib.stride_tricks import as_strided
+from multiprocessing.pool import ThreadPool
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,8 @@ def get_local_shape_descriptors(
         roi=None,
         labels=None,
         mode='gaussian',
-        downsample=1):
+        downsample=1,
+        num_processes=1):
     '''
     Compute local shape descriptors for the given segmentation.
 
@@ -62,7 +64,8 @@ def get_local_shape_descriptors(
         segmentation,
         voxel_size,
         roi,
-        labels)
+        labels,
+        num_processes)
 
 
 class LsdExtractor(object):
@@ -103,7 +106,8 @@ class LsdExtractor(object):
             segmentation,
             voxel_size=None,
             roi=None,
-            labels=None):
+            labels=None,
+            num_processes=1):
         '''Compute local shape descriptors for a given segmentation.
 
         Args:
@@ -205,11 +209,11 @@ class LsdExtractor(object):
 
         coords = self.coords[(sub_shape, sub_voxel_size)]
 
-        # for all labels
-        for label in tqdm(labels, position=0, leave=True):
+        pbar = tqdm(total=len(labels))
 
+        def compute_lsd_for_label(label):
             if label == 0:
-                continue
+                return 0
 
             logger.debug("Creating shape descriptors for label %d", label)
 
@@ -244,10 +248,62 @@ class LsdExtractor(object):
 
             logger.debug("Accumulating descriptors...")
             start = time.time()
-            descriptors += descriptor*mask[roi_slices]
+            descriptor = descriptor*mask[roi_slices]
             logger.debug("%f seconds", time.time() - start)
+            pbar.update(1)
+            return descriptor
 
+        with ThreadPool(processes=num_processes) as pool:
+            descriptors_from_threads = pool.map(compute_lsd_for_label, labels)
+            if descriptors_from_threads != 0:
+                for descriptor in descriptors_from_threads:
+                    descriptors += descriptor
+        pbar.close()
         tqdm._instances.clear()
+
+        # # for all labels
+        # for label in tqdm(labels, position=0, leave=True):
+
+        #     if label == 0:
+        #         continue
+
+        #     logger.debug("Creating shape descriptors for label %d", label)
+
+        #     mask = (segmentation == label).astype(np.float32)
+        #     logger.debug("Label mask %s", mask.shape)
+
+        #     try:
+        #         # 3d by default
+        #         sub_mask = mask[::df, ::df, ::df]
+
+        #     except:
+        #         sub_mask = mask[::df, ::df]
+
+        #     logger.debug("Downsampled label mask %s", sub_mask.shape)
+
+        #     sub_count, sub_mean_offset, sub_variance, sub_pearson = self.__get_stats(
+        #         coords,
+        #         sub_mask,
+        #         sub_sigma_voxel,
+        #         sub_roi)
+
+        #     sub_descriptor = np.concatenate([
+        #         sub_mean_offset,
+        #         sub_variance,
+        #         sub_pearson,
+        #         sub_count[None, :]])
+
+        #     logger.debug("Upscaling descriptors...")
+        #     start = time.time()
+        #     descriptor = self.__upsample(sub_descriptor, df)
+        #     logger.debug("%f seconds", time.time() - start)
+
+        #     logger.debug("Accumulating descriptors...")
+        #     start = time.time()
+        #     descriptors += descriptor*mask[roi_slices]
+        #     logger.debug("%f seconds", time.time() - start)
+
+        # tqdm._instances.clear()
         # normalize stats
 
         # get max possible mean offset for normalization
