@@ -3,7 +3,7 @@ import numpy as np
 import h5py
 
 
-def from_h5(cls, file_name: str,
+def from_h5(file_name: str,
             dataset_path: str = '/main',
             global_offset: tuple = None):
 
