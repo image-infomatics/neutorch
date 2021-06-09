@@ -19,4 +19,4 @@ def from_h5(file_name: str,
             if global_offset_path in f:
                 global_offset = tuple(f[global_offset_path])
 
-    return cls(arr, global_offset=global_offset)
+    return arr
