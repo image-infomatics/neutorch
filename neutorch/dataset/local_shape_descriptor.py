@@ -20,7 +20,7 @@ def get_local_shape_descriptors(
         labels=None,
         mode='gaussian',
         downsample=1,
-        num_processes=1):
+        num_threads=1):
     '''
     Compute local shape descriptors for the given segmentation.
 
@@ -65,7 +65,7 @@ def get_local_shape_descriptors(
         voxel_size,
         roi,
         labels,
-        num_processes)
+        num_threads)
 
 
 class LsdExtractor(object):
@@ -107,7 +107,7 @@ class LsdExtractor(object):
             voxel_size=None,
             roi=None,
             labels=None,
-            num_processes=1):
+            num_threads=1):
         '''Compute local shape descriptors for a given segmentation.
 
         Args:
@@ -253,7 +253,7 @@ class LsdExtractor(object):
             pbar.update(1)
             return descriptor
 
-        with ThreadPool(processes=num_processes) as pool:
+        with ThreadPool(processes=num_threads) as pool:
             descriptors_from_threads = pool.map(compute_lsd_for_label, labels)
             if descriptors_from_threads != 0:
                 for descriptor in descriptors_from_threads:
