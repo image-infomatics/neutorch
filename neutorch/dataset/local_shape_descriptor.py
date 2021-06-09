@@ -2,6 +2,7 @@ from .gunpowder.roi import Roi
 from .gunpowder.coordinate import Coordinate
 import numpy as np
 import time
+from tqdm import tqdm
 import logging
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage.filters import convolve
@@ -205,7 +206,7 @@ class LsdExtractor(object):
         coords = self.coords[(sub_shape, sub_voxel_size)]
 
         # for all labels
-        for label in labels:
+        for label in tqdm(labels, position=0, leave=True):
 
             if label == 0:
                 continue
@@ -246,6 +247,7 @@ class LsdExtractor(object):
             descriptors += descriptor*mask[roi_slices]
             logger.debug("%f seconds", time.time() - start)
 
+        tqdm._instances.clear()
         # normalize stats
 
         # get max possible mean offset for normalization

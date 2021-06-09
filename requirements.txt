@@ -6,3 +6,4 @@ tensorboard
 opencv-python
 scikit-image
 chunkflow
+tqdm
