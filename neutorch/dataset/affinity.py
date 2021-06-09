@@ -45,6 +45,7 @@ class Dataset(torch.utils.data.Dataset):
         fileB = './data/cremi/sample_B.hdf'
         fileC = './data/cremi/sample_C.hdf'
 
+        # temporary for testing
         files = [fileA]  # , fileB, fileC]
         volumes = []
         for file in files:
@@ -52,6 +53,7 @@ class Dataset(torch.utils.data.Dataset):
             label = Chunk.from_h5(
                 file, dataset_path='volumes/labels/neuron_ids')
 
+            # temporary until lsd data is in place
             lsd_label = np.array([label, label, label, label,
                                   label, label, label, label, label, label])
 
