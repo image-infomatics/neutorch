@@ -213,7 +213,7 @@ class LsdExtractor(object):
 
         def compute_lsd_for_label(label):
             if label == 0:
-                return 0
+                return 0, 0
 
             logger.debug("Creating shape descriptors for label %d", label)
 
@@ -250,14 +250,24 @@ class LsdExtractor(object):
             start = time.time()
             descriptor = descriptor*mask[roi_slices]
             logger.debug("%f seconds", time.time() - start)
+
+            # convert to sparse representation otherwise you will eat up memory!!
+            indices = np.nonzero(descriptor)
+            values = descriptor[indices]
             pbar.update(1)
-            return descriptor
+
+            return indices, values
 
         with ThreadPool(processes=num_threads) as pool:
             descriptors_from_threads = pool.map(compute_lsd_for_label, labels)
-            if descriptors_from_threads != 0:
-                for descriptor in descriptors_from_threads:
-                    descriptors += descriptor
+
+            for indices, values in descriptors_from_threads:
+                if indices != 0:
+                    descriptors[indices] += values
+
+        # back to numpy
+        descriptors = np.array(descriptors)
+
         pbar.close()
         tqdm._instances.clear()
 
