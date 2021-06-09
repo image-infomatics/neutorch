@@ -1,3 +1,4 @@
+from neutorch.dataset.utils import from_h5
 import random
 from typing import Union
 from time import time
@@ -5,11 +6,9 @@ from time import time
 import numpy as np
 import h5py
 
-from chunkflow.chunk import Chunk
-
 import torch
 from .tio_transforms import DropAlongAxis, ZeroAlongAxis
-
+from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
 import torchio as tio
 
@@ -49,8 +48,8 @@ class Dataset(torch.utils.data.Dataset):
         files = [fileA]  # , fileB, fileC]
         volumes = []
         for file in files:
-            image = Chunk.from_h5(file, dataset_path='volumes/raw')
-            label = Chunk.from_h5(
+            image = from_h5(file, dataset_path='volumes/raw')
+            label = from_h5(
                 file, dataset_path='volumes/labels/neuron_ids')
 
             # temporary until lsd data is in place

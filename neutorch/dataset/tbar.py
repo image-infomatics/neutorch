@@ -7,9 +7,7 @@ from time import time, sleep
 
 import numpy as np
 import h5py
-
-from chunkflow.chunk import Chunk
-
+from .utils import from_h5
 import torch
 import toml
 
@@ -25,10 +23,10 @@ def image_reader(path: str):
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, config_file: str, 
-            training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=(64, 64, 64), 
-            ):
+    def __init__(self, config_file: str,
+                 training_split_ratio: float = 0.9,
+                 patch_size: Union[int, tuple] = (64, 64, 64),
+                 ):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
@@ -43,7 +41,8 @@ class Dataset(torch.utils.data.Dataset):
             patch_size = (patch_size,) * 3
 
         config_file = os.path.expanduser(config_file)
-        assert config_file.endswith('.toml'), "we use toml file as configuration format."
+        assert config_file.endswith(
+            '.toml'), "we use toml file as configuration format."
 
         with open(config_file, 'r') as file:
             meta = toml.load(file)
@@ -56,12 +55,12 @@ class Dataset(torch.utils.data.Dataset):
         self.patch_size = patch_size
         patch_size_before_transform = tuple(
             p + s0 + s1 for p, s0, s1 in zip(
-                patch_size, 
-                self.transform.shrink_size[:3], 
+                patch_size,
+                self.transform.shrink_size[:3],
                 self.transform.shrink_size[-3:]
             )
         )
-        
+
         # load all the datasets
         volumes = []
         for gt in meta.values():
@@ -72,7 +71,7 @@ class Dataset(torch.utils.data.Dataset):
             image_path = os.path.join(config_dir, image_path)
             synapse_path = os.path.join(config_dir, synapse_path)
 
-            image = Chunk.from_h5(image_path)
+            image = from_h5(image_path)
             voxel_offset = image.voxel_offset
             image = image.astype(np.float32) / 255.
             # use the voxel number as the sampling weights
@@ -85,9 +84,9 @@ class Dataset(torch.utils.data.Dataset):
             presynapses = synapses['presynapses']
             assert len(presynapses) > 0
             tbar_points = np.zeros((len(presynapses), 3), dtype=np.int64)
-            for idx, point in  enumerate(presynapses.values()):
+            for idx, point in enumerate(presynapses.values()):
                 # transform xyz to zyx
-                tbar_points[idx, :] = point[::-1] 
+                tbar_points[idx, :] = point[::-1]
                 # tbar_points[idx, 0] = point[2]
                 # tbar_points[idx, 1] = point[1]
                 # tbar_points[idx, 2] = point[0]
@@ -103,7 +102,7 @@ class Dataset(torch.utils.data.Dataset):
                 patch_size=patch_size_before_transform,
             )
             volumes.append(ground_truth_volume)
-        
+
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
 
@@ -112,13 +111,14 @@ class Dataset(torch.utils.data.Dataset):
         for volume in volumes:
             volume_weights.append(volume.volume_sampling_weight)
 
-        self.training_volume_num = math.floor(len(volumes) * training_split_ratio)
+        self.training_volume_num = math.floor(
+            len(volumes) * training_split_ratio)
         self.validation_volume_num = len(volumes) - self.training_volume_num
         self.training_volumes = volumes[:self.training_volume_num]
         self.validation_volumes = volumes[-self.validation_volume_num:]
         self.training_volume_weights = volume_weights[:self.training_volume_num]
         self.validation_volume_weights = volume_weights[-self.validation_volume_num]
-        
+
     @property
     def random_training_patch(self):
         # only sample one subject, so replacement option could be ignored
@@ -135,7 +135,8 @@ class Dataset(torch.utils.data.Dataset):
         self.transform(patch)
         patch.apply_delayed_shrink_size()
         print('patch shape: ', patch.shape)
-        assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
+        assert patch.shape[-3:
+                           ] == self.patch_size, f'patch shape: {patch.shape}'
         return patch
 
     @property
@@ -153,7 +154,7 @@ class Dataset(torch.utils.data.Dataset):
         self.transform(patch)
         patch.apply_delayed_shrink_size()
         return patch
-           
+
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
@@ -167,7 +168,7 @@ class Dataset(torch.utils.data.Dataset):
             BlackBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
-            #DropSection(),
+            # DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),
@@ -185,7 +186,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir='/tmp/log')
 
     import h5py
-    
+
     model = torch.nn.Identity()
     print('start generating random patches...')
     for n in range(10000):
@@ -195,9 +196,9 @@ if __name__ == '__main__':
         image = patch.image
         label = patch.label
         with h5py.File('/tmp/image.h5', 'w') as file:
-            file['main'] = image[0,0, ...]
+            file['main'] = image[0, 0, ...]
         with h5py.File('/tmp/label.h5', 'w') as file:
-            file['main'] = label[0,0, ...]
+            file['main'] = label[0, 0, ...]
 
         print('number of nonzero voxels: ', np.count_nonzero(label))
         # assert np.count_nonzero(tbar) == 8
@@ -221,4 +222,3 @@ if __name__ == '__main__':
         #     scale_each=True,
         # )
         sleep(1)
-

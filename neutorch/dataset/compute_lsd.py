@@ -2,7 +2,7 @@ import click
 import numpy as np
 
 import numpy as np
-from chunkflow.chunk import Chunk
+from .utils import from_h5
 from .local_shape_descriptor import get_local_shape_descriptors
 
 
@@ -43,7 +43,7 @@ def compute_lsd(input: str, output: str, sigma: tuple, downsample: int,  mode: s
         output = f'{input}_lsd'
 
     print(f'Computing LSD for {input}...')
-    label = Chunk.from_h5(
+    label = from_h5(
         f'{input}.hdf', dataset_path='volumes/labels/neuron_ids')
 
     # Segmentation shape (125, 1250, 1250) must be a multiple of downsampling factor 2

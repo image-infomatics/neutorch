@@ -5,6 +5,5 @@ h5py
 tensorboard
 opencv-python
 scikit-image
-chunkflow
 tqdm
 click
