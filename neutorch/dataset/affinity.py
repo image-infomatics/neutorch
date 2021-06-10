@@ -17,12 +17,14 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  training_split_ratio: float = 0.9,
                  patch_size: Union[int, tuple] = (64, 64, 64),
+                 resolution: tuple = (1, 1, 1),
                  ):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
+            resolution (tuple): resolution of images along each axis (z,y,x)
         """
 
         super().__init__()
@@ -31,6 +33,10 @@ class Dataset(torch.utils.data.Dataset):
 
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
+
+        # scale according to resolution
+        patch_size = tuple(
+            ps // res for ps, res in zip(patch_size, resolution))
 
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation

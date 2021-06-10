@@ -33,7 +33,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         Args:
             image (np.ndarray): image normalized to 0-1
             label (np.ndarray): training label
-            patch_size (Union[tuple, int]): output patch size
+            patch_size (Union[tuple, int]): output patch size in real space
             forbbiden_distance_to_boundary (Union[tuple, int]): 
                 the distance from patch center to volume boundary that is not allowed to sample 
                 the order is z,y,x,-z,-y,-x
