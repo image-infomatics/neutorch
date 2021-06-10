@@ -8,75 +8,75 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-
-from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt, log_tensor
-from neutorch.loss import BinomialCrossEntropyWithLogits
-# from neutorch.dataset.tbar import Dataset
-from neutorch.dataset.superresolution import Dataset
+from model.IsoRSUNet import UNetModel
+from model.io import save_chkpt, log_tensor
+from model.loss import BinomialCrossEntropyWithLogits
+from dataset.superresolution import Dataset
 
 
 @click.command()
-@click.option('--seed', 
-    type=int, default=1,
-    help='for reproducibility'
-)
+@click.option('--seed',
+              type=int, default=1,
+              help='for reproducibility'
+              )
 @click.option('--training-split-ratio', '-s',
-    type=float, default=0.8,
-    help='use 80% of samples for training, 20% of samples for validation.'
-)
+              type=float, default=0.8,
+              help='use 80% of samples for training, 20% of samples for validation.'
+              )
 @click.option('--patch-size', '-p',
-    type=tuple, default=(64, 64, 64),
-    help='input and output patch size.'
-)
+              type=tuple, default=(64, 64, 64),
+              help='input and output patch size.'
+              )
 @click.option('--iter-start', '-b',
-    type=int, default=0,
-    help='the starting index of training iteration.'
-)
+              type=int, default=0,
+              help='the starting index of training iteration.'
+              )
 @click.option('--iter-stop', '-e',
-    type=int, default=200000,
-    help='the stopping index of training iteration.'
-)
+              type=int, default=200000,
+              help='the stopping index of training iteration.'
+              )
 @click.option('--dataset-config-file', '-d',
-    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
-    required=True,
-    help='dataset configuration file path.'
-)
+              type=click.Path(exists=True, dir_okay=False,
+                              readable=True, resolve_path=True),
+              required=True,
+              help='dataset configuration file path.'
+              )
 @click.option('--output-dir', '-o',
-    type=click.Path(file_okay=False, dir_okay=True, writable=True, resolve_path=True),
-    required=True,
-    help='the directory to save all the outputs, such as checkpoints.'
-)
-@click.option('--in-channels', '-c', 
-    type=int, default=1, help='channel number of input tensor.'
-)
+              type=click.Path(file_okay=False, dir_okay=True,
+                              writable=True, resolve_path=True),
+              required=True,
+              help='the directory to save all the outputs, such as checkpoints.'
+              )
+@click.option('--in-channels', '-c',
+              type=int, default=1, help='channel number of input tensor.'
+              )
 @click.option('--out-channels', '-n',
-    type=int, default=1, help='channel number of output tensor.')
+              type=int, default=1, help='channel number of output tensor.')
 @click.option('--learning-rate', '-l',
-    type=float, default=0.001, help='learning rate'
-)
+              type=float, default=0.001, help='learning rate'
+              )
 @click.option('--training-interval', '-t',
-    type=int, default=100, help='training interval to record stuffs.'
-)
+              type=int, default=100, help='training interval to record stuffs.'
+              )
 @click.option('--validation-interval', '-v',
-    type=int, default=1000, help='validation and saving interval iterations.'
-)
+              type=int, default=1000, help='validation and saving interval iterations.'
+              )
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
-        iter_start: int, iter_stop: int, dataset_config_file: str, 
-        output_dir: str,
-        in_channels: int, out_channels: int, learning_rate: float,
-        training_interval: int, validation_interval: int):
-    
+          iter_start: int, iter_stop: int, dataset_config_file: str,
+          output_dir: str,
+          in_channels: int, out_channels: int, learning_rate: float,
+          training_interval: int, validation_interval: int):
+
     random.seed(seed)
 
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
-    model = Model(in_channels, out_channels)
+    model = UNetModel(in_channels, out_channels)
     if torch.cuda.is_available():
         model = model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    
+
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
         dataset_config_file,
@@ -131,15 +131,20 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
                 validation_target = validation_target.cuda()
 
             with torch.no_grad():
-                validation_logits = model(validation_image)
+                validation_logits = UNetModel(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
-                validation_loss = loss_module(validation_logits, validation_target)
+                validation_loss = loss_module(
+                    validation_logits, validation_target)
                 per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
-                print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
+                print(
+                    f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
-                log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
-                log_tensor(writer, 'evaluate/prediction', validation_predict, iter_idx)
-                log_tensor(writer, 'evaluate/target', validation_target, iter_idx)
+                log_tensor(writer, 'evaluate/image',
+                           validation_image, iter_idx)
+                log_tensor(writer, 'evaluate/prediction',
+                           validation_predict, iter_idx)
+                log_tensor(writer, 'evaluate/target',
+                           validation_target, iter_idx)
 
     writer.close()
 

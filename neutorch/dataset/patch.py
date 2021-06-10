@@ -129,6 +129,14 @@ class AffinityPatch(object):
     def affinity(self):
         return self.subject.affinity.tensor.numpy()
 
+    @property
+    def lsd(self):
+        return self.subject.lsd.tensor.numpy()
+
+    @property
+    def target(self):
+        return np.append(self.affinity, self.lsd, axis=0)
+
     def get_lsd_channel(self, channel):
         lsd = self.subject.lsd.tensor.numpy()
         if channel == 0:

@@ -8,6 +8,7 @@ import torch
 
 WIDTH = [16, 32, 64, 128, 256, 512]
 
+
 def _ntuple(n: int):
     """
     Copied from PyTorch source code
@@ -18,6 +19,7 @@ def _ntuple(n: int):
         else:
             return tuple(repeat(x, n))
     return parse
+
 
 _triple = _ntuple(3)
 
@@ -32,16 +34,18 @@ def pad_size(kernel_size: int, mode: str):
     elif mode == 'full':
         return tuple(x - 1 for x in ks)
     else:
-        raise ValueError('invalide mode option, only support valid, same or full')
+        raise ValueError(
+            'invalide mode option, only support valid, same or full')
+
 
 class Conv(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, 
-            kernel_size: int = 3, stride: int = 1, bias: bool = False):
+    def __init__(self, in_channels: int, out_channels: int,
+                 kernel_size: int = 3, stride: int = 1, bias: bool = False):
         super().__init__()
         padding = pad_size(kernel_size, 'same')
         self.conv = nn.Conv3d(in_channels, out_channels,
-            kernel_size=kernel_size, stride=stride, padding=padding, bias=bias
-        )
+                              kernel_size=kernel_size, stride=stride, padding=padding, bias=bias
+                              )
         nn.init.kaiming_normal_(self.conv.weight, nonlinearity='relu')
         if bias:
             nn.init.constant_(self.conv.bias, 0)
@@ -56,11 +60,12 @@ class TrilinearUp(nn.Module):
     Currently everything's hardcoded and only supports upsampling factor of 2.
     Note that this implementation is isotropic compared with BilinearUp.
     """
+
     def __init__(self, channels: int):
         super().__init__()
         self.groups = channels
         self._init_weights()
-    
+
     def _init_weights(self):
         weight = torch.Tensor(self.groups, 1, 4, 4, 4)
         width = weight.size(-1)
@@ -72,21 +77,23 @@ class TrilinearUp(nn.Module):
         for w in range(width):
             for h in range(hight):
                 for d in range(depth):
-                    weight[...,d,h,w] = (1 - abs(w/f - c)) * (1 - abs(h/f - c)) * (1 - abs(d/f - c))
+                    weight[..., d, h, w] = (
+                        1 - abs(w/f - c)) * (1 - abs(h/f - c)) * (1 - abs(d/f - c))
         self.register_buffer('weight', weight)
-    
+
     def forward(self, x):
         x = nn.functional.conv_transpose3d(x, self.weight,
-            stride=(2,2,2), padding=(1,1,1), groups=self.groups
-        )
+                                           stride=(2, 2, 2), padding=(1, 1, 1), groups=self.groups
+                                           )
         return x
 
 
 def conv(in_channels, out_channels, kernel_size: int = 3, stride: int = 1,
-            bias: bool = False):
+         bias: bool = False):
     padding = pad_size(kernel_size, 'same')
     return nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size,
-        stride=stride, padding=padding, bias=bias)
+                     stride=stride, padding=padding, bias=bias)
+
 
 class BNReLUConv(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size=3):
@@ -94,7 +101,9 @@ class BNReLUConv(nn.Sequential):
         # self.add_module('norm', nn.BatchNorm3d(in_channels))
         self.add_module('norm', nn.InstanceNorm3d(in_channels))
         self.add_module('relu', nn.ReLU(inplace=True))
-        self.add_module('conv', conv(in_channels, out_channels, kernel_size=kernel_size))
+        self.add_module('conv', conv(
+            in_channels, out_channels, kernel_size=kernel_size))
+
 
 class ResBlock(nn.Module):
     def __init__(self, channels):
@@ -108,6 +117,7 @@ class ResBlock(nn.Module):
         x = self.conv2(x)
         x += residule
         return x
+
 
 class ConvBlock(nn.Sequential):
     def __init__(self, in_channels: int, out_channels: int):
@@ -145,32 +155,33 @@ class UpConvBlock(nn.Module):
 
 class IsoRSUNet(nn.Module):
     """Isotropic Residual Symmetric UNet
-    
+
     Isotropic: the convolutional kernel size is isotropic, normally 3x3x3
     Residual: there are residual blocks in convolutional chain.
     Symmetric: the left and right side is the same
     UNet: 3D UNet
     """
-    def __init__(self, width: list=WIDTH) -> None:
+
+    def __init__(self, width: list = WIDTH) -> None:
         super().__init__()
         assert len(width) > 1
         for w in width:
             assert w >= 1
-            
+
         depth = len(width) - 1
         self.in_channels = width[0]
         self.input_conv = ConvBlock(width[0], width[0])
         self.down_convs = nn.ModuleList()
         for d in range(depth):
-            self.down_convs.append( nn.Sequential(
+            self.down_convs.append(nn.Sequential(
                 nn.MaxPool3d((2, 2, 2)),
                 ConvBlock(width[d], width[d+1])
             ))
-        
+
         self.up_convs = nn.ModuleList()
         for d in reversed(range(depth)):
             self.up_convs.append(UpConvBlock(width[d+1], width[d]))
-        
+
         self.out_channels = width[0]
         self._init_weights()
 
@@ -185,10 +196,10 @@ class IsoRSUNet(nn.Module):
         for down_conv in self.down_convs:
             skip.append(x)
             x = down_conv(x)
-        
+
         for up_conv in self.up_convs:
             x = up_conv(x, skip.pop())
-        
+
         return x
 
 
@@ -224,17 +235,18 @@ class OutputBlock(nn.Module):
         return x
 
 
-class Model(nn.Sequential):
+class UNetModel(nn.Sequential):
     """
     Residule Symmetric U-Net with down/upsampling in/output.
     """
-    def __init__(self, in_channels: int, out_channels: int, width: list=WIDTH):
+
+    def __init__(self, in_channels: int, out_channels: int, width: list = WIDTH):
         super().__init__()
 
         # assert len(in_spec)==1, "model takes a single input"
         # in_channels = list(in_spec.values()[0][-4])
         # matches the RSUNet output
-        # out_channels = width[0] 
+        # out_channels = width[0]
         io_kernel = (3, 3, 3)
 
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
@@ -243,7 +255,7 @@ class Model(nn.Sequential):
 
 
 if __name__ == '__main__':
-    model = Model(1, 1)
-    input = torch.rand((1,1, 64, 64, 64), dtype=torch.float32)
-    logits = model(input)
+    model = UNetModel(1, 1)
+    input = torch.rand((1, 1, 64, 64, 64), dtype=torch.float32)
+    logits = UNetModel(input)
     assert logits.shape[1] == 1

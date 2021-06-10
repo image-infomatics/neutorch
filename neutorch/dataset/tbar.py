@@ -208,7 +208,7 @@ if __name__ == '__main__':
         log_tensor(writer, 'train/label', label, n)
 
         # # print(patch)
-        # logits = model(image)
+        # logits = UNetModel(image)
         # image = image[:, :, 32, :, :]
         # tbar, _ = torch.max(tbar, dim=2, keepdim=False)
         # slices = torch.cat((image, tbar))

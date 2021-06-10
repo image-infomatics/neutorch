@@ -17,14 +17,12 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  training_split_ratio: float = 0.9,
                  patch_size: Union[int, tuple] = (64, 64, 64),
-                 resolution: tuple = (1, 1, 1),
                  ):
         """
         Parameters:
             config_file (str): file_path to provide metadata of all the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
-            resolution (tuple): resolution of images along each axis (z,y,x)
         """
 
         super().__init__()
@@ -33,10 +31,6 @@ class Dataset(torch.utils.data.Dataset):
 
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
-
-        # scale according to resolution
-        patch_size = tuple(
-            ps // res for ps, res in zip(patch_size, resolution))
 
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
@@ -101,6 +95,8 @@ class Dataset(torch.utils.data.Dataset):
         zero = ZeroAlongAxis()
         elastic = tio.RandomElasticDeformation(locked_borders=2)
         flip = tio.RandomFlip(axes=(0, 1, 2))
+
+        # may need to take into account resolution here ??
         affine = tio.RandomAffine(
             center='image',
             # these values are selected empirically such that
@@ -113,7 +109,7 @@ class Dataset(torch.utils.data.Dataset):
         )
         spatial = tio.OneOf({
             affine: 0.2,
-            # elastic: 0.2, this is a very slow transformation
+            # elastic: 0.2, # this is a very slow transformation
             flip: 0.7,
             drop: 0.2,
             zero: 0.3,
@@ -167,7 +163,7 @@ if __name__ == '__main__':
         log_tensor(writer, 'train/label', label, n)
 
         # # print(patch)
-        # logits = model(image)
+        # logits = UNetModel(image)
         # image = image[:, :, 32, :, :]
         # tbar, _ = torch.max(tbar, dim=2, keepdim=False)
         # slices = torch.cat((image, tbar))
