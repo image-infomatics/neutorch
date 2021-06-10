@@ -1,4 +1,4 @@
-from neutorch.dataset.utils import from_h5
+from .utils import from_h5
 import random
 from typing import Union
 from time import time
@@ -39,22 +39,22 @@ class Dataset(torch.utils.data.Dataset):
 
         self._prepare_transform()
 
+        PATH = './data/cremi'
         # load all the datasets
-        fileA = './data/cremi/sample_A.hdf'
-        fileB = './data/cremi/sample_B.hdf'
-        fileC = './data/cremi/sample_C.hdf'
+        fileA = 'sample_A'
+        fileB = 'sample_B'
+        fileC = 'sample_C'
 
         # temporary for testing
-        files = [fileA]  # , fileB, fileC]
+        files = [fileB]  # , fileB, fileC]
         volumes = []
         for file in files:
-            image = from_h5(file, dataset_path='volumes/raw')
+            image = from_h5(f'{PATH}/{file}.hdf', dataset_path='volumes/raw')
             label = from_h5(
-                file, dataset_path='volumes/labels/neuron_ids')
+                f'{PATH}/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
 
             # temporary until lsd data is in place
-            lsd_label = np.array([label, label, label, label,
-                                  label, label, label, label, label, label])
+            lsd_label = np.load(f'{PATH}/{file}_lsd.npy')
 
             image = image.astype(np.float32) / 255.
             ground_truth_volume = GroundTruthVolume(
