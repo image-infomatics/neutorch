@@ -9,7 +9,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from neutorch.model.IsoRSUNet import UNetModel
-from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.io import save_chkpt, log_tensor, log_affinity_output
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
 
@@ -24,7 +24,7 @@ from neutorch.dataset.affinity import Dataset
               help='use 80% of samples for training, 20% of samples for validation.'
               )
 @click.option('--patch-size', '-p',
-              type=tuple, default=(8, 80, 80),
+              type=tuple, default=(64, 64, 64),
               help='input and output patch size.'
               )
 @click.option('--iter-start', '-b',
@@ -82,30 +82,34 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     for iter_idx in range(iter_start, iter_stop):
 
         patch = dataset.random_training_patch
-        image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.target)
+
+        image = torch.from_numpy(np.array([patch.image]))
+        target = torch.from_numpy(np.array([patch.target]))
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
 
-        logits = UNetModel(image)
+        logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         accumulated_loss += loss.cpu().tolist()
 
+        log_depth = 4
         if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
             predict = torch.sigmoid(logits)
             writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
-            log_tensor(writer, 'train/image', image, iter_idx)
-            log_tensor(writer, 'train/prediction', predict, iter_idx)
-            log_tensor(writer, 'train/target', target, iter_idx)
+            log_affinity_output(writer, 'train/target',
+                                target, iter_idx, depth=log_depth)
+            log_affinity_output(writer, 'train/predict',
+                                predict, iter_idx, depth=log_depth)
+            log_tensor(writer, 'train/image', image, iter_idx, depth=log_depth)
 
         if iter_idx % validation_interval == 0 and iter_idx > 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
@@ -131,12 +135,12 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
                 print(
                     f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
+                log_affinity_output(writer, 'evaluate/prediction',
+                                    validation_predict, iter_idx, depth=log_depth)
+                log_affinity_output(writer, 'evaluate/target',
+                                    validation_target, iter_idx, depth=log_depth)
                 log_tensor(writer, 'evaluate/image',
-                           validation_image, iter_idx)
-                log_tensor(writer, 'evaluate/prediction',
-                           validation_predict, iter_idx)
-                log_tensor(writer, 'evaluate/target',
-                           validation_target, iter_idx)
+                           validation_image, iter_idx, depth=log_depth)
 
     writer.close()
 

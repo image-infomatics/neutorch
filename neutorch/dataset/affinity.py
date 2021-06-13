@@ -39,7 +39,7 @@ class Dataset(torch.utils.data.Dataset):
 
         self._prepare_transform()
 
-        PATH = '../data/cremi'
+        PATH = './neutorch/data/cremi'
         # load all the datasets
         fileA = 'sample_A'
         fileB = 'sample_B'
