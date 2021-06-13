@@ -39,7 +39,7 @@ class Dataset(torch.utils.data.Dataset):
 
         self._prepare_transform()
 
-        PATH = './neutorch/data/cremi'
+        PATH = '../data/cremi'
         # load all the datasets
         fileA = 'sample_A'
         fileB = 'sample_B'
@@ -91,9 +91,7 @@ class Dataset(torch.utils.data.Dataset):
         # Normalization
         rescale = tio.RescaleIntensity(out_min_max=(0, 1))
 
-        # Spatial
         drop = DropAlongAxis()
-        zero = ZeroAlongAxis()
         elastic = tio.RandomElasticDeformation(locked_borders=2)
         flip = tio.RandomFlip(axes=(0, 1, 2))
 
@@ -112,8 +110,7 @@ class Dataset(torch.utils.data.Dataset):
             affine: 0.2,
             # elastic: 0.2, # this is a very slow transformation
             flip: 0.7,
-            drop: 0.2,
-            zero: 0.3,
+            drop: 0.3,
         },
             p=0.3,
         )
@@ -124,12 +121,13 @@ class Dataset(torch.utils.data.Dataset):
             tio.RandomGamma(): 0.2,
             tio.RandomGhosting(): 0.1,
             tio.RandomBlur(): 0.2,
-            tio.RandomMotion(): 0.1
+            tio.RandomMotion(): 0.1,
+            # ZeroAlongAxis(): 0.2,
         },
             p=0.5,
         )
 
-        transforms = [rescale, intensity, spatial]
+        transforms = [rescale, intensity, spatial,  ZeroAlongAxis()]
 
         self.transform = tio.Compose(transforms)
 

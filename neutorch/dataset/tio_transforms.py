@@ -1,10 +1,10 @@
-from typing import Union, Tuple, Optional, List
-import torch
+from typing import Tuple, Optional, List
 import numpy as np
 import random
 
 from torchio.data.subject import Subject
 from torchio.transforms.spatial_transform import SpatialTransform
+from torchio.transforms.intensity_transform import IntensityTransform
 from torchio.transforms.augmentation.random_transform import RandomTransform
 from torchio import DATA
 
@@ -41,7 +41,7 @@ class DropAlongAxis(RandomTransform, SpatialTransform):
         return sample
 
 
-class ZeroAlongAxis(RandomTransform, SpatialTransform):
+class ZeroAlongAxis(RandomTransform, IntensityTransform):
 
     def __init__(
             self,
