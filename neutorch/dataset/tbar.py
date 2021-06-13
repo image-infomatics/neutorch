@@ -11,8 +11,8 @@ from .utils import from_h5
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_volume import GroundTruthVolumeWithPointAnnotation
-from neutorch.dataset.transform import *
+from .ground_truth_volume import GroundTruthVolumeWithPointAnnotation
+from .transform import *
 
 
 def image_reader(path: str):

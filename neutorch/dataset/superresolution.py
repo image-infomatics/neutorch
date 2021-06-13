@@ -11,8 +11,8 @@ import h5py
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_volume import GroundTruthVolume
-from neutorch.dataset.transform import *
+from .ground_truth_volume import GroundTruthVolume
+from .transform import *
 from .utils import from_h5
 
 

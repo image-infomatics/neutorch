@@ -39,7 +39,7 @@ class Dataset(torch.utils.data.Dataset):
 
         self._prepare_transform()
 
-        PATH = './data/cremi'
+        PATH = '../data/cremi'
         # load all the datasets
         fileA = 'sample_A'
         fileB = 'sample_B'
@@ -48,6 +48,7 @@ class Dataset(torch.utils.data.Dataset):
         # temporary for testing
         files = [fileB]  # , fileB, fileC]
         volumes = []
+
         for file in files:
             image = from_h5(f'{PATH}/{file}.hdf', dataset_path='volumes/raw')
             label = from_h5(

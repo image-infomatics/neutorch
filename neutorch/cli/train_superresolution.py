@@ -8,10 +8,10 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from model.IsoRSUNet import UNetModel
-from model.io import save_chkpt, log_tensor
-from model.loss import BinomialCrossEntropyWithLogits
-from dataset.superresolution import Dataset
+from neutorch.model.IsoRSUNet import UNetModel
+from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.loss import BinomialCrossEntropyWithLogits
+from neutorch.dataset.superresolution import Dataset
 
 
 @click.command()

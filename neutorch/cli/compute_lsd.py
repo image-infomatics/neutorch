@@ -2,8 +2,8 @@ import click
 import numpy as np
 
 import numpy as np
-from .utils import from_h5
-from .local_shape_descriptor import get_local_shape_descriptors
+from neutorch.dataset.utils import from_h5
+from neutorch.dataset.local_shape_descriptor import get_local_shape_descriptors
 
 
 @click.command()

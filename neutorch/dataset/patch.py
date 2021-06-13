@@ -2,8 +2,6 @@ from functools import lru_cache
 import numpy as np
 import torchio as tio
 from typing import Optional
-from time import time
-from .local_shape_descriptor import get_local_shape_descriptors
 
 
 class Patch(object):

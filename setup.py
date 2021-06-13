@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='neutorch',
-    version='0.0.1',
+    version='0.0.2',
     description='Deep Learning for brain connectomics using PyTorch',
     author='Jingpeng Wu',
     author_email='jingpeng.wu@gmail.com',

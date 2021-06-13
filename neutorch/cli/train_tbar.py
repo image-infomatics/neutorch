@@ -8,10 +8,10 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from model.IsoRSUNet import UNetModel
-from model.io import save_chkpt, log_tensor
-from model.loss import BinomialCrossEntropyWithLogits
-from dataset.affinity import Dataset
+from neutorch.model.IsoRSUNet import UNetModel
+from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.loss import BinomialCrossEntropyWithLogits
+from neutorch.dataset.tbar import Dataset
 
 
 @click.command()
@@ -24,7 +24,7 @@ from dataset.affinity import Dataset
               help='use 80% of samples for training, 20% of samples for validation.'
               )
 @click.option('--patch-size', '-p',
-              type=tuple, default=(8, 80, 80),
+              type=tuple, default=(64, 64, 64),
               help='input and output patch size.'
               )
 @click.option('--iter-start', '-b',
@@ -34,6 +34,12 @@ from dataset.affinity import Dataset
 @click.option('--iter-stop', '-e',
               type=int, default=200000,
               help='the stopping index of training iteration.'
+              )
+@click.option('--dataset-config-file', '-d',
+              type=click.Path(exists=True, dir_okay=False,
+                              readable=True, resolve_path=True),
+              required=True,
+              help='dataset configuration file path.'
               )
 @click.option('--output-dir', '-o',
               type=click.Path(file_okay=False, dir_okay=True,
@@ -45,7 +51,7 @@ from dataset.affinity import Dataset
               type=int, default=1, help='channel number of input tensor.'
               )
 @click.option('--out-channels', '-n',
-              type=int, default=13, help='channel number of output tensor.')
+              type=int, default=1, help='channel number of output tensor.')
 @click.option('--learning-rate', '-l',
               type=float, default=0.001, help='learning rate'
               )
@@ -56,7 +62,8 @@ from dataset.affinity import Dataset
               type=int, default=1000, help='validation and saving interval iterations.'
               )
 def train(seed: int, training_split_ratio: float, patch_size: tuple,
-          iter_start: int, iter_stop: int, output_dir: str,
+          iter_start: int, iter_stop: int, dataset_config_file: str,
+          output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int):
 
@@ -72,29 +79,31 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
 
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
+        dataset_config_file,
         patch_size=patch_size,
-        training_split_ratio=training_split_ratio
+        training_split_ratio=training_split_ratio,
     )
 
     patch_voxel_num = np.product(patch_size)
     accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
-
+        ping = time()
         patch = dataset.random_training_patch
+        print('training patch shape: ', patch.shape)
+        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.target)
-
+        target = torch.from_numpy(patch.label)
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
-
-        logits = UNetModel(image)
+        logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         accumulated_loss += loss.cpu().tolist()
+        print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
         if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
