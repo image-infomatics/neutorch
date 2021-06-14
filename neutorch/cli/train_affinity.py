@@ -81,10 +81,10 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     accumulated_loss = 0.
     for iter_idx in range(iter_start, iter_stop):
 
-        patch = dataset.random_training_patch
+        batch = dataset.random_training_batch
 
-        image = torch.from_numpy(np.array([patch.image]))
-        target = torch.from_numpy(np.array([patch.target]))
+        image = torch.from_numpy(batch.images)
+        target = torch.from_numpy(batch.targets)
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():

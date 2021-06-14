@@ -150,3 +150,24 @@ class AffinityPatch(object):
     @lru_cache
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
+
+
+class AffinityBatch(object):
+    def __init__(self, patches):
+        """An array of patches used for batching
+
+        Args:
+            patches (Array): patches
+        """
+
+        self.length = len(patches)
+        self.patches = patches
+        images = []
+        targets = []
+
+        for p in patches:
+            images.append(p.image)
+            targets.append(p.target)
+
+        self.images = np.array(images)
+        self.targets = np.array(targets)
