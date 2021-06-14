@@ -16,13 +16,14 @@ import torchio as tio
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
+                 path: str,
                  training_split_ratio: float = 0.9,
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
                  ):
         """
         Parameters:
-            config_file (str): file_path to provide metadata of all the ground truth data.
+            path (str): file_path to the ground truth data.
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
             batch_size (int): the number of batches in each batch
@@ -43,23 +44,21 @@ class Dataset(torch.utils.data.Dataset):
 
         self._prepare_transform()
 
-        PATH = 'neutorch/data/cremi'
         # load all the datasets
         fileA = 'sample_A'
         fileB = 'sample_B'
         fileC = 'sample_C'
 
         # temporary for testing
-        files = [fileB]  # , fileB, fileC]
+        files = [fileA]  # , fileB, fileC]
         volumes = []
 
         for file in files:
-            image = from_h5(f'{PATH}/{file}.hdf', dataset_path='volumes/raw')
+            image = from_h5(f'{path}/{file}.hdf', dataset_path='volumes/raw')
             label = from_h5(
-                f'{PATH}/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
+                f'{path}/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
 
-            # temporary until lsd data is in place
-            lsd_label = np.load(f'{PATH}/{file}_lsd.npy')
+            lsd_label = np.load(f'{path}/{file}_lsd.npy')
 
             image = image.astype(np.float32) / 255.
             ground_truth_volume = GroundTruthVolume(

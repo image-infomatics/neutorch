@@ -15,6 +15,10 @@ from neutorch.dataset.affinity import Dataset
 
 
 @click.command()
+@click.option('--path',
+              type=str, default='./data',
+              help='path to the training data'
+              )
 @click.option('--seed',
               type=int, default=1,
               help='for reproducibility'
@@ -56,7 +60,7 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation and saving interval iterations.'
               )
-def train(seed: int, training_split_ratio: float, patch_size: tuple,
+def train(path: str, seed: int, training_split_ratio: float, patch_size: tuple,
           iter_start: int, iter_stop: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int):
@@ -73,6 +77,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
 
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(
+        path,
         patch_size=patch_size,
         training_split_ratio=training_split_ratio
     )
