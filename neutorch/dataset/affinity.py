@@ -1,3 +1,4 @@
+from matplotlib.pyplot import axes
 from .utils import from_h5
 import random
 from typing import Union
@@ -7,7 +8,7 @@ import numpy as np
 import h5py
 
 import torch
-from .tio_transforms import DropAlongAxis, ZeroAlongAxis
+from .tio_transforms import DropAlongAxis, ZeroAlongAxis, DropSections, Transpose
 from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
@@ -103,57 +104,60 @@ class Dataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         ping = time()
         patch.subject = self.transform(patch.subject)
+        # print(f'transform takes {round(time()-ping, 4)} seconds.')
         patch.compute_affinity()
         # crop down from over sample to true patch size, crop after compute affinity
         crop = tio.Crop(bounds_parameters=self.over_sample//2)
         patch.subject = crop(patch.subject)
-        # print(f'transform takes {round(time()-ping, 4)} seconds.')
 
         return patch
 
     def _prepare_transform(self):
 
-        # Normalization
-        rescale = tio.RescaleIntensity(out_min_max=(0, 1))
+        # normalization
 
-        drop = DropAlongAxis()
-        elastic = tio.RandomElasticDeformation(locked_borders=2)
+        rescale = tio.RescaleIntensity(
+            out_min_max=(0, 1),
+            # percentiles=(0.5, 0.95) # these percentiles might be desireable as in https://arxiv.org/abs/1809.10486
+        )
+
+        # orient
+        transpose = Transpose(axes=(2, 3))  # only do XY for simplicity
+
+        # spacial
         flip = tio.RandomFlip(axes=(0, 1, 2))
-
-        # may need to take into account resolution here ??
+        axis = DropAlongAxis()
         affine = tio.RandomAffine(
             center='image',
-            # these values are selected empirically such that
-            # in combination with patch_size and oversampling (64, 16)
-            # the affine transformation does not introduce
-            # any undefined values at the border of the image
             scales=(1.2, 1.5),
             translation=(-5, 5),
             degrees=(-8, 8),
+            default_pad_value='otsu'
         )
-        spatial = tio.OneOf({
-            affine: 0.2,
-            # elastic: 0.2, # this is a very slow transformation
-            flip: 0.7,
-            drop: 0.3,
-        },
-            p=0.3,
-        )
-        # Intensity
-        intensity = tio.OneOf({
-            tio.RandomBiasField(): 0.3,
-            tio.RandomNoise(): 0.1,
-            tio.RandomGamma(): 0.2,
-            tio.RandomGhosting(): 0.1,
-            tio.RandomBlur(): 0.2,
-            tio.RandomMotion(): 0.1,
-            # ZeroAlongAxis(): 0.2,
-        },
-            p=0.5,
-        )
+        spacial = tio.Compose([axis, affine, flip])
 
-        transforms = [rescale, intensity, spatial,  ZeroAlongAxis()]
+        # intensity
+        section = DropSections()
+        zero = ZeroAlongAxis()
+        loss = tio.OneOf([section, zero])  # one data loss transform
 
+        bias = tio.RandomBiasField(coefficients=0.22)
+        gamma = tio.RandomGamma(log_gamma=(-0.25, 0.25))
+        contrast = tio.OneOf([gamma, bias])  # one contrast transform
+
+        noise = tio.RandomNoise(std=(0, 0.05))
+        blur = tio.RandomBlur(std=(0, 0.15))
+        # either blur or noise, both would counter act
+        noise_blur = tio.OneOf([noise, blur])
+
+        intensity = tio.Compose([contrast, noise_blur, loss])
+
+        # pipeline
+        # we apply two transpose tranforms on either end,
+        # this means that AlongAxis transforms will happen on either axis
+        # in both the input and output space
+        # should rescale be at the beginning or end?
+        transforms = [transpose, spacial, intensity, transpose, rescale]
         self.transform = tio.Compose(transforms)
 
 
