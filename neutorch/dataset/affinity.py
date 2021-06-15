@@ -8,7 +8,7 @@ import numpy as np
 import h5py
 
 import torch
-from .tio_transforms import DropAlongAxis, ZeroAlongAxis, DropSections, Transpose
+from .tio_transforms import *
 from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
@@ -40,7 +40,7 @@ class Dataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
-        self.over_sample = 16
+        self.over_sample = 4
         patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
 
         self._prepare_transform()
@@ -62,6 +62,11 @@ class Dataset(torch.utils.data.Dataset):
             lsd_label = np.load(f'{path}/{file}_lsd.npy')
 
             image = image.astype(np.float32) / 255.
+
+            # we just trim the last slice because it is duplicate in the data
+            # due to quirk of lsd algo, in future, should just fix data
+            lsd_label = lsd_label[:, :-1, :, :]
+
             ground_truth_volume = GroundTruthVolume(
                 image, label, patch_size=patch_size_oversized, lsd_label=lsd_label)
             volumes.append(ground_truth_volume)
@@ -104,7 +109,7 @@ class Dataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         ping = time()
         patch.subject = self.transform(patch.subject)
-        # print(f'transform takes {round(time()-ping, 4)} seconds.')
+        print(f'transform takes {round(time()-ping, 4)} seconds.')
         patch.compute_affinity()
         # crop down from over sample to true patch size, crop after compute affinity
         crop = tio.Crop(bounds_parameters=self.over_sample//2)
@@ -115,49 +120,39 @@ class Dataset(torch.utils.data.Dataset):
     def _prepare_transform(self):
 
         # normalization
-
-        rescale = tio.RescaleIntensity(
-            out_min_max=(0, 1),
-            # percentiles=(0.5, 0.95) # these percentiles might be desireable as in https://arxiv.org/abs/1809.10486
-        )
+        rescale = tio.RescaleIntensity(out_min_max=(0, 1))
 
         # orient
-        transpose = Transpose(axes=(2, 3))  # only do XY for simplicity
+        transposeXY = Transpose(axes=(2, 3))  # only do XY for simplicity
 
         # spacial
         flip = tio.RandomFlip(axes=(0, 1, 2))
-        axis = DropAlongAxis()
-        affine = tio.RandomAffine(
-            center='image',
-            scales=(1.2, 1.5),
-            translation=(-5, 5),
-            degrees=(-8, 8),
-            default_pad_value='otsu'
-        )
-        spacial = tio.Compose([axis, affine, flip])
+        slip = SlipAlongAxis(p=0.5)
+        affine = Perspective2D()
+        spacial = tio.Compose([slip, flip, affine])
 
-        # intensity
-        section = DropSections()
-        zero = ZeroAlongAxis()
-        loss = tio.OneOf([section, zero])  # one data loss transform
+        # loss
+        drop_section = DropSections(drop_amount=(1, 30))
+        drop_axis = ZeroAlongAxis()
+        dropZ = DropZSlices()
+        # one data loss transform
+        loss = tio.OneOf({drop_section: 0.4, drop_axis: 0.3, dropZ: 0.2})
 
-        bias = tio.RandomBiasField(coefficients=0.22)
-        gamma = tio.RandomGamma(log_gamma=(-0.25, 0.25))
-        contrast = tio.OneOf([gamma, bias])  # one contrast transform
+        bias = ApplyIntensityAlongZ(tio.RandomBiasField(coefficients=0.25))
+        gamma = ApplyIntensityAlongZ(tio.RandomGamma(
+            log_gamma=(-1, 2)))
+        brightness = ApplyIntensityAlongZ(Brightness(amount=(-0.4, 0.4)))
 
-        noise = tio.RandomNoise(std=(0, 0.05))
-        blur = tio.RandomBlur(std=(0, 0.15))
-        # either blur or noise, both would counter act
-        noise_blur = tio.OneOf([noise, blur])
+        noise = ApplyIntensityAlongZ(tio.RandomNoise(std=(0, 0.05)))
+        blur = ApplyIntensityAlongZ(tio.RandomBlur(std=(0.5, 3.5)))
 
-        intensity = tio.Compose([contrast, noise_blur, loss])
+        intensity = tio.Compose([bias, gamma, brightness, noise, blur, loss])
 
-        # pipeline
-        # we apply two transpose tranforms on either end,
-        # this means that AlongAxis transforms will happen on either axis
-        # in both the input and output space
-        # should rescale be at the beginning or end?
-        transforms = [transpose, spacial, intensity, transpose, rescale]
+        # clip
+        clip = Clip(min_max=(0.2, 0.98))
+
+        transforms = [rescale, transposeXY,
+                      spacial, intensity, transposeXY, clip]
         self.transform = tio.Compose(transforms)
 
 
