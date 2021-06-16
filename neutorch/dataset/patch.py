@@ -1,4 +1,3 @@
-from functools import lru_cache
 import numpy as np
 import torchio as tio
 from typing import Optional
@@ -61,7 +60,6 @@ class Patch(object):
         return self.image.shape
 
     @property
-    @lru_cache
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
 
@@ -147,7 +145,6 @@ class AffinityPatch(object):
             return lsd[9, :, :, :]
 
     @property
-    @lru_cache
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
 
