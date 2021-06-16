@@ -25,7 +25,7 @@ from neutorch.dataset.affinity import Dataset
               help='for reproducibility'
               )
 @click.option('--patch-size', '-p',
-              type=tuple, default=(6, 64, 64),
+              type=tuple, default=(26, 256, 256),
               help='input and output patch size.'
               )
 @click.option('--batch-size', '-b',
@@ -61,7 +61,7 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation and saving interval iterations.'
               )
-@click.option('--parallel', '-p',
+@click.option('--parallel',
               type=bool, default=True, help='whether to wrap in DataParallel to take advantage of multiple GPUs for each mini-batch.'
               )
 def train(path: str, seed: int, patch_size: tuple, batch_size: int,
