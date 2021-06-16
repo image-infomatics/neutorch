@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from neutorch.model.IsoRSUNet import UNetModel
+from neutorch.model.RSUNet import UNetModel
 from neutorch.model.io import save_chkpt, log_tensor, log_affinity_output
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
@@ -28,7 +28,7 @@ from neutorch.dataset.affinity import Dataset
               help='use 80% of samples for training, 20% of samples for validation.'
               )
 @click.option('--patch-size', '-p',
-              type=tuple, default=(64, 64, 64),
+              type=tuple, default=(6, 64, 64),
               help='input and output patch size.'
               )
 @click.option('--iter-start', '-b',

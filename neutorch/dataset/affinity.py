@@ -109,7 +109,7 @@ class Dataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         ping = time()
         patch.subject = self.transform(patch.subject)
-        print(f'transform takes {round(time()-ping, 4)} seconds.')
+        # print(f'transform takes {round(time()-ping, 4)} seconds.')
         patch.compute_affinity()
         # crop down from over sample to true patch size, crop after compute affinity
         crop = tio.Crop(bounds_parameters=self.over_sample//2)
