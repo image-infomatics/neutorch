@@ -1,6 +1,7 @@
 import random
 import os
 from time import time
+from tqdm import tqdm
 
 import click
 import numpy as np
@@ -25,8 +26,8 @@ from neutorch.dataset.affinity import Dataset
               help='for reproducibility'
               )
 @click.option('--patch-size', '-p',
-              type=tuple, default=(26, 256, 256),
-              help='input and output patch size.'
+              type=str, default='(6, 64, 64)',
+              help='patch size from volume.'
               )
 @click.option('--batch-size', '-b',
               type=int, default=1,
@@ -64,13 +65,19 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--parallel',
               type=bool, default=True, help='whether to wrap in DataParallel to take advantage of multiple GPUs for each mini-batch.'
               )
-def train(path: str, seed: int, patch_size: tuple, batch_size: int,
+@click.option('--verbose',
+              type=bool, default=False, help='whether to print messages.'
+              )
+def train(path: str, seed: int, patch_size: str, batch_size: int,
           iter_start: int, iter_stop: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int, parallel: bool):
+          training_interval: int, validation_interval: int, parallel: bool, verbose: bool):
 
+    if verbose:
+        print("init...")
+
+    patch_size = eval(patch_size)
     random.seed(seed)
-
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
     model = UNetModel(in_channels, out_channels)
@@ -87,7 +94,11 @@ def train(path: str, seed: int, patch_size: tuple, batch_size: int,
 
     patch_voxel_num = np.product(patch_size)
     accumulated_loss = 0.
-    for iter_idx in range(iter_start, iter_stop):
+
+    if verbose:
+        print("starting...")
+
+    for iter_idx in tqdm(range(iter_start, iter_stop)):
 
         batch = dataset.random_training_batch
 
@@ -96,6 +107,8 @@ def train(path: str, seed: int, patch_size: tuple, batch_size: int,
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
+            if verbose:
+                print("using gpu...")
             image = image.cuda()
             target = target.cuda()
 
