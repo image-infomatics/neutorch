@@ -33,13 +33,9 @@ from neutorch.dataset.affinity import Dataset
               type=int, default=1,
               help='size of mini-batch, generally can be 1 be should be equal to num_gpu if you want take advatnage of parallel training.'
               )
-@click.option('--iter-start', '-i',
-              type=int, default=0,
-              help='the starting index of training iteration.'
-              )
-@click.option('--iter-stop', '-e',
+@click.option('--num_examples', '-e',
               type=int, default=200000,
-              help='the stopping index of training iteration.'
+              help='how many training examples the network will see before completion'
               )
 @click.option('--output-dir', '-o',
               type=click.Path(file_okay=False, dir_okay=True,
@@ -69,7 +65,7 @@ from neutorch.dataset.affinity import Dataset
               type=bool, default=False, help='whether to print messages.'
               )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
-          iter_start: int, iter_stop: int, output_dir: str,
+          num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, parallel: bool, verbose: bool):
 
@@ -97,7 +93,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     if verbose:
         print("starting...")
-    pbar = tqdm(range(iter_start, iter_stop))
+
+    pbar = tqdm(range(0, num_examples, batch_size))
     for iter_idx in pbar:
 
         batch = dataset.random_training_batch
