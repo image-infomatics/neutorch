@@ -33,7 +33,7 @@ def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
 
 
 def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-               iter_idx: int, nrow: int = 8, depth: int = 0):
+               iter_idx: int, nrow: int = 8, depth: int = 0, batch_index: int = 0):
     """write a 5D tensor in tensorboard log
 
     Args:
@@ -43,12 +43,16 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         iter_idx (int): training iteration index
         nrow (int): number of images in a row
         depth (int): if 0 will log whole volume on grid, otherwise will log up 0:depth
+        batch_index (int): index of batch to select example to log
     """
     assert torch.is_tensor(tensor)
     assert tensor.ndim >= 3
     # normalize from 0 to 1
     tensor -= tensor.min()
     tensor /= tensor.max()
+
+    # select example from batch
+    tensor = tensor[batch_index]
 
     # this should work for ndim >= 3
     tensor = tensor.cpu()
@@ -74,7 +78,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
 
 
 def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-                        iter_idx: int, depth: int = 0):
+                        iter_idx: int, depth: int = 0, batch_index: int = 0):
     """write a Affinity Output tensor in tensorboard log
 
     Args:
@@ -83,12 +87,16 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         tensor (torch.Tensor):
         iter_idx (int): training iteration index
         depth (int): if 0 will log whole volume on grid, otherwise will log up 0:depth
+        batch_index (int): index of batch to select example to log
     """
     assert torch.is_tensor(tensor)
     assert tensor.ndim >= 3
     # normalize from 0 to 1
     tensor -= tensor.min()
     tensor /= tensor.max()
+
+    # select example from batch
+    tensor = tensor[batch_index]
 
     # this should work for ndim >= 3
     tensor = tensor.cpu()

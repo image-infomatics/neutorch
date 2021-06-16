@@ -27,7 +27,11 @@ from neutorch.dataset.affinity import Dataset
               type=tuple, default=(6, 64, 64),
               help='input and output patch size.'
               )
-@click.option('--iter-start', '-b',
+@click.option('--batch-size', '-b',
+              type=int, default=1,
+              help='size of mini-batch'
+              )
+@click.option('--iter-start', '-i',
               type=int, default=0,
               help='the starting index of training iteration.'
               )
@@ -56,7 +60,7 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation and saving interval iterations.'
               )
-def train(path: str, seed: int, patch_size: tuple,
+def train(path: str, seed: int, patch_size: tuple, batch_size: int,
           iter_start: int, iter_stop: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int):
@@ -72,7 +76,7 @@ def train(path: str, seed: int, patch_size: tuple,
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     loss_module = BinomialCrossEntropyWithLogits()
-    dataset = Dataset(path, patch_size=patch_size,)
+    dataset = Dataset(path, patch_size=patch_size, batch_size=batch_size)
 
     patch_voxel_num = np.product(patch_size)
     accumulated_loss = 0.

@@ -66,7 +66,6 @@ class Dataset(torch.utils.data.Dataset):
             # due to quirk of lsd algo, in future, should just fix data
             lsd_label = lsd_label[:, :-1, :, :]
 
-            print(file)
             # here we take some slices of a volume to build a valiation volume
             # for now we only take from the first training volume
             if i == 0:
@@ -80,12 +79,10 @@ class Dataset(torch.utils.data.Dataset):
                 label = label[..., vs:, :, :]
                 lsd_label = lsd_label[..., vs:, :, :]
 
-                print(vs, val_image.shape, val_label.shape, val_lsd_label.shape)
                 val_ground_truth_volume = GroundTruthVolume(
                     val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label)
                 validation_volumes.append(val_ground_truth_volume)
 
-            print(image.shape, label.shape, lsd_label.shape)
             train_ground_truth_volume = GroundTruthVolume(
                 image, label, patch_size=patch_size_oversized, lsd_label=lsd_label)
             training_volumes.append(train_ground_truth_volume)
@@ -157,13 +154,13 @@ class Dataset(torch.utils.data.Dataset):
         # one data loss transform
         loss = tio.OneOf({drop_section: 0.4, drop_axis: 0.3, dropZ: 0.2})
 
-        bias = ApplyIntensityAlongZ(tio.RandomBiasField(coefficients=0.25))
+        bias = ApplyIntensityAlongZ(tio.RandomBiasField(coefficients=0.24))
         gamma = ApplyIntensityAlongZ(tio.RandomGamma(
             log_gamma=(-1, 2)))
-        brightness = ApplyIntensityAlongZ(Brightness(amount=(-0.4, 0.4)))
+        brightness = ApplyIntensityAlongZ(Brightness(amount=(-0.3, 0.3)))
 
-        noise = ApplyIntensityAlongZ(tio.RandomNoise(std=(0, 0.05)))
-        blur = ApplyIntensityAlongZ(tio.RandomBlur(std=(0.5, 3.5)))
+        noise = ApplyIntensityAlongZ(tio.RandomNoise(std=(0, 0.04)))
+        blur = ApplyIntensityAlongZ(tio.RandomBlur(std=(0.5, 3)))
 
         intensity = tio.Compose([bias, gamma, brightness, noise, blur, loss])
 
