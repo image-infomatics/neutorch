@@ -6,6 +6,7 @@ import click
 import numpy as np
 
 import torch
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from neutorch.model.RSUNet import UNetModel
@@ -29,7 +30,7 @@ from neutorch.dataset.affinity import Dataset
               )
 @click.option('--batch-size', '-b',
               type=int, default=1,
-              help='size of mini-batch'
+              help='size of mini-batch, generally can be 1 be should be equal to num_gpu if you want take advatnage of parallel training.'
               )
 @click.option('--iter-start', '-i',
               type=int, default=0,
@@ -52,7 +53,7 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--out-channels', '-n',
               type=int, default=13, help='channel number of output tensor.')
 @click.option('--learning-rate', '-l',
-              type=float, default=0.001, help='learning rate'
+              type=float, default=0.001, help='the learning rate.'
               )
 @click.option('--training-interval', '-t',
               type=int, default=100, help='training interval to record stuffs.'
@@ -60,10 +61,13 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation and saving interval iterations.'
               )
+@click.option('--parallel', '-p',
+              type=bool, default=True, help='whether to wrap in DataParallel to take advantage of multiple GPUs for each mini-batch.'
+              )
 def train(path: str, seed: int, patch_size: tuple, batch_size: int,
           iter_start: int, iter_stop: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int):
+          training_interval: int, validation_interval: int, parallel: bool):
 
     random.seed(seed)
 
@@ -72,6 +76,9 @@ def train(path: str, seed: int, patch_size: tuple, batch_size: int,
     model = UNetModel(in_channels, out_channels)
     if torch.cuda.is_available():
         model = model.cuda()
+
+    if parallel:
+        model = nn.DataParallel(model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
