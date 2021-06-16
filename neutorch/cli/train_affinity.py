@@ -97,8 +97,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     if verbose:
         print("starting...")
-
-    for iter_idx in tqdm(range(iter_start, iter_stop)):
+    pbar = tqdm(range(iter_start, iter_stop))
+    for iter_idx in pbar:
 
         batch = dataset.random_training_batch
 
@@ -118,7 +118,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         loss.backward()
         optimizer.step()
         accumulated_loss += loss.cpu().tolist()
-
+        pbar.set_postfix({'loss': loss})
         log_depth = 4
         if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
