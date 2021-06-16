@@ -42,6 +42,10 @@ class Dataset(torch.utils.data.Dataset):
         # we oversample the patch to create buffer for any transformation
         self.over_sample = 4
         patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
+        # number of slices used to make validation volume
+        # use the z dim of the patch size plus how ever much we oversample plus a little extra
+        val_slices_bonus = 10
+        self.validation_slices = patch_size_oversized[0] + val_slices_bonus
 
         self._prepare_transform()
 
@@ -51,28 +55,49 @@ class Dataset(torch.utils.data.Dataset):
         fileC = 'sample_C'
 
         # temporary for testing
-        files = [fileA]  # , fileB, fileC]
-        volumes = []
+        files = [fileA, fileB, fileC]
+        training_volumes = []
+        validation_volumes = []
 
-        for file in files:
+        for i in range(len(files)):
+            file = files[i]
             image = from_h5(f'{path}/{file}.hdf', dataset_path='volumes/raw')
             label = from_h5(
                 f'{path}/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
 
             lsd_label = np.load(f'{path}/{file}_lsd.npy')
-
             image = image.astype(np.float32) / 255.
 
             # we just trim the last slice because it is duplicate in the data
             # due to quirk of lsd algo, in future, should just fix data
             lsd_label = lsd_label[:, :-1, :, :]
 
-            ground_truth_volume = GroundTruthVolume(
-                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label)
-            volumes.append(ground_truth_volume)
+            print(file)
+            # here we take some slices of a volume to build a valiation volume
+            # for now we only take from the first training volume
+            if i == 0:
+                vs = self.validation_slices
 
-        self.training_volumes = volumes  # volumes[1:]
-        self.validation_volumes = [volumes[0]]
+                val_image = image[..., :vs, :, :]
+                val_label = label[..., :vs, :, :]
+                val_lsd_label = lsd_label[..., :vs, :, :]
+
+                image = image[..., vs:, :, :]
+                label = label[..., vs:, :, :]
+                lsd_label = lsd_label[..., vs:, :, :]
+
+                print(vs, val_image.shape, val_label.shape, val_lsd_label.shape)
+                val_ground_truth_volume = GroundTruthVolume(
+                    val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label)
+                validation_volumes.append(val_ground_truth_volume)
+
+            print(image.shape, label.shape, lsd_label.shape)
+            train_ground_truth_volume = GroundTruthVolume(
+                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label)
+            training_volumes.append(train_ground_truth_volume)
+
+        self.training_volumes = training_volumes
+        self.validation_volumes = validation_volumes
 
     @property
     def random_training_batch(self):

@@ -121,18 +121,18 @@ def train(path: str, seed: int, training_split_ratio: float, patch_size: tuple,
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
-            print('evaluate prediction: ')
-            patch = dataset.random_validation_patch
-            print('evaluation patch shape: ', patch.shape)
-            validation_image = torch.from_numpy(patch.image)
-            validation_target = torch.from_numpy(patch.label)
+            batch = dataset.random_training_batch
+
+            validation_image = torch.from_numpy(batch.images)
+            validation_target = torch.from_numpy(batch.targets)
+
             # Transfer Data to GPU if available
             if torch.cuda.is_available():
                 validation_image = validation_image.cuda()
                 validation_target = validation_target.cuda()
 
             with torch.no_grad():
-                validation_logits = UNetModel(validation_image)
+                validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(
                     validation_logits, validation_target)
