@@ -69,6 +69,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, parallel: bool, verbose: bool):
 
+    # clear in case was stopped before
+    tqdm._instances.clear()
+
     if verbose:
         print("init...")
 
@@ -88,14 +91,19 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(path, patch_size=patch_size, batch_size=batch_size)
 
-    patch_voxel_num = np.product(patch_size)
+    patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.
 
     if verbose:
         print("starting...")
 
-    pbar = tqdm(range(0, num_examples, batch_size))
-    for iter_idx in pbar:
+    pbar = tqdm(total=num_examples)
+    total_itrs = num_examples // batch_size
+
+    if verbose:
+        print("total_itrs: ", total_itrs)
+
+    for iter_idx in range(0, total_itrs):
 
         batch = dataset.random_training_batch
 
@@ -104,8 +112,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
-            if verbose:
-                print("using gpu...")
             image = image.cuda()
             target = target.cuda()
 
@@ -114,8 +120,11 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        accumulated_loss += loss.cpu().tolist()
-        pbar.set_postfix({'loss': loss})
+        cur_loss = loss.cpu().tolist()
+        accumulated_loss += cur_loss
+        pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
+        pbar.update(batch_size)
+
         log_depth = 4
         if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
@@ -161,6 +170,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                            validation_image, iter_idx, depth=log_depth)
 
     writer.close()
+    pbar.close()
 
 
 if __name__ == '__main__':
