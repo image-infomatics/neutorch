@@ -1,11 +1,9 @@
-from matplotlib.pyplot import axes
 from .utils import from_h5
 import random
 from typing import Union
 from time import time
 
 import numpy as np
-import h5py
 
 import torch
 from .tio_transforms import *
@@ -18,21 +16,17 @@ import torchio as tio
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
-                 training_split_ratio: float = 0.9,
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
                  ):
         """
         Parameters:
             path (str): file_path to the ground truth data.
-            training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
             batch_size (int): the number of batches in each batch
         """
 
         super().__init__()
-        assert training_split_ratio > 0.5
-        assert training_split_ratio < 1.
 
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
@@ -179,48 +173,3 @@ class Dataset(torch.utils.data.Dataset):
         transforms = [rescale, transposeXY,
                       spacial, intensity, transposeXY, clip]
         self.transform = tio.Compose(transforms)
-
-
-if __name__ == '__main__':
-    dataset = Dataset(training_split_ratio=0.99)
-
-    from torch.utils.tensorboard import SummaryWriter
-    from neutorch.model.io import log_tensor
-    writer = SummaryWriter(log_dir='/tmp/log')
-
-    import h5py
-
-    model = torch.nn.Identity()
-    print('start generating random patches...')
-    for n in range(10000):
-        ping = time()
-        patch = dataset.random_training_patch
-        print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
-        image = patch.image
-        label = patch.label
-        with h5py.File('/tmp/image.h5', 'w') as file:
-            file['main'] = image[0, 0, ...]
-        with h5py.File('/tmp/label.h5', 'w') as file:
-            file['main'] = label[0, 0, ...]
-
-        print('number of nonzero voxels: ', np.count_nonzero(label))
-        # assert np.count_nonzero(tbar) == 8
-        image = torch.from_numpy(image)
-        label = torch.from_numpy(label)
-        log_tensor(writer, 'train/image', image, n)
-        log_tensor(writer, 'train/label', label, n)
-
-        # # print(patch)
-        # logits = UNetModel(image)
-        # image = image[:, :, 32, :, :]
-        # tbar, _ = torch.max(tbar, dim=2, keepdim=False)
-        # slices = torch.cat((image, tbar))
-        # image_path = os.path.expanduser('~/Downloads/patches.png')
-        # print('save a batch of patches to ', image_path)
-        # torchvision.utils.save_image(
-        #     slices,
-        #     image_path,
-        #     nrow=8,
-        #     normalize=True,
-        #     scale_each=True,
-        # )
