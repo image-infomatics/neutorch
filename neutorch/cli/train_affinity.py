@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from neutorch.model.RSUNet import UNetModel
-from neutorch.model.io import save_chkpt, log_tensor, log_affinity_output
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
 
@@ -58,16 +58,13 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation and saving interval iterations.'
               )
-@click.option('--parallel',
-              type=bool, default=True, help='whether to wrap in DataParallel to take advantage of multiple GPUs for each mini-batch.'
-              )
 @click.option('--verbose',
               type=bool, default=False, help='whether to print messages.'
               )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int, parallel: bool, verbose: bool):
+          training_interval: int, validation_interval: int, verbose: bool):
 
     # clear in case was stopped before
     tqdm._instances.clear()
@@ -77,22 +74,27 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     patch_size = eval(patch_size)
     random.seed(seed)
-    writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
+    m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
+    t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
+    v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
 
     model = UNetModel(in_channels, out_channels)
     if torch.cuda.is_available():
         model = model.cuda()
 
-    if parallel:
-        model = nn.DataParallel(model)
+    # make parallel
+    model = nn.DataParallel(model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(path, patch_size=patch_size, batch_size=batch_size)
-
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.
+
+    # generate a batch to make graph
+    batch = dataset.random_training_batch
+    image = torch.from_numpy(batch.images)
+    m_writer.add_graph(model, image)
 
     if verbose:
         print("starting...")
@@ -125,18 +127,17 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
-        log_depth = 4
         if iter_idx % training_interval == 0 and iter_idx > 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
             predict = torch.sigmoid(logits)
-            writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
-            log_affinity_output(writer, 'train/target',
-                                target, iter_idx, depth=log_depth)
-            log_affinity_output(writer, 'train/predict',
-                                predict, iter_idx, depth=log_depth)
-            log_tensor(writer, 'train/image', image, iter_idx, depth=log_depth)
+            t_writer.add_scalar('Loss', per_voxel_loss, iter_idx)
+            log_affinity_output(t_writer, 'train/target',
+                                target, iter_idx)
+            log_affinity_output(t_writer, 'train/predict',
+                                predict, iter_idx)
+            log_image(t_writer, 'train/image', image, iter_idx)
 
         if iter_idx % validation_interval == 0 and iter_idx > 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
@@ -147,6 +148,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             validation_image = torch.from_numpy(batch.images)
             validation_target = torch.from_numpy(batch.targets)
+
+            # log weights,
+            log_weights(m_writer, model, iter_idx)
 
             # Transfer Data to GPU if available
             if torch.cuda.is_available():
@@ -161,15 +165,17 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
                 print(
                     f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
-                writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
-                log_affinity_output(writer, 'evaluate/prediction',
-                                    validation_predict, iter_idx, depth=log_depth)
-                log_affinity_output(writer, 'evaluate/target',
-                                    validation_target, iter_idx, depth=log_depth)
-                log_tensor(writer, 'evaluate/image',
-                           validation_image, iter_idx, depth=log_depth)
+                v_writer.add_scalar('Loss', per_voxel_loss, iter_idx)
+                log_affinity_output(v_writer, 'validation/prediction',
+                                    validation_predict, iter_idx,)
+                log_affinity_output(v_writer, 'validation/target',
+                                    validation_target, iter_idx)
+                log_image(v_writer, 'validation/image',
+                          validation_image, iter_idx)
 
-    writer.close()
+    t_writer.close()
+    v_writer.close()
+    m_writer.close()
     pbar.close()
 
 
