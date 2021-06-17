@@ -105,17 +105,13 @@ class Dataset(torch.utils.data.Dataset):
 
         def get_patch(_):
             if validation:
-                return self.random_validation_batch
+                return self.random_validation_patch
             return self.random_training_patch
 
         with ThreadPool(processes=num_threads) as pool:
             patches = pool.map(get_patch, range(self.batch_size))
 
         return AffinityBatch(patches)
-
-    @property
-    def random_validation_batch(self):
-        return self.select_random_patch(self.validation_volumes)
 
     @property
     def random_training_patch(self):
@@ -159,19 +155,23 @@ class Dataset(torch.utils.data.Dataset):
         # one data loss transform
         loss = tio.OneOf({drop_section: 0.4, drop_axis: 0.3, dropZ: 0.2})
 
+        # light
         bias = ApplyIntensityAlongZ(tio.RandomBiasField(coefficients=0.24))
         gamma = ApplyIntensityAlongZ(tio.RandomGamma(
             log_gamma=(-1, 2)))
         brightness = ApplyIntensityAlongZ(Brightness(amount=(-0.3, 0.3)))
 
+        # focus
         noise = ApplyIntensityAlongZ(tio.RandomNoise(std=(0, 0.04)))
         blur = ApplyIntensityAlongZ(tio.RandomBlur(std=(0.5, 3)))
 
+        # all intensities
         intensity = tio.Compose([bias, gamma, brightness, noise, blur, loss])
 
         # clip
         clip = Clip(min_max=(0.2, 0.98))
 
+        # compose transforms
         transforms = [rescale, transposeXY,
                       spacial, intensity, transposeXY, clip]
         self.transform = tio.Compose(transforms)
