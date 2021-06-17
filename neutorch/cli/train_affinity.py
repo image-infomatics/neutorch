@@ -112,26 +112,26 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     for iter_idx in range(0, total_itrs):
 
-        if verbose:
-            ping = time()
-            print("gen batch...")
+        # if verbose:
+        #     ping = time()
+        #     print("gen batch...")
 
         # get batch
         batch = dataset.random_training_batch
         image = torch.from_numpy(batch.images)
         target = torch.from_numpy(batch.targets)
 
-        if verbose:
-            print(f"finish batch: {round(time()-ping, 3)}s")
+        # if verbose:
+        #     print(f"finish batch: {round(time()-ping, 3)}s")
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
 
-        if verbose:
-            ping = time()
-            print("pass model...")
+        # if verbose:
+        #     ping = time()
+        #     print("pass model...")
 
         # clear grads
         optimizer.zero_grad()
@@ -154,9 +154,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # updates mixed percision scaler for next iteration
         scaler.update()
 
-        # record progress
-        if verbose:
-            print(f"finish pass: {round(time()-ping, 3)}s")
+        # # record progress
+        # if verbose:
+        #     print(f"finish pass: {round(time()-ping, 3)}s")
 
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
