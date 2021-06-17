@@ -53,10 +53,10 @@ from neutorch.dataset.affinity import Dataset
               type=float, default=0.001, help='the learning rate.'
               )
 @click.option('--training-interval', '-t',
-              type=int, default=100, help='training interval to record stuffs.'
+              type=int, default=100, help='training interval in terms of examples seen to record data points.'
               )
 @click.option('--validation-interval', '-v',
-              type=int, default=1000, help='validation and saving interval iterations.'
+              type=int, default=1000, help='validation interval in terms of examples seen to record validation data.'
               )
 @click.option('--verbose',
               type=bool, default=False, help='whether to print messages.'
@@ -158,11 +158,12 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # if verbose:
         #     print(f"finish pass: {round(time()-ping, 3)}s")
 
+        # record progress
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
         # log for training
-        if iter_idx % training_interval == 0 and iter_idx > 0:
+        if iter_idx % (training_interval//batch_size) == 0 and iter_idx > 0:
             # compute loss
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
@@ -182,7 +183,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             accumulated_loss = 0.0
 
         # log for validation
-        if iter_idx % validation_interval == 0 and iter_idx > 0:
+        if iter_idx % (validation_interval//batch_size) == 0 and iter_idx > 0:
 
             # save checkpoint
             save_chkpt(model, output_dir, iter_idx, optimizer)
