@@ -11,6 +11,7 @@ from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
 import torchio as tio
+from multiprocessing.pool import ThreadPool
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -92,19 +93,23 @@ class Dataset(torch.utils.data.Dataset):
 
     @property
     def random_training_batch(self):
-        patches = []
-        for _ in range(self.batch_size):
-            p = self.random_training_patch
-            patches.append(p)
-
-        return AffinityBatch(patches)
+        return self.get_batch_threaded(validation=False)
 
     @property
     def random_validation_batch(self):
-        patches = []
-        for _ in range(self.batch_size):
-            p = self.random_validation_patch
-            patches.append(p)
+        return self.get_batch_threaded(validation=True)
+
+    def get_batch_threaded(self, validation: bool = False):
+        # probably could be done without map...
+        num_threads = min(self.batch_size, 16)
+
+        def get_patch(_):
+            if validation:
+                return self.random_validation_batch
+            return self.random_training_patch
+
+        with ThreadPool(processes=num_threads) as pool:
+            patches = pool.map(get_patch, range(self.batch_size))
 
         return AffinityBatch(patches)
 

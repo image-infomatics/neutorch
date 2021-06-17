@@ -81,6 +81,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     model = UNetModel(in_channels, out_channels)
     if torch.cuda.is_available():
         model = model.cuda()
+    if verbose:
+        print("gpu: ", torch.cuda.is_available())
 
     # make parallel
     model = nn.DataParallel(model)
@@ -107,15 +109,25 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     for iter_idx in range(0, total_itrs):
 
-        batch = dataset.random_training_batch
+        if verbose:
+            ping = time()
+            print("gen batch...")
 
+        batch = dataset.random_training_batch
         image = torch.from_numpy(batch.images)
         target = torch.from_numpy(batch.targets)
+
+        if verbose:
+            print(f"finish batch: {round(time()-ping, 3)}s")
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
+
+        if verbose:
+            ping = time()
+            print("pass model...")
 
         logits = model(image)
         loss = loss_module(logits, target)
@@ -124,6 +136,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         optimizer.step()
         cur_loss = loss.cpu().tolist()
         accumulated_loss += cur_loss
+
+        if verbose:
+            print(f"finish pass: {round(time()-ping, 3)}s")
+
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
