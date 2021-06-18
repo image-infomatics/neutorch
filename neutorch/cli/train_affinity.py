@@ -96,7 +96,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     validation_interval = max(validation_interval//batch_size, 1)
 
     # init log writers
-    m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
+    # m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
     t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
     v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
 
@@ -116,7 +116,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     # generate a batch to make graph
     batch = dataset.random_training_batch
     image = torch.from_numpy(batch.images)
-    m_writer.add_graph(model, image)
+    # m_writer.add_graph(model, image)
 
     if verbose:
         print("gpu: ", torch.cuda.is_available())
@@ -223,14 +223,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 log_image(v_writer, 'validation/image',
                           validation_image, iter_idx)
 
-        # log weights for every 10 validation
-        if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
-            log_weights(m_writer, model, iter_idx)
+        # # log weights for every 10 validation
+        # if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
+        #     log_weights(m_writer, model, iter_idx)
 
     # close all
     t_writer.close()
     v_writer.close()
-    m_writer.close()
+    # m_writer.close()
     pbar.close()
     if logstd:
         sys.stdout = old_stdout
