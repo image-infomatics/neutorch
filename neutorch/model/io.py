@@ -25,7 +25,13 @@ def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
         optimizer (Optimizer): the optimizer used
     """
     print("SAVE CHECKPOINT: {} iters.".format(chkpt_num))
-    fname = os.path.join(fpath, "model_{}.chkpt".format(chkpt_num))
+    fpath = os.path.join(fpath, 'chkpts')
+
+    # make folder if doesnt exist
+    if not os.path.exists(fpath):
+        os.makedirs(fpath)
+
+    fname = os.path.join(fpath, f'model_{chkpt_num}.chkpt')
     state = {'iter': chkpt_num,
              'state_dict': model.state_dict(),
              'optimizer': optimizer.state_dict()}

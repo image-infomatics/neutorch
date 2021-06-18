@@ -6,6 +6,7 @@ from tqdm import tqdm
 import click
 import numpy as np
 
+import sys
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
@@ -22,7 +23,7 @@ from neutorch.dataset.affinity import Dataset
               help='path to the training data'
               )
 @click.option('--seed',
-              type=int, default=1,
+              type=int, default=7,
               help='for reproducibility'
               )
 @click.option('--patch-size', '-p',
@@ -34,7 +35,7 @@ from neutorch.dataset.affinity import Dataset
               help='size of mini-batch, generally can be 1 be should be equal to num_gpu if you want take advatnage of parallel training.'
               )
 @click.option('--num_examples', '-e',
-              type=int, default=200000,
+              type=int, default=250000,
               help='how many training examples the network will see before completion'
               )
 @click.option('--output-dir', '-o',
@@ -61,10 +62,20 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--verbose',
               type=bool, default=False, help='whether to print messages.'
               )
+@click.option('--logstd',
+              type=bool, default=False, help='whether to redirect stdout to a logfile.'
+              )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int, verbose: bool):
+          training_interval: int, validation_interval: int, verbose: bool, logstd: bool):
+
+    # redirect stdout to logfile
+    if logstd:
+        old_stdout = sys.stdout
+        log_path = os.path.join(output_dir, 'message.log')
+        log_file = open(log_path, "w")
+        sys.stdout = log_file
 
     if verbose:
         print("init...")
@@ -211,13 +222,19 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                                     validation_target, iter_idx)
                 log_image(v_writer, 'validation/image',
                           validation_image, iter_idx)
-                log_weights(m_writer, model, iter_idx)
+
+        # log weights for every 10 validation
+        if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
+            log_weights(m_writer, model, iter_idx)
 
     # close all
     t_writer.close()
     v_writer.close()
     m_writer.close()
     pbar.close()
+    if logstd:
+        sys.stdout = old_stdout
+        log_file.close()
 
 
 if __name__ == '__main__':
