@@ -80,13 +80,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     pbar = tqdm(total=num_examples)
     total_itrs = num_examples // batch_size
 
+    # convert in terms of batch size
+    training_interval = max(training_interval//batch_size, 1)
+    validation_interval = max(validation_interval//batch_size, 1)
+
     # init log writers
     m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
     t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
     v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
-
-    # init scaler for mixed percision
-    scaler = torch.cuda.amp.GradScaler()
 
     # init model
     model = UNetModel(in_channels, out_channels)
@@ -133,26 +134,20 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         #     ping = time()
         #     print("pass model...")
 
-        # clear grads
-        optimizer.zero_grad()
-
-        # foward pass with mixed percision
-        with torch.cuda.amp.autocast():
-            logits = model(image)
+        # foward pass
+        logits = model(image)
 
         # compute loss
         loss = loss_module(logits, target)
 
-        # loss backward with scale for mixed percision
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
+        # loss backward
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
         # record loss
         cur_loss = loss.cpu().tolist()
         accumulated_loss += cur_loss
-
-        # updates mixed percision scaler for next iteration
-        scaler.update()
 
         # # record progress
         # if verbose:
@@ -163,7 +158,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pbar.update(batch_size)
 
         # log for training
-        if iter_idx % (training_interval//batch_size) == 0 and iter_idx > 0:
+        if iter_idx % training_interval == 0 and iter_idx > 0:
             # compute loss
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
@@ -183,7 +178,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             accumulated_loss = 0.0
 
         # log for validation
-        if iter_idx % (validation_interval//batch_size) == 0 and iter_idx > 0:
+        if iter_idx % validation_interval == 0 and iter_idx > 0:
 
             # save checkpoint
             save_chkpt(model, output_dir, iter_idx, optimizer)
