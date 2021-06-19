@@ -34,9 +34,13 @@ from neutorch.dataset.affinity import Dataset
               type=int, default=1,
               help='size of mini-batch, generally can be 1 be should be equal to num_gpu if you want take advatnage of parallel training.'
               )
+@click.option('--start_example', '-s',
+              type=int, default=0,
+              help='which example we are starting from if loading from checkpoint.'
+              )
 @click.option('--num_examples', '-e',
               type=int, default=250000,
-              help='how many training examples the network will see before completion'
+              help='how many training examples the network will see before completion.'
               )
 @click.option('--output-dir', '-o',
               type=click.Path(file_okay=False, dir_okay=True,
@@ -69,7 +73,7 @@ from neutorch.dataset.affinity import Dataset
               type=bool, default=False, help='whether to redirect stdout to a logfile.'
               )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
-          num_examples: int, output_dir: str,
+          start_example: int,  num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, load: str, verbose: bool, logstd: bool):
 
@@ -91,7 +95,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     random.seed(seed)
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.
-    pbar = tqdm(total=num_examples)
+    pbar = tqdm(total=num_examples+start_example)
+    pbar.update(start_example)
     total_itrs = num_examples // batch_size
 
     # convert in terms of batch size
@@ -105,16 +110,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # init model
     model = UNetModel(in_channels, out_channels)
-
+    # make parallel
+    model = nn.DataParallel(model)
     # load chkpt
-    if load is not '':
+    if load != '':
         model = load_chkpt(model, load)
 
     if torch.cuda.is_available():
         model = model.cuda()
-
-    # make parallel
-    model = nn.DataParallel(model)
 
     # init optimizer, loss, dataset
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -130,7 +133,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         print("gpu: ", torch.cuda.is_available())
         print("starting... total_itrs", total_itrs)
 
-    for iter_idx in range(0, total_itrs):
+    for iter_idx in range(start_example, total_itrs):
 
         # if verbose:
         #     ping = time()
