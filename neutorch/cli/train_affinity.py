@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from neutorch.model.RSUNet import UNetModel
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
 
@@ -59,6 +59,9 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation interval in terms of examples seen to record validation data.'
               )
+@click.option('--load',
+              type=str, default='', help='load from checkpoint, pass path to ckpt file'
+              )
 @click.option('--verbose',
               type=bool, default=False, help='whether to print messages.'
               )
@@ -68,7 +71,7 @@ from neutorch.dataset.affinity import Dataset
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int, verbose: bool, logstd: bool):
+          training_interval: int, validation_interval: int, load: str, verbose: bool, logstd: bool):
 
     # redirect stdout to logfile
     if logstd:
@@ -102,6 +105,11 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # init model
     model = UNetModel(in_channels, out_channels)
+
+    # load chkpt
+    if load is not '':
+        model = load_chkpt(model, load)
+
     if torch.cuda.is_available():
         model = model.cuda()
 

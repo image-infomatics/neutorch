@@ -38,10 +38,9 @@ def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
     torch.save(state, fname)
 
 
-def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
-    print("LOAD CHECKPOINT: {} iters.".format(chkpt_num))
-    fname = os.path.join(fpath, "model_{}.chkpt".format(chkpt_num))
-    checkpoint = torch.load(fname)
+def load_chkpt(model: nn.Module, path: str):
+    print(f"LOAD CHECKPOINT: {path} iters.")
+    checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
     return model
 
