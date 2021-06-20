@@ -39,7 +39,7 @@ from neutorch.dataset.affinity import Dataset
               help='which example we are starting from if loading from checkpoint.'
               )
 @click.option('--num_examples', '-e',
-              type=int, default=250000,
+              type=int, default=400000,
               help='how many training examples the network will see before completion.'
               )
 @click.option('--output-dir', '-o',
@@ -63,6 +63,9 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--validation-interval', '-v',
               type=int, default=1000, help='validation interval in terms of examples seen to record validation data.'
               )
+@click.option('--checkpoint-interval', '-ch',
+              type=int, default=40000, help='interval when to log checkpoints.'
+              )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
@@ -75,7 +78,8 @@ from neutorch.dataset.affinity import Dataset
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           start_example: int,  num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int, load: str, verbose: bool, logstd: bool):
+          training_interval: int, validation_interval: int,  checkpoint_interval: int,
+          load: str, verbose: bool, logstd: bool):
 
     # redirect stdout to logfile
     if logstd:
@@ -202,9 +206,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # log for validation
         if iter_idx % validation_interval == 0 and iter_idx > 0:
 
-            # save checkpoint
-            save_chkpt(model, output_dir, iter_idx, optimizer)
-
             # get validation_batch
             batch = dataset.random_validation_batch
             validation_image = torch.from_numpy(batch.images)
@@ -233,6 +234,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                                     validation_target, iter_idx)
                 log_image(v_writer, 'validation/image',
                           validation_image, iter_idx)
+
+        # save checkpoint
+        if iter_idx % checkpoint_interval == 0 and iter_idx > 0:
+            save_chkpt(model, output_dir, iter_idx, optimizer)
 
         # # log weights for every 10 validation
         # if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
