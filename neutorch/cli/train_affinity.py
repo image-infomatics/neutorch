@@ -36,7 +36,7 @@ from neutorch.dataset.affinity import Dataset
               )
 @click.option('--start_example', '-s',
               type=int, default=0,
-              help='which example we are starting from if loading from checkpoint.'
+              help='which example we are starting from if loading from checkpoint, does not affect num_examples.'
               )
 @click.option('--num_examples', '-e',
               type=int, default=400000,
@@ -78,7 +78,7 @@ from neutorch.dataset.affinity import Dataset
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           start_example: int,  num_examples: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
-          training_interval: int, validation_interval: int,  checkpoint_interval: int,
+          training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool, logstd: bool):
 
     # redirect stdout to logfile
@@ -98,14 +98,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     patch_size = eval(patch_size)
     random.seed(seed)
     patch_voxel_num = np.product(patch_size) * batch_size
-    accumulated_loss = 0.
-    pbar = tqdm(total=num_examples+start_example)
-    pbar.update(start_example)
+    accumulated_loss = 0.0
+    pbar = tqdm(total=num_examples)
     total_itrs = num_examples // batch_size
-
-    # convert in terms of batch size
-    training_interval = max(training_interval//batch_size, 1)
-    validation_interval = max(validation_interval//batch_size, 1)
 
     # init log writers
     # m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
@@ -137,28 +132,17 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         print("gpu: ", torch.cuda.is_available())
         print("starting... total_itrs", total_itrs)
 
-    for iter_idx in range(start_example, total_itrs):
-
-        # if verbose:
-        #     ping = time()
-        #     print("gen batch...")
+    for iter_idx in range(0, total_itrs):
 
         # get batch
         batch = dataset.random_training_batch
         image = torch.from_numpy(batch.images)
         target = torch.from_numpy(batch.targets)
 
-        # if verbose:
-        #     print(f"finish batch: {round(time()-ping, 3)}s")
-
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
             target = target.cuda()
-
-        # if verbose:
-        #     ping = time()
-        #     print("pass model...")
 
         # foward pass
         logits = model(image)
@@ -175,16 +159,16 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         cur_loss = loss.cpu().tolist()
         accumulated_loss += cur_loss
 
-        # # record progress
-        # if verbose:
-        #     print(f"finish pass: {round(time()-ping, 3)}s")
-
         # record progress
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
+        # the current exampl enumber the network has seen
+        example_number = ((iter_idx+1) * batch_size)+start_example
+        print(example_number)
+
         # log for training
-        if iter_idx % training_interval == 0 and iter_idx > 0:
+        if example_number % training_interval == 0 and example_number > 0:
             # compute loss
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
@@ -193,18 +177,18 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             predict = torch.sigmoid(logits)
 
             # log values
-            t_writer.add_scalar('Loss', per_voxel_loss, iter_idx)
+            t_writer.add_scalar('Loss', per_voxel_loss, example_number)
             log_affinity_output(t_writer, 'train/target',
-                                target, iter_idx)
+                                target, example_number)
             log_affinity_output(t_writer, 'train/predict',
-                                predict, iter_idx)
-            log_image(t_writer, 'train/image', image, iter_idx)
+                                predict, example_number)
+            log_image(t_writer, 'train/image', image, example_number)
 
             # reset loss
             accumulated_loss = 0.0
 
         # log for validation
-        if iter_idx % validation_interval == 0 and iter_idx > 0:
+        if example_number % validation_interval == 0 and example_number > 0:
 
             # get validation_batch
             batch = dataset.random_validation_batch
@@ -227,17 +211,17 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 print(f'validation loss: {round(per_voxel_loss, 3)}')
 
                 # log values
-                v_writer.add_scalar('Loss', per_voxel_loss, iter_idx)
+                v_writer.add_scalar('Loss', per_voxel_loss, example_number)
                 log_affinity_output(v_writer, 'validation/prediction',
-                                    validation_predict, iter_idx,)
+                                    validation_predict, example_number,)
                 log_affinity_output(v_writer, 'validation/target',
-                                    validation_target, iter_idx)
+                                    validation_target, example_number)
                 log_image(v_writer, 'validation/image',
-                          validation_image, iter_idx)
+                          validation_image, example_number)
 
         # save checkpoint
-        if iter_idx % checkpoint_interval == 0 and iter_idx > 0:
-            save_chkpt(model, output_dir, iter_idx, optimizer)
+        if example_number % checkpoint_interval == 0 and example_number > 0 or iter_idx == total_itrs-1:
+            save_chkpt(model, output_dir, example_number, optimizer)
 
         # # log weights for every 10 validation
         # if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
