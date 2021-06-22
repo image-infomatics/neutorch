@@ -2,6 +2,8 @@ import numpy as np
 import torchio as tio
 from typing import Optional
 
+from neutorch.cremi.border_mask import create_border_mask
+
 
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
@@ -91,20 +93,27 @@ class AffinityPatch(object):
         self.subject = subject
 
     # segmentation label into affinty map
-
     def compute_affinity(self):
 
-        label = np.squeeze(self.subject.label.tensor)
+        label = np.squeeze(self.subject.label.tensor.numpy())
         z0, y0, x0 = label.shape
+
+        # add background mask
+        masked_label = np.zeros(label.shape, dtype=np.uint64)
+        max_dist = 1
+        create_border_mask(label, masked_label, max_dist, 0)
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
         affinity = np.zeros((3, z0, y0, x0))
-        affinity[2, 0:-1, :, :] = label[..., 1:, :,
-                                        :] == label[..., 0:-1, :, :]  # z channel
-        affinity[1, :, 0:-1, :] = label[..., :, 1:,
-                                        :] == label[..., :, 0:-1, :]  # y channel
-        affinity[0, :, :, 0:-1] = label[..., :, :,
-                                        1:] == label[..., :, :, 0:-1]  # x channel
+        affinity[2, 0:-1, :, :] = masked_label[..., 1:, :,
+                                               :] == masked_label[..., 0:-1, :, :]  # z channel
+        affinity[1, :, 0:-1, :] = masked_label[..., :, 1:,
+                                               :] == masked_label[..., :, 0:-1, :]  # y channel
+        affinity[0, :, :, 0:-1] = masked_label[..., :, :,
+                                               1:] == masked_label[..., :, :, 0:-1]  # x channel
+
+        # but back in background labels
+        affinity[:, masked_label == 0] = 0
 
         tio_affinity = tio.LabelMap(tensor=affinity)
         self.subject.add_image(tio_affinity, 'affinity')
