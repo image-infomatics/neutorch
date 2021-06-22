@@ -6,10 +6,12 @@ from tqdm import tqdm
 import click
 import numpy as np
 
+import cv2
 import sys
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data.dataloader import DataLoader
 
 from neutorch.model.RSUNet import UNetModel
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt
@@ -37,6 +39,10 @@ from neutorch.dataset.affinity import Dataset
 @click.option('--start_example', '-s',
               type=int, default=0,
               help='which example we are starting from if loading from checkpoint, does not affect num_examples.'
+              )
+@click.option('--num_workers', '-w',
+              type=int, default=0,
+              help='num workers for pytorch dataloader.'
               )
 @click.option('--num_examples', '-e',
               type=int, default=400000,
@@ -76,11 +82,13 @@ from neutorch.dataset.affinity import Dataset
               type=bool, default=False, help='whether to redirect stdout to a logfile.'
               )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
-          start_example: int,  num_examples: int, output_dir: str,
+          start_example: int,  num_examples: int, num_workers: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool, logstd: bool):
 
+    print(__name__)
+    cv2.setNumThreads(0)
     # redirect stdout to logfile
     if logstd:
         old_stdout = sys.stdout
@@ -118,26 +126,22 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     if torch.cuda.is_available():
         model = model.cuda()
 
-    # init optimizer, loss, dataset
+    # init optimizer, loss, dataset, dataloader
+    print('num_workers', num_workers)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_module = BinomialCrossEntropyWithLogits()
-    dataset = Dataset(path, patch_size=patch_size, batch_size=batch_size)
-
-    # generate a batch to make graph
-    batch = dataset.random_training_batch
-    image = torch.from_numpy(batch.images)
-    # m_writer.add_graph(model, image)
+    dataset = Dataset(path, patch_size=patch_size, length=num_examples)
+    dataloader = DataLoader(
+        dataset=dataset, batch_size=batch_size, num_workers=num_workers)
 
     if verbose:
         print("gpu: ", torch.cuda.is_available())
         print("starting... total_itrs", total_itrs)
 
-    for iter_idx in range(0, total_itrs):
+    for step, batch in enumerate(dataloader):
 
         # get batch
-        batch = dataset.random_training_batch
-        image = torch.from_numpy(batch.images)
-        target = torch.from_numpy(batch.targets)
+        image, target = batch
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
@@ -163,9 +167,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
-        # the current exampl enumber the network has seen
-        example_number = ((iter_idx+1) * batch_size)+start_example
-        print(example_number)
+        # the current number of examples the network has seen
+        example_number = ((step+1) * batch_size)+start_example
 
         # log for training
         if example_number % training_interval == 0 and example_number > 0:
@@ -220,7 +223,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                           validation_image, example_number)
 
         # save checkpoint
-        if example_number % checkpoint_interval == 0 and example_number > 0 or iter_idx == total_itrs-1:
+        if example_number % checkpoint_interval == 0 and example_number > 0 or step == total_itrs-1:
             save_chkpt(model, output_dir, example_number, optimizer)
 
         # # log weights for every 10 validation

@@ -17,12 +17,14 @@ from multiprocessing.pool import ThreadPool
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
+                 length: int,
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
                  ):
         """
         Parameters:
             path (str): file_path to the ground truth data.
+            length (int): number of examples
             patch_size (int or tuple): the patch size we are going to provide.
             batch_size (int): the number of batches in each batch
         """
@@ -31,6 +33,9 @@ class Dataset(torch.utils.data.Dataset):
 
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * 3
+
+        # keep track of total length and current index
+        self.length = length
 
         self.batch_size = batch_size
         self.patch_size = patch_size
@@ -50,12 +55,14 @@ class Dataset(torch.utils.data.Dataset):
         fileC = 'sample_C'
 
         # temporary for testing
-        files = [fileA, fileB, fileC]
+        files = [fileA]  # , fileB, fileC]
         training_volumes = []
         validation_volumes = []
 
         for i in range(len(files)):
+
             file = files[i]
+            print(f'loading file {file}...')
             image = from_h5(f'{path}/{file}.hdf', dataset_path='volumes/raw')
             label = from_h5(
                 f'{path}/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
@@ -175,3 +182,13 @@ class Dataset(torch.utils.data.Dataset):
         transforms = [rescale, transposeXY,
                       spacial, intensity, transposeXY, clip]
         self.transform = tio.Compose(transforms)
+
+    def __getitem__(self, idx):
+        print("called getitem")
+        patch = self.random_training_patch
+        X = patch.image
+        y = patch.target
+        return X, y
+
+    def __len__(self):
+        return self.length
