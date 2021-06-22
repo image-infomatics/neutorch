@@ -208,7 +208,7 @@ class Perspective2D(RandomTransform, SpatialTransform):
 
     def __init__(
             self,
-            corner_ratio: float = 0.6,
+            corner_ratio: float = 0.8,
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
@@ -228,12 +228,13 @@ class Perspective2D(RandomTransform, SpatialTransform):
         self.corner_ratio = corner_ratio
 
     def apply_transform(self, sample: Subject) -> dict:
+        # get just z,y,x dims which should be same for all images and labels
         image = sample.get_first_image()
-        (c0, z0, y0, x0) = image.shape
-
+        (_, z0,  y0, x0) = image.shape
         R = self.gen_random_transformtion(y0, x0)
-
         for image in self.get_images(sample):
+            # get channel which is different for some labels
+            c0 = image.shape[0]
             data = image.numpy()
             for c in range(c0):
                 for z in range(z0):
@@ -247,7 +248,7 @@ class Perspective2D(RandomTransform, SpatialTransform):
         return sample
 
     def gen_random_transformtion(self, sy: int, sx: int):
-        corner_ratio = random.uniform(0.02, self.corner_ratio)
+        corner_ratio = random.uniform(0.05, self.corner_ratio)
         upper_left_point = [
             random.randint(0, round(sy*corner_ratio/2)),
             random.randint(0, round(sx*corner_ratio/2))
