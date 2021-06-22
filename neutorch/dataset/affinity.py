@@ -184,7 +184,6 @@ class Dataset(torch.utils.data.Dataset):
         self.transform = tio.Compose(transforms)
 
     def __getitem__(self, idx):
-        print("called getitem")
         patch = self.random_training_patch
         X = patch.image
         y = patch.target

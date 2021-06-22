@@ -45,7 +45,7 @@ from neutorch.dataset.affinity import Dataset
               help='num workers for pytorch dataloader.'
               )
 @click.option('--num_examples', '-e',
-              type=int, default=400000,
+              type=int, default=500000,
               help='how many training examples the network will see before completion.'
               )
 @click.option('--output-dir', '-o',
@@ -70,7 +70,7 @@ from neutorch.dataset.affinity import Dataset
               type=int, default=1000, help='validation interval in terms of examples seen to record validation data.'
               )
 @click.option('--checkpoint-interval', '-ch',
-              type=int, default=40000, help='interval when to log checkpoints.'
+              type=int, default=50000, help='interval when to log checkpoints.'
               )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
@@ -87,7 +87,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool, logstd: bool):
 
-    print(__name__)
     cv2.setNumThreads(0)
     # redirect stdout to logfile
     if logstd:
@@ -131,7 +130,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pin_memory = True
 
     # init optimizer, loss, dataset, dataloader
-    print('num_workers', num_workers)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(path, patch_size=patch_size, length=num_examples)
@@ -146,11 +144,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
         # get batch
         image, target = batch
-
-        # Transfer Data to GPU if available
-        if torch.cuda.is_available():
-            image = image.cuda()
-            target = target.cuda()
 
         # foward pass
         logits = model(image)
