@@ -123,8 +123,12 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     if load != '':
         model = load_chkpt(model, load)
 
+    pin_memory = False
     if torch.cuda.is_available():
         model = model.cuda()
+        # fine tune convolutions, see: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html
+        torch.backends.cudnn.benchmark = True
+        pin_memory = True
 
     # init optimizer, loss, dataset, dataloader
     print('num_workers', num_workers)
@@ -132,7 +136,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     loss_module = BinomialCrossEntropyWithLogits()
     dataset = Dataset(path, patch_size=patch_size, length=num_examples)
     dataloader = DataLoader(
-        dataset=dataset, batch_size=batch_size, num_workers=num_workers)
+        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory)
 
     if verbose:
         print("gpu: ", torch.cuda.is_available())
@@ -154,8 +158,11 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # compute loss
         loss = loss_module(logits, target)
 
+        # better zero gradients
+        # see: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html
+        for param in model.parameters():
+            param.grad = None
         # loss backward
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
