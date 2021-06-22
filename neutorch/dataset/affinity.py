@@ -55,7 +55,7 @@ class Dataset(torch.utils.data.Dataset):
         fileC = 'sample_C'
 
         # temporary for testing
-        files = [fileA, fileB, fileC]
+        files = [fileA]  # , fileB, fileC]
         training_volumes = []
         validation_volumes = []
 

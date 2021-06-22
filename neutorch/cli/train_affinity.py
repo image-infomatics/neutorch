@@ -6,7 +6,6 @@ from tqdm import tqdm
 import click
 import numpy as np
 
-import cv2
 import sys
 import torch
 import torch.nn as nn
@@ -87,7 +86,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool, logstd: bool):
 
-    cv2.setNumThreads(0)
     # redirect stdout to logfile
     if logstd:
         old_stdout = sys.stdout
@@ -132,9 +130,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     # init optimizer, loss, dataset, dataloader
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_module = BinomialCrossEntropyWithLogits()
-    dataset = Dataset(path, patch_size=patch_size, length=num_examples)
+    dataset = Dataset(path, patch_size=patch_size,
+                      length=num_examples, batch_size=batch_size)
     dataloader = DataLoader(
-        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory)
+        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, drop_last=True)
 
     if verbose:
         print("gpu: ", torch.cuda.is_available())
@@ -144,6 +143,11 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
         # get batch
         image, target = batch
+
+        # Transfer Data to GPU if available
+        if torch.cuda.is_available():
+            image = image.cuda()
+            target = target.cuda()
 
         # foward pass
         logits = model(image)
@@ -167,13 +171,18 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
+        # the previous number of examples the network has seen
+        prev_example_number = ((step) * batch_size)+start_example
+
         # the current number of examples the network has seen
         example_number = ((step+1) * batch_size)+start_example
 
         # log for training
-        if example_number % training_interval == 0 and example_number > 0:
+        if example_number // training_interval > prev_example_number // training_interval:
+
             # compute loss
-            per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
+            per_voxel_loss = accumulated_loss / \
+                training_interval / patch_voxel_num / batch_size
             print(f'training loss {round(per_voxel_loss, 3)}')
 
             # compute predict
@@ -187,11 +196,11 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                                 predict, example_number)
             log_image(t_writer, 'train/image', image, example_number)
 
-            # reset loss
+            # reset acc loss
             accumulated_loss = 0.0
 
         # log for validation
-        if example_number % validation_interval == 0 and example_number > 0:
+        if example_number // validation_interval > prev_example_number // validation_interval:
 
             # get validation_batch
             batch = dataset.random_validation_batch
@@ -210,7 +219,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(
                     validation_logits, validation_target)
-                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num / batch_size
                 print(f'validation loss: {round(per_voxel_loss, 3)}')
 
                 # log values
@@ -223,12 +232,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                           validation_image, example_number)
 
         # save checkpoint
-        if example_number % checkpoint_interval == 0 and example_number > 0 or step == total_itrs-1:
+        if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
             save_chkpt(model, output_dir, example_number, optimizer)
-
-        # # log weights for every 10 validation
-        # if iter_idx % (validation_interval*10) == 0 and iter_idx > 0:
-        #     log_weights(m_writer, model, iter_idx)
+            # log_weights(m_writer, model, iter_idx)
 
     # close all
     t_writer.close()
