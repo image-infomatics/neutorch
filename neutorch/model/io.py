@@ -2,7 +2,8 @@ import matplotlib.cm
 import matplotlib
 import os
 import math
-
+import numpy as np
+from skimage import color
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -176,3 +177,37 @@ def log_weights(writer: SummaryWriter, model, iter_idx):
 
         writer.add_histogram(f'up_conv/pre_{i}', pre, iter_idx)
         writer.add_histogram(f'up_conv/post_{i}', post, iter_idx)
+
+
+def log_segmentation(writer: SummaryWriter, tag: str, seg: np.ndarray,
+                     iter_idx: int,  slice_index: int = 0):
+    """write a input iimage tensor in tensorboard log
+
+    Args:
+        writer (SummaryWriter):
+        tag (str): the name of the tensor in the log
+        seg (np.ndarray): the segmentation
+        iter_idx (int): training iteration index
+        slice_index (int): index of slice to select example to log
+    """
+
+    # pick slice from volume
+    slice = seg[slice_index, :, :]
+
+    # color slice
+    dummy_vol = np.zeros(slice.shape)
+    colored = color.label2rgb(slice, dummy_vol, alpha=1, bg_label=0)
+    colored = torch.Tensor(colored)
+    writer.add_image(f'{tag}_image', colored, iter_idx, dataformats='HWC')
+
+
+def label_data(vol, seg):
+    length = vol.shape[0]
+    size = vol.shape[1]
+    # reshape for labeling
+    seg = np.reshape(seg, (size, length*size))
+    vol = np.reshape(vol, (size, length*size))
+    # label
+    labeled = color.label2rgb(seg, vol, alpha=0.1, bg_label=-1)
+    # shape back
+    labeled = np.reshape(labeled, (length, size, size, 3))

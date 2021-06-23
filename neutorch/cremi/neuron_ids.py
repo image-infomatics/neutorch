@@ -1,5 +1,5 @@
 import numpy as np
-from .border_mask import create_border_mask
+from neutorch.dataset.border_mask import create_border_mask
 from .voi import voi
 from .rand import adapted_rand
 

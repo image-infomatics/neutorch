@@ -13,9 +13,10 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.dataloader import DataLoader
 
 from neutorch.model.RSUNet import UNetModel
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt, log_segmentation
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
+from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 
 
 @click.command()
@@ -105,7 +106,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.0
     pbar = tqdm(total=num_examples)
+    # total number of iterations for training
     total_itrs = num_examples // batch_size
+    training_iters = 0  # number of iterations that happened since last training_interval
 
     # init log writers
     # m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
@@ -168,7 +171,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         accumulated_loss += cur_loss
 
         # record progress
-        pbar.set_postfix({'cur_loss': round(cur_loss / patch_voxel_num, 3)})
+        pbar.set_postfix(
+            {'cur_loss': round(cur_loss / patch_voxel_num, 3)})
         pbar.update(batch_size)
 
         # the previous number of examples the network has seen
@@ -177,12 +181,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # the current number of examples the network has seen
         example_number = ((step+1) * batch_size)+start_example
 
+        # number of iterations that happened since last training_interval
+        training_iters += 1
+
         # log for training
         if example_number // training_interval > prev_example_number // training_interval:
 
             # compute loss
-            per_voxel_loss = accumulated_loss / \
-                training_interval / patch_voxel_num / batch_size
+            per_voxel_loss = accumulated_loss / training_iters / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
 
             # compute predict
@@ -198,6 +204,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             # reset acc loss
             accumulated_loss = 0.0
+            training_iters = 0
 
         # log for validation
         if example_number // validation_interval > prev_example_number // validation_interval:
@@ -219,7 +226,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(
                     validation_logits, validation_target)
-                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num / batch_size
+                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
                 print(f'validation loss: {round(per_voxel_loss, 3)}')
 
                 # log values
@@ -230,6 +237,38 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                                     validation_target, example_number)
                 log_image(v_writer, 'validation/image',
                           validation_image, example_number)
+
+                ping = time()
+                # do aggolmoration and metrics
+                metrics = {'voi_split': 0, 'voi_merge': 0,
+                           'adapted_rand': 0, 'cremi_score': 0}
+                for i in range(batch_size):
+                    # get true segmentation and affinity map
+                    segmentation_truth = np.squeeze(batch.labels[i])
+                    affinity = validation_predict[i][0:3].numpy()
+
+                    # get predicted segmentation from affinity map
+                    segmentation_pred = do_agglomeration(affinity)
+
+                    # get the CREMI metrics from true segmentation vs predicted segmentation
+                    metric = cremi_metrics(
+                        segmentation_pred, segmentation_truth)
+                    for m in metric.keys():
+                        metrics[m] += metric[m]/batch_size
+
+                    # log the picture for first in batch
+                    if i == 0:
+                        log_segmentation(v_writer, 'validation/seg_true',
+                                         segmentation_truth, example_number)
+                        log_segmentation(v_writer, 'validation/seg_pred',
+                                         segmentation_pred, example_number)
+
+                # log metrics
+                for k, v in metrics.items():
+                    v_writer.add_scalar(
+                        f'cremi_metrics/{k}', v, example_number)
+
+                print(f'aggo+metrics takes {round(time()-ping, 3)} seconds.')
 
         # save checkpoint
         if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:

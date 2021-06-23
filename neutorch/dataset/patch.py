@@ -2,7 +2,10 @@ import numpy as np
 import torchio as tio
 from typing import Optional
 
-from neutorch.cremi.border_mask import create_border_mask
+from .border_mask import create_border_mask
+
+# (int): the amount of border added to the affinity maps (for thicker lines)
+AFF_BORDER_WIDTH = 1
 
 
 class Patch(object):
@@ -100,8 +103,7 @@ class AffinityPatch(object):
 
         # add background mask
         masked_label = np.zeros(label.shape, dtype=np.uint64)
-        max_dist = 1
-        create_border_mask(label, masked_label, max_dist, 0)
+        create_border_mask(label, masked_label, AFF_BORDER_WIDTH, 0)
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
         affinity = np.zeros((3, z0, y0, x0))
@@ -170,10 +172,13 @@ class AffinityBatch(object):
         self.patches = patches
         images = []
         targets = []
+        labels = []
 
         for p in patches:
             images.append(p.image)
             targets.append(p.target)
+            labels.append(p.label)
 
         self.images = np.array(images)
         self.targets = np.array(targets)
+        self.labels = np.array(labels)
