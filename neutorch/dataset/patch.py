@@ -105,12 +105,12 @@ class AffinityPatch(object):
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
         affinity = np.zeros((3, z0, y0, x0))
-        affinity[2, 0:-1, :, :] = masked_label[..., 1:, :,
-                                               :] == masked_label[..., 0:-1, :, :]  # z channel
-        affinity[1, :, 0:-1, :] = masked_label[..., :, 1:,
-                                               :] == masked_label[..., :, 0:-1, :]  # y channel
-        affinity[0, :, :, 0:-1] = masked_label[..., :, :,
-                                               1:] == masked_label[..., :, :, 0:-1]  # x channel
+        affinity[2, 1:, :, :] = masked_label[..., 1:, :,
+                                             :] == masked_label[..., 0:-1, :, :]  # z channel
+        affinity[1, :, 1:, :] = masked_label[..., :, 1:,
+                                             :] == masked_label[..., :, 0:-1, :]  # y channel
+        affinity[0, :, :, 1:] = masked_label[..., :, :,
+                                             1:] == masked_label[..., :, :, 0:-1]  # x channel
 
         # but back in background labels
         affinity[:, masked_label == 0] = 0
