@@ -242,7 +242,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 # do aggolmoration and metrics
                 metrics = {'voi_split': 0, 'voi_merge': 0,
                            'adapted_rand': 0, 'cremi_score': 0}
-                for i in range(batch_size):
+
+                # only compute over half batch size for time saving
+                reduced_batch_size = max(batch_size // 2, 1)
+                for i in range(reduced_batch_size):
                     # get true segmentation and affinity map
                     segmentation_truth = np.squeeze(batch.labels[i])
                     affinity = validation_predict[i][0:3].cpu().numpy()
