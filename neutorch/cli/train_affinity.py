@@ -189,7 +189,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             # compute loss
             per_voxel_loss = accumulated_loss / training_iters / patch_voxel_num
-            print(f'training loss {round(per_voxel_loss, 3)}')
+            # print(f'training loss {round(per_voxel_loss, 3)}')
 
             # compute predict
             predict = torch.sigmoid(logits)
@@ -227,7 +227,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 validation_loss = loss_module(
                     validation_logits, validation_target)
                 per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
-                print(f'validation loss: {round(per_voxel_loss, 3)}')
+                # print(f'validation loss: {round(per_voxel_loss, 3)}')
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
@@ -245,7 +245,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 for i in range(batch_size):
                     # get true segmentation and affinity map
                     segmentation_truth = np.squeeze(batch.labels[i])
-                    affinity = validation_predict[i][0:3].numpy()
+                    affinity = validation_predict[i][0:3].cpu().numpy()
 
                     # get predicted segmentation from affinity map
                     segmentation_pred = do_agglomeration(affinity)
