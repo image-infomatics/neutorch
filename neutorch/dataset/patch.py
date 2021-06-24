@@ -90,6 +90,11 @@ class AffinityPatch(object):
             image=tio_image, label=tio_label)
 
         if lsd_label is not None:
+            # add background mask
+            mask = np.zeros(label.shape)
+            create_border_mask(label, mask, AFF_BORDER_WIDTH, 0)
+            lsd_label[:, mask == 0] = 0
+
             tio_lsd = tio.LabelMap(tensor=lsd_label)
             subject.add_image(tio_lsd, 'lsd')
 

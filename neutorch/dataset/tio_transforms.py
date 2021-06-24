@@ -208,7 +208,7 @@ class Perspective2D(RandomTransform, SpatialTransform):
 
     def __init__(
             self,
-            corner_ratio: float = 1,
+            corner_ratio: float = 0.8,
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,

@@ -104,22 +104,25 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
 # https://towardsdatascience.com/multi-task-learning-with-pytorch-and-fastai-6d10dc7ce855
 class MultiTaskLoss(nn.Module):
 
-    def __init__(self, number_of_tasks, weights):
+    def __init__(self, number_of_tasks):
         super(MultiTaskLoss, self).__init__()
         self.number_of_tasks = number_of_tasks
-        self.weights = torch.Tensor(weights)
+        self.log_vars = nn.Parameter(torch.zeros((number_of_tasks)))
 
     def forward(self, preds, gts):
 
         crossEntropy = BinomialCrossEntropyWithLogits()
+        mse = nn.MSELoss()
 
-        losses = 0.0
-        for i in range(self.number_of_tasks):
-            ce_loss = crossEntropy(preds[i], gts[i])
-            loss = ce_loss * self.weights[i]
-            losses += loss
+        loss_aff = crossEntropy(preds[0], gts[0])
+        precision0 = torch.exp(-self.log_vars[0])
+        loss_aff = precision0*loss_aff + self.log_vars[0]
 
-        return losses
+        loss_LSD = mse(preds[1], gts[1])
+        precision1 = torch.exp(-self.log_vars[1])
+        loss_LSD = precision1*loss_LSD + self.log_vars[1]
+
+        return loss_aff + loss_LSD
 
 
 # class WeightedAffLSD_MSELoss(torch.nn.MSELoss):
