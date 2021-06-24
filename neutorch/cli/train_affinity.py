@@ -1,6 +1,7 @@
 import random
 import os
 from time import time
+from torch.nn.modules import loss
 from tqdm import tqdm
 
 import click
@@ -131,8 +132,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pin_memory = True
 
     # init optimizer, loss, dataset, dataloader
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_module = MultiTaskLoss(2)  # we have two tasks, affinity & LSD
+    parameters = list(model.parameters()) + list(loss_module.parameters())
+    optimizer = torch.optim.Adam(parameters, lr=learning_rate)
+
     dataset = Dataset(path, patch_size=patch_size,
                       length=num_examples, batch_size=batch_size)
     dataloader = DataLoader(
@@ -244,6 +247,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
+                v_writer.add_scalar('Loss/affinity_weight',
+                                    loss_module.weights[0], example_number)
+                v_writer.add_scalar('Loss/lsd_weight',
+                                    loss_module.weights[1], example_number)
                 log_affinity_output(v_writer, 'validation/prediction',
                                     validation_predict, example_number,)
                 log_affinity_output(v_writer, 'validation/target',

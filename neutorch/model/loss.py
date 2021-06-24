@@ -107,17 +107,17 @@ class MultiTaskLoss(nn.Module):
     def __init__(self, number_of_tasks):
         super(MultiTaskLoss, self).__init__()
         self.number_of_tasks = number_of_tasks
-        self.log_vars = nn.Parameter(torch.zeros((number_of_tasks)))
+        self.weights = nn.Parameter(torch.zeros((number_of_tasks)))
 
     def forward(self, preds, gts):
-
+        print("weights", self.weights[0], self.weights[1])
         crossEntropy = BinomialCrossEntropyWithLogits()
 
         losses = 0.0
         for i in range(self.number_of_tasks):
             ce_loss = crossEntropy(preds[i], gts[i])
-            precision = torch.exp(-self.log_vars[i])
-            loss = precision*ce_loss + self.log_vars[i]
+            precision = torch.exp(-self.weights[i])
+            loss = precision*ce_loss + self.weights[i]
             losses += loss
 
         return losses
