@@ -2,6 +2,7 @@ from __future__ import print_function
 from itertools import repeat
 import collections
 import math
+from matplotlib.pyplot import axes
 
 import torch
 import torch.nn as nn
@@ -206,6 +207,34 @@ class OutputBlock(nn.Module):
         return x
 
 
+class AffLSDSplit(nn.Module):
+    def __init__(self, in_channels, aff_lsd_channels, kernel_size=3, stride=1,
+                 bias=False):
+        super(AffLSDSplit, self).__init__()
+        padding = pad_size(kernel_size, 'same')
+
+        aff_channels = aff_lsd_channels[0]
+        lsd_channels = aff_lsd_channels[1]
+
+        self.aff_conv = nn.Conv3d(in_channels, aff_channels,
+                                  kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
+
+        self.lsd_conv = nn.Conv3d(in_channels, lsd_channels,
+                                  kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
+
+        nn.init.kaiming_normal_(self.aff_conv.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.lsd_conv.weight, nonlinearity='relu')
+        if bias:
+            nn.init.constant_(self.aff_conv.bias, 0)
+            nn.init.constant_(self.lsd_conv.bias, 0)
+
+    def forward(self, x):
+        aff = self.aff_conv(x)
+        lsd = self.lsd_conv(x)
+        res = torch.cat([aff, lsd], dim=1)
+        return res
+
+
 class UNetModel(nn.Sequential):
     """
     Residual Symmetric U-Net with down/upsampling in/output.
@@ -219,3 +248,4 @@ class UNetModel(nn.Sequential):
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
         self.add_module('core', RSUNet(width=width))
         self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))
+        self.add_module('split', AffLSDSplit(out_channels, (3, 10), io_kernel))

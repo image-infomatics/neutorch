@@ -3,7 +3,7 @@ from torch import nn
 import numpy as np
 
 
-def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
+def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor = None, thresh: float = 0.):
     if not torch.any(target):
         return None
 
@@ -14,7 +14,7 @@ def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: flo
     else:
         bmsk = torch.ones_like(target, dtype=torch.uint8)
         nmsk = np.prod(bmsk.size())
-    
+
     lpos = (torch.gt(target, thresh) * bmsk).type(torch.float)
     lneg = (torch.le(target, thresh) * bmsk).type(torch.float)
 
@@ -34,16 +34,17 @@ class BinomialCrossEntropyWithLogits(nn.Module):
     A version of BCE w/ logits with the ability to mask
     out regions of output.
     """
+
     def __init__(self, rebalance: bool = True):
         super().__init__()
         self.rebalance = rebalance
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
 
-    def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor=None):
+    def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor = None):
         if mask is None:
-            cost = loss.sum() #/ np.prod(loss.size())
+            cost = loss.sum()  # / np.prod(loss.size())
         else:
-            cost = (loss * mask).sum() #/ mask.sum()
+            cost = (loss * mask).sum()  # / mask.sum()
         return cost
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
@@ -58,7 +59,7 @@ class BinomialCrossEntropyWithLogits(nn.Module):
 
 
 class FocalLoss(BinomialCrossEntropyWithLogits):
-    def __init__(self, alpha: float = 0.25, gamma: float=2., rebalance: bool=True):
+    def __init__(self, alpha: float = 0.25, gamma: float = 2., rebalance: bool = True):
         """reweight the loss to focus more on the inaccurate rear spots
 
         Args:
@@ -72,7 +73,7 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
         self.alpha = alpha
         self.gamma = gamma
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor=None):
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor = None):
         """
         implementation was partially copied from here.
         https://github.com/pytorch/vision/blob/master/torchvision/ops/focal_loss.py
@@ -87,14 +88,54 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
         if self.alpha >= 0:
             alpha_t = self.alpha * target + (1. - self.alpha) * (1. - target)
             loss = alpha_t * loss
-        
+
         if mask is not None:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
-   
+
         cost = self._reduce_loss(loss, mask=mask)
         return cost
 
 # TO-DO
 # tversky loss
 # https://gitlab.mpcdf.mpg.de/connectomics/codat/-/blob/master/codat/training/losses.py
+
+
+# https://towardsdatascience.com/multi-task-learning-with-pytorch-and-fastai-6d10dc7ce855
+class MultiTaskLoss(nn.Module):
+
+    def __init__(self, number_of_tasks):
+        super(MultiTaskLoss, self).__init__()
+        self.number_of_tasks = number_of_tasks
+        self.log_vars = nn.Parameter(torch.zeros((number_of_tasks)))
+
+    def forward(self, preds, gts):
+
+        crossEntropy = BinomialCrossEntropyWithLogits()
+
+        losses = 0.0
+        for i in range(self.number_of_tasks):
+            ce_loss = crossEntropy(preds[i], gts[i])
+            precision = torch.exp(-self.log_vars[i])
+            loss = precision*ce_loss + self.log_vars[i]
+            losses += loss
+
+        return losses
+
+
+# class WeightedAffLSD_MSELoss(torch.nn.MSELoss):
+
+#     def __init__(self):
+#         super(WeightedAffLSD_MSELoss, self).__init__()
+
+#     def forward(self, lsds_prediction, lsds_target, lsds_weights, affs_prediction, affs_target, affs_weights,):
+
+#         loss1 = super(WeightedAffLSD_MSELoss, self).forward(
+#                 lsds_prediction*lsds_weights,
+#                 lsds_target*lsds_weights)
+
+#         loss2 = super(WeightedAffLSD_MSELoss, self).forward(
+#             affs_prediction*affs_weights,
+#             affs_target*affs_weights)
+
+#         return loss1 + loss2

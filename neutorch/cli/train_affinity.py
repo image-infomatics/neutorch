@@ -14,7 +14,7 @@ from torch.utils.data.dataloader import DataLoader
 
 from neutorch.model.RSUNet import UNetModel
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt, log_segmentation
-from neutorch.model.loss import BinomialCrossEntropyWithLogits
+from neutorch.model.loss import BinomialCrossEntropyWithLogits, MultiTaskLoss
 from neutorch.dataset.affinity import Dataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 
@@ -132,7 +132,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # init optimizer, loss, dataset, dataloader
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    loss_module = BinomialCrossEntropyWithLogits()
+    loss_module = MultiTaskLoss(2)  # we have two tasks, affinity & LSD
     dataset = Dataset(path, patch_size=patch_size,
                       length=num_examples, batch_size=batch_size)
     dataloader = DataLoader(
@@ -155,13 +155,20 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         # foward pass
         logits = model(image)
 
+        # split
+        pd_aff = logits[:, :3, ...]
+        gt_aff = target[:, :3, ...]
+        pd_lsd = logits[:, 3:, ...]
+        gt_lsd = target[:, 3:, ...]
+
         # compute loss
-        loss = loss_module(logits, target)
+        loss = loss_module([pd_aff, pd_lsd], [gt_aff, gt_lsd])
 
         # better zero gradients
         # see: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html
         for param in model.parameters():
             param.grad = None
+
         # loss backward
         loss.backward()
         optimizer.step()
@@ -189,7 +196,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             # compute loss
             per_voxel_loss = accumulated_loss / training_iters / patch_voxel_num
-            # print(f'training loss {round(per_voxel_loss, 3)}')
 
             # compute predict
             predict = torch.sigmoid(logits)
@@ -224,10 +230,17 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 # compute loss
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
+
+                # split
+                pd_aff = validation_logits[:, :3, ...]
+                gt_aff = validation_target[:, :3, ...]
+                pd_lsd = validation_logits[:, 3:, ...]
+                gt_lsd = validation_target[:, 3:, ...]
+
                 validation_loss = loss_module(
-                    validation_logits, validation_target)
+                    [pd_aff, pd_lsd], [gt_aff, gt_lsd])
+
                 per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
-                # print(f'validation loss: {round(per_voxel_loss, 3)}')
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)

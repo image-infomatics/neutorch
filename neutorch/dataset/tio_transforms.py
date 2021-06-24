@@ -15,7 +15,7 @@ class SlipAlongAxis(RandomTransform, SpatialTransform):
 
     def __init__(
             self,
-            drop_amount: Tuple = (1, 6),
+            drop_amount: Tuple = (2, 12),
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
@@ -44,7 +44,7 @@ class ZeroAlongAxis(RandomTransform, IntensityTransform):
 
     def __init__(
             self,
-            drop_amount: Tuple = (1, 6),
+            drop_amount: Tuple = (2, 12),
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
@@ -72,7 +72,7 @@ class DropSections(RandomTransform, IntensityTransform):
     def __init__(
             self,
             slices: Tuple = (1, 8),
-            drop_amount: Tuple = (1, 25),
+            drop_amount: Tuple = (15, 60),
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
@@ -208,7 +208,7 @@ class Perspective2D(RandomTransform, SpatialTransform):
 
     def __init__(
             self,
-            corner_ratio: float = 0.8,
+            corner_ratio: float = 1,
             p: float = 1,
             seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
