@@ -107,7 +107,7 @@ class MultiTaskLoss(nn.Module):
     def __init__(self, number_of_tasks, weights):
         super(MultiTaskLoss, self).__init__()
         self.number_of_tasks = number_of_tasks
-        self.weights = weights
+        self.weights = torch.Tensor(weights)
 
     def forward(self, preds, gts):
 

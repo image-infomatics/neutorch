@@ -132,7 +132,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         pin_memory = True
 
     # init optimizer, loss, dataset, dataloader
-    loss_module = MultiTaskLoss(2, (1, 3))  # we have two tasks, affinity & LSD
+    loss_module = MultiTaskLoss(2, [1, 3])  # we have two tasks, affinity & LSD
     # parameters = list(model.parameters()) + list(loss_module.parameters())
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
