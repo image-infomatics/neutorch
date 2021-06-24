@@ -116,8 +116,7 @@ class MultiTaskLoss(nn.Module):
         losses = 0.0
         for i in range(self.number_of_tasks):
             ce_loss = crossEntropy(preds[i], gts[i])
-            precision = torch.exp(-self.weights[i])
-            loss = precision*ce_loss + self.weights[i]
+            loss = ce_loss * self.weights[i]
             losses += loss
 
         return losses
