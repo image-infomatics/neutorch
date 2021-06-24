@@ -104,13 +104,13 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
 # https://towardsdatascience.com/multi-task-learning-with-pytorch-and-fastai-6d10dc7ce855
 class MultiTaskLoss(nn.Module):
 
-    def __init__(self, number_of_tasks):
+    def __init__(self, number_of_tasks, weights):
         super(MultiTaskLoss, self).__init__()
         self.number_of_tasks = number_of_tasks
-        self.weights = nn.Parameter(torch.zeros((number_of_tasks)))
+        self.weights = weights
 
     def forward(self, preds, gts):
-        print("weights", self.weights[0], self.weights[1])
+
         crossEntropy = BinomialCrossEntropyWithLogits()
 
         losses = 0.0
