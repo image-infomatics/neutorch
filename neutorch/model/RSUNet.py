@@ -248,4 +248,3 @@ class UNetModel(nn.Sequential):
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
         self.add_module('core', RSUNet(width=width))
         self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))
-        self.add_module('split', AffLSDSplit(out_channels, (3, 10), io_kernel))
