@@ -2,8 +2,10 @@
 *.DS_Store
 
 data
-output
+*output
 preds
+
+Pipfile*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

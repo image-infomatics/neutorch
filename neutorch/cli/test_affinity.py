@@ -1,6 +1,6 @@
 from time import time
 from tqdm import tqdm
-
+import math
 import click
 import numpy as np
 
@@ -101,15 +101,15 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
         if with_label:
             label = dataset.label
             (sz, sy, sx) = label.shape
-            [oz, oy, ox] = dataset.label_offset
+            (oz, oy, ox) = dataset.label_offset
 
-            affinty_section = affinity[:, oz:oz+sz, oy:oy+sy, ox:ox+sx]
+            seg_section = segmentation_pred[oz:oz+sz, oy:oy+sy, ox:ox+sx]
             # get the CREMI metrics from true segmentation vs predicted segmentation
-            metrics = cremi_metrics(affinty_section, label)
+            metrics = cremi_metrics(seg_section, label)
 
             # log metrics
             for k, v in metrics.items():
-                print(f'{k}:{v}')
+                print(f'{k}:{math.round(v,5)}')
 
     pbar.close()
 
