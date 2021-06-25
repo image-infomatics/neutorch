@@ -199,12 +199,14 @@ class TestDataset(torch.utils.data.Dataset):
                  path: str,
                  patch_size: tuple,
                  with_label: bool = False,
+                 overlap: tuple = (0, 0, 0)
                  ):
         """
         Parameters:
             path (str): file_path to the test  data.
             patch_size (tuple): the patch size we are going to provide.
             with_label (bool): get label also
+            overlap (tuple): amount each batch should overlap in each dim
         """
 
         super().__init__()
@@ -219,6 +221,7 @@ class TestDataset(torch.utils.data.Dataset):
         (z, y, x) = volume.shape
         (pz, py, px) = patch_size
 
+        self.overlap = overlap
         self.patch_size = patch_size
         self.volume = volume
         self.indices = (0, 0, 0)  # cur indices to sample from z, y, x
