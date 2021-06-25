@@ -25,7 +25,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=click.Path(file_okay=False, dir_okay=True,
                               writable=True, resolve_path=True),
               required=True,
-              default='./output',
+              default='./preds',
               help='the directory to save all the outputs, such as checkpoints.'
               )
 @click.option('--in-channels', '-c',
@@ -36,7 +36,13 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
-def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_channels: int, load: str):
+@click.option('--agglomerate',
+              type=bool, default=False, help='whether to run agglomerations as well'
+              )
+@click.option('--with_label',
+              type=bool, default=False, help='whether to read label as well and produce CREMI metrics'
+              )
+def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_channels: int, load: str, agglomerate: bool, with_label: bool):
 
     # convert
     patch_size = eval(patch_size)
@@ -57,12 +63,12 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
         model = model.cuda()
         torch.backends.cudnn.benchmark = True
 
-    dataset = TestDataset(path, patch_size)
+    dataset = TestDataset(path, patch_size, with_label=with_label)
     pbar = tqdm(total=dataset.length)
 
     # over allocate then we will crop
     range = dataset.get_range()
-    affinities = np.zeros((3, *range))
+    affinity = np.zeros((3, *range))
     (pz, py, px) = patch_size
 
     for (index, image) in enumerate(dataset):
@@ -81,9 +87,30 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
             predict = torch.sigmoid(logits)
             predict = torch.squeeze(predict)
             pred_affs = predict[0:3, ...]
-            affinities[:, iz:iz+pz, iy:iy+py, ix:ix+px] = pred_affs.cpu()
+            affinity[:, iz:iz+pz, iy:iy+py, ix:ix+px] = pred_affs.cpu()
 
-    np.save(f'{output_dir}/affinity.npy', affinities)
+        pbar.update(1)
+
+    np.save(f'{output_dir}/affinity.npy', affinity)
+
+    if agglomerate:
+        # get predicted segmentation from affinity map
+        segmentation_pred = do_agglomeration(affinity)
+        np.save(f'{output_dir}/segmentation.npy', segmentation_pred)
+
+        if with_label:
+            label = dataset.label
+            (sz, sy, sx) = label.shape
+            [oz, oy, ox] = dataset.label_offset
+
+            affinty_section = affinity[:, oz:oz+sz, oy:oy+sy, ox:ox+sx]
+            # get the CREMI metrics from true segmentation vs predicted segmentation
+            metrics = cremi_metrics(affinty_section, label)
+
+            # log metrics
+            for k, v in metrics.items():
+                print(f'{k}:{v}')
+
     pbar.close()
 
 

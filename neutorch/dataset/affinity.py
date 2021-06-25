@@ -198,11 +198,13 @@ class TestDataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
                  patch_size: tuple,
+                 with_label: bool = False,
                  ):
         """
         Parameters:
             path (str): file_path to the test  data.
             patch_size (tuple): the patch size we are going to provide.
+            with_label (bool): get label also
         """
 
         super().__init__()
@@ -210,6 +212,10 @@ class TestDataset(torch.utils.data.Dataset):
         print(f'loading from {path}...')
         volume = from_h5(path, dataset_path='volumes/raw')
         volume = volume.astype(np.float32) / 255.
+        if with_label:
+            self.label, self.label_offset = from_h5(
+                path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
+
         (z, y, x) = volume.shape
         (pz, py, px) = patch_size
 
