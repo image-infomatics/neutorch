@@ -46,7 +46,7 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
 
     # init model
     model = UNetModel(in_channels, out_channels)
-    # model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
 
     # load chkpt
     if load != '':
