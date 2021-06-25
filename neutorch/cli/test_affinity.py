@@ -81,7 +81,7 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
             predict = torch.sigmoid(logits)
             predict = torch.squeeze(predict)
             pred_affs = predict[0:3, ...]
-            affinities[:, iz:iz+pz, iy:iy+py, ix:ix+px] = pred_affs
+            affinities[:, iz:iz+pz, iy:iy+py, ix:ix+px] = pred_affs.cpu()
 
     np.save(f'{output_dir}/affinity.npy', affinities)
     pbar.close()
