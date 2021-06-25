@@ -111,6 +111,11 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
             for k, v in metrics.items():
                 print(f'{k}:{math.round(v,5)}')
 
+            f = open(f"{output_dir}/metrics.txt", "w")
+            for k, v in metrics.items():
+                f.write(f'{k}:{math.round(v,5)}\n')
+            f.close()
+
     pbar.close()
 
 
