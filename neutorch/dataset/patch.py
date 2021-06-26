@@ -89,7 +89,9 @@ class AffinityPatch(object):
         subject = tio.Subject(
             image=tio_image, label=tio_label)
 
+        self.is_lsd = False
         if lsd_label is not None:
+            self.is_lsd = True
             # add background mask
             mask = np.zeros(label.shape)
             create_border_mask(label, mask, AFF_BORDER_WIDTH, 0)
@@ -143,13 +145,18 @@ class AffinityPatch(object):
 
     @property
     def lsd(self):
+        assert self.is_lsd
         return self.subject.lsd.tensor.numpy()
 
     @property
     def target(self):
-        return np.append(self.affinity, self.lsd, axis=0)
+        if self.is_lsd:
+            return np.append(self.affinity, self.lsd, axis=0)
+        else:
+            return self.affinity
 
     def get_lsd_channel(self, channel):
+        assert self.is_lsd
         lsd = self.subject.lsd.tensor.numpy()
         if channel == 0:
             return np.moveaxis(lsd[0:3, :, :, :], 0, 3)

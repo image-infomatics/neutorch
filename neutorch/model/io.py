@@ -135,6 +135,12 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     tensor /= tensor.max()
     h = tensor.shape[-1]
     w = tensor.shape[-2]
+    c = tensor.shape[-4]
+
+    # figure out whether these is lsd target
+    lsd = False
+    if c > 3:
+        lsd = True
 
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]
@@ -151,11 +157,12 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     writer.add_image(f'{tag}_affinity', grid, iter_idx)
 
     # log lsd channels, channels [3,12)
-    last_channels = colorize(slice[12, :, :])
-    lsd_slice = torch.cat([slice[3:12, :, :], last_channels])
-    lsd_maps = torch.reshape(lsd_slice, (4, 3, w, h))
-    grid = make_grid(lsd_maps, padding=0, nrow=2)
-    writer.add_image(f'{tag}_lsd', grid, iter_idx)
+    if lsd:
+        last_channels = colorize(slice[12, :, :])
+        lsd_slice = torch.cat([slice[3:12, :, :], last_channels])
+        lsd_maps = torch.reshape(lsd_slice, (4, 3, w, h))
+        grid = make_grid(lsd_maps, padding=0, nrow=2)
+        writer.add_image(f'{tag}_lsd', grid, iter_idx)
 
 
 def log_weights(writer: SummaryWriter, model, iter_idx):

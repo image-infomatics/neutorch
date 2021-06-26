@@ -60,7 +60,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=int, default=1, help='channel number of input tensor.'
               )
 @click.option('--out-channels', '-n',
-              type=int, default=13, help='channel number of output tensor.')
+              type=int, default=0, help='channel number of output tensor. 0 means automatically computed.')
 @click.option('--learning-rate', '-l',
               type=float, default=0.001, help='the learning rate.'
               )
@@ -72,6 +72,9 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               )
 @click.option('--checkpoint-interval', '-ch',
               type=int, default=50000, help='interval when to log checkpoints.'
+              )
+@click.option('--lsd',
+              type=bool, default=True, help='whether to train with mutlitask lsd'
               )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
@@ -86,7 +89,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
           start_example: int,  num_examples: int, num_workers: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
-          load: str, verbose: bool, logstd: bool):
+          lsd: bool, load: str, verbose: bool, logstd: bool):
 
     # redirect stdout to logfile
     if logstd:
@@ -116,6 +119,13 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
     v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
 
+    # compute automatically
+    if out_channels == 0:
+        if lsd:
+            out_channels = 13
+        else:
+            out_channels = 3
+
     # init model
     model = UNetModel(in_channels, out_channels)
     # make parallel
@@ -137,7 +147,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     optimizer = torch.optim.Adam(parameters, lr=learning_rate)
 
     dataset = Dataset(path, patch_size=patch_size,
-                      length=num_examples, batch_size=batch_size)
+                      length=num_examples, lsd=lsd, batch_size=batch_size, )
     dataloader = DataLoader(
         dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, drop_last=True)
 
