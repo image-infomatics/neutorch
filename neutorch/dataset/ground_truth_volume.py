@@ -27,7 +27,8 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
                  patch_size: Union[tuple, int],
                  forbbiden_distance_to_boundary: tuple = None,
-                 lsd_label: Optional[np.ndarray] = None) -> None:
+                 lsd_label: Optional[np.ndarray] = None,
+                 name: str = '') -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -43,8 +44,10 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 direction is defined separately. 
             lsd_label Optional[np.ndarray]:
                 an auxiliary label such as LSD which is treated similarly to normal label 
+            name (str): name of volume
         """
 
+        self.name = name
         assert image.ndim == 3
         assert label.ndim >= 3
         assert image.shape == label.shape[-3:]
