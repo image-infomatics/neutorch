@@ -142,8 +142,11 @@ class UpConvBlock(nn.Module):
         self.conv = ConvBlock(out_channels, out_channels)
 
     def forward(self, x, skip):
+        print('UpConvBlock in:', x.shape)
         x = self.up(x, skip)
-        return self.conv(x)
+        x = self.conv(x)
+        print('UpConvBlock in:', x.shape)
+        return x
 
 
 class RSUNet(nn.Module):
@@ -201,9 +204,11 @@ class OutputBlock(nn.Module):
         self.conv = Conv(in_channels, out_channels, kernel_size, bias=True)
 
     def forward(self, x):
+        print('OutputBlock in:', x.shape)
         x = self.norm(x)
         x = self.relu(x)
         x = self.conv(x)
+        print('OutputBlock out:', x.shape)
         return x
 
 
