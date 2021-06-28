@@ -38,10 +38,17 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 @click.option('--agglomerate',
               type=bool, default=False, help='whether to run agglomerations as well'
               )
-@click.option('--with_label',
+@click.option('--with-label',
               type=bool, default=False, help='whether to read label as well and produce CREMI metrics'
               )
-def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_channels: int, load: str, agglomerate: bool, with_label: bool):
+@click.option('--save-aff',
+              type=bool, default=False, help='whether to save the affinity file'
+              )
+@click.option('--save-seg',
+              type=bool, default=False, help='whether to save the affinity file'
+              )
+def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_channels: int, load: str,
+         agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool):
 
     # convert
     patch_size = eval(patch_size)
@@ -90,12 +97,14 @@ def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_chan
 
         pbar.update(1)
 
-    np.save(f'{output_dir}/affinity.npy', affinity)
+    if save_aff:
+        np.save(f'{output_dir}/affinity.npy', affinity)
 
     if agglomerate:
         # get predicted segmentation from affinity map
         segmentation_pred = do_agglomeration(affinity)
-        np.save(f'{output_dir}/segmentation.npy', segmentation_pred)
+        if save_seg:
+            np.save(f'{output_dir}/segmentation.npy', segmentation_pred)
 
         if with_label:
             label = dataset.label
