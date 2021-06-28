@@ -356,17 +356,16 @@ class PatchExpanding(nn.Module):
         c2 = x[:, :, :, 2*c:3*c]  # B H W 2C/4
         c3 = x[:, :, :, 3*c:]  # B H W 2C/4
 
-        # insert side by side into new array
-        new_x = torch.zeros((B, H*2, W*2, c))  # B 2H 2W C/2
+        # insert side by side
+        x = torch.reshape(x, (B, H*2, W*2, c))  # B 2H 2W C/2
+        x[:, 0::2, 0::2, :] = c0
+        x[:, 1::2, 0::2, :] = c1
+        x[:, 0::2, 1::2, :] = c2
+        x[:, 1::2, 1::2, :] = c3
 
-        new_x[:, 0::2, 0::2, :] = c0
-        new_x[:, 1::2, 0::2, :] = c1
-        new_x[:, 0::2, 1::2, :] = c2
-        new_x[:, 1::2, 1::2, :] = c3
+        x = x.view(B, -1, C//2)  # B L C/2
 
-        new_x = new_x.view(B, -1, C//2)  # B L C/2
-
-        return new_x
+        return x
 
 
 class PatchUnembed(nn.Module):

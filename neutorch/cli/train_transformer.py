@@ -76,7 +76,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=int, default=50000, help='interval when to log checkpoints.'
               )
 @click.option('--lsd',
-              type=bool, default=True, help='whether to train with mutlitask lsd'
+              type=bool, default=False, help='whether to train with mutlitask lsd'
               )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
