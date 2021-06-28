@@ -218,3 +218,39 @@ def label_data(vol, seg):
     labeled = color.label2rgb(seg, vol, alpha=0.1, bg_label=-1)
     # shape back
     labeled = np.reshape(labeled, (length, size, size, 3))
+
+
+def log_2d_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
+                           iter_idx: int, batch_index: int = 0):
+    """write a Affinity Output tensor in tensorboard log
+
+    Args:
+        writer (SummaryWriter):
+        tag (str): the name of the tensor in the log
+        tensor (torch.Tensor):
+        iter_idx (int): training iteration index
+        slice_index (int): index of slice to select example to log
+        batch_index (int): index of batch to select example to log
+    """
+    assert torch.is_tensor(tensor)
+    assert tensor.ndim >= 3
+    tensor = tensor.cpu()
+    # normalize from 0 to 1
+    tensor -= tensor.min()
+    tensor /= tensor.max()
+    h = tensor.shape[-1]
+    w = tensor.shape[-2]
+
+    # select slice from batch
+    slice = tensor[batch_index, :, :, :]
+
+    # def log_channels(channels, subtag):
+    #     imgs = [torch.squeeze(tensor[..., slice(channels[0], channels[1]), z, :, :], axis=0)
+    #             for z in range(depth_index)]
+    #     img = make_grid(imgs, padding=0, nrow=nrow)
+    #     writer.add_image(f'{tag}_{subtag}_{channels}', img, iter_idx)
+
+    # log affinity map, channels [0,2)
+    a_maps = torch.reshape(slice, (2, 1, w, h))
+    grid = make_grid(a_maps, padding=0, nrow=1)
+    writer.add_image(f'{tag}_2daffinity', grid, iter_idx)

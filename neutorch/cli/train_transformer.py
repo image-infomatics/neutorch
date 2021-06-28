@@ -4,6 +4,7 @@ import os
 from time import time
 from torch.nn.modules import loss
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 import click
 import numpy as np
@@ -15,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.dataloader import DataLoader
 
 from neutorch.model.swin_transformer import SwinUNet
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_weights, load_chkpt, log_segmentation
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_2d_affinity_output, load_chkpt, log_segmentation
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
@@ -131,7 +132,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             out_channels = 3
 
     # init model
-    model = SwinUNet(in_channels=in_channels, out_channels=out_channels)
+    model = SwinUNet(in_channels=in_channels, out_channels=2)
     # make parallel
     model = nn.DataParallel(model)
     # load chkpt
@@ -159,12 +160,13 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     for step, batch in enumerate(dataloader):
 
-        z_index = 0
+        z_index = random.randint(0, patch_size[0]-1)
         # get batch
         image, target = batch
 
         image = image[:, :, z_index, :, :]
         target = target[:, :, z_index, :, :]
+        target = target[:, 0:2, :, :]
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
@@ -173,6 +175,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
         # foward pass
         logits = model(image)
+
         # target: B, C, ... ouput: B, ..., C
         logits = torch.moveaxis(logits, -1, 1)
 
@@ -215,16 +218,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             # compute predict
             predict = torch.sigmoid(logits)
 
-            predict = torch.unsqueeze(predict, 2)
-            target = torch.unsqueeze(target, 2)
             image = torch.unsqueeze(image, 2)
 
             # log values
             t_writer.add_scalar('Loss', per_voxel_loss, example_number)
-            log_affinity_output(t_writer, 'train/target',
-                                target, example_number)
-            log_affinity_output(t_writer, 'train/predict',
-                                predict, example_number)
+            log_2d_affinity_output(t_writer, 'train/target',
+                                   target, example_number)
+            log_2d_affinity_output(t_writer, 'train/predict',
+                                   predict, example_number)
             log_image(t_writer, 'train/image', image, example_number)
 
             # reset acc loss
@@ -241,6 +242,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             validation_image = validation_image[:, :, z_index, :, :]
             validation_target = validation_target[:, :, z_index, :, :]
+            validation_target = validation_target[:, 0:2, :, :]
 
             # transfer Data to GPU if available
             if torch.cuda.is_available():
@@ -261,16 +263,14 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
                 validation_predict = torch.sigmoid(validation_logits)
 
-                validation_predict = torch.unsqueeze(validation_predict, 2)
-                validation_target = torch.unsqueeze(validation_target, 2)
                 validation_image = torch.unsqueeze(validation_image, 2)
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
-                log_affinity_output(v_writer, 'validation/prediction',
-                                    validation_predict, example_number,)
-                log_affinity_output(v_writer, 'validation/target',
-                                    validation_target, example_number)
+                log_2d_affinity_output(v_writer, 'validation/prediction',
+                                       validation_predict, example_number,)
+                log_2d_affinity_output(v_writer, 'validation/target',
+                                       validation_target, example_number)
                 log_image(v_writer, 'validation/image',
                           validation_image, example_number)
 

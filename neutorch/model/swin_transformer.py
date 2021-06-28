@@ -349,14 +349,24 @@ class PatchExpanding(nn.Module):
         if pad_input:
             x = F.pad(x, (0, 0, 0, W % 2, 0, H % 2))
 
-        # x0 = x[:, :, :, 0::4]  # B H W 2C/4
-        # x1 = x[:, :, :, 1::4]  # B H W 2C/4
-        # x2 = x[:, :, :, 2::4]  # B H W 2C/4
-        # x3 = x[:, :, :, 3::4]  # B H W 2C/4
-        # x = torch.cat([x, x1], 1)  # B 2H*W 2C/4
-        # x = torch.cat([x, x3], 2)  # B 2H*2W 2C/4
-        x = x.view(B, -1, C//2)  # B 2H*2W C/2
-        return x
+        c = 2*C//4
+        # get mutliple pixel repesentation from channels
+        c0 = x[:, :, :, :c]  # B H W 2C/4
+        c1 = x[:, :, :, c:2*c]  # B H W 2C/4
+        c2 = x[:, :, :, 2*c:3*c]  # B H W 2C/4
+        c3 = x[:, :, :, 3*c:]  # B H W 2C/4
+
+        # insert side by side into new array
+        new_x = torch.zeros((B, H*2, W*2, c))  # B 2H 2W C/2
+
+        new_x[:, 0::2, 0::2, :] = c0
+        new_x[:, 1::2, 0::2, :] = c1
+        new_x[:, 0::2, 1::2, :] = c2
+        new_x[:, 1::2, 1::2, :] = c3
+
+        new_x = new_x.view(B, -1, C//2)  # B L C/2
+
+        return new_x
 
 
 class PatchUnembed(nn.Module):
@@ -371,7 +381,8 @@ class PatchUnembed(nn.Module):
         super().__init__()
         self.dim = dim
         self.norm = norm_layer(dim)
-        self.expansion = nn.Linear(dim, out_channels, bias=False)
+        self.conv = nn.Conv2d(
+            dim, out_channels, kernel_size=5, stride=1, padding=2)
         self.out_channels = out_channels
 
     def forward(self, x, H, W):
@@ -381,9 +392,58 @@ class PatchUnembed(nn.Module):
         assert C == self.dim, "dim is wrong"
 
         x = self.norm(x)
-        x = self.expansion(x)  # B L 2C
 
-        x = x.view(B, H, W, self.out_channels)  # B H W 2C
+        avg = torch.mean(x, -1)
+        for i in range(self.out_channels):
+            x[:, :, i] = avg
+
+        x = x[:, :, :self.out_channels]
+        x = x.view(B, H, W, self.out_channels)
+
+        return x
+
+
+class PatchEmbed(nn.Module):
+    """ Image to Patch Embedding
+
+    Args:
+        patch_size (int): Patch token size. Default: 4.
+        in_chans (int): Number of input image channels. Default: 3.
+        embed_dim (int): Number of linear projection output channels. Default: 96.
+        norm_layer (nn.Module, optional): Normalization layer. Default: None
+    """
+
+    def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
+        super().__init__()
+        patch_size = to_2tuple(patch_size)
+        self.patch_size = patch_size
+
+        self.in_chans = in_chans
+        self.embed_dim = embed_dim
+
+        self.proj = nn.Conv2d(in_chans, embed_dim,
+                              kernel_size=patch_size, stride=patch_size)
+        if norm_layer is not None:
+            self.norm = norm_layer(embed_dim)
+        else:
+            self.norm = None
+
+    def forward(self, x):
+        """Forward function."""
+        # padding
+        _, _, H, W = x.size()
+        if W % self.patch_size[1] != 0:
+            x = F.pad(x, (0, self.patch_size[1] - W % self.patch_size[1]))
+        if H % self.patch_size[0] != 0:
+            x = F.pad(
+                x, (0, 0, 0, self.patch_size[0] - H % self.patch_size[0]))
+
+        x = self.proj(x)  # B C Wh Ww
+        if self.norm is not None:
+            Wh, Ww = x.size(2), x.size(3)
+            x = x.flatten(2).transpose(1, 2)
+            x = self.norm(x)
+            x = x.transpose(1, 2).view(-1, self.embed_dim, Wh, Ww)
 
         return x
 
@@ -510,51 +570,6 @@ class BasicLayer(nn.Module):
             return x, H, W, x, H, W
 
 
-class PatchEmbed(nn.Module):
-    """ Image to Patch Embedding
-
-    Args:
-        patch_size (int): Patch token size. Default: 4.
-        in_chans (int): Number of input image channels. Default: 3.
-        embed_dim (int): Number of linear projection output channels. Default: 96.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
-    """
-
-    def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
-        super().__init__()
-        patch_size = to_2tuple(patch_size)
-        self.patch_size = patch_size
-
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
-
-        self.proj = nn.Conv2d(in_chans, embed_dim,
-                              kernel_size=patch_size, stride=patch_size)
-        if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
-        else:
-            self.norm = None
-
-    def forward(self, x):
-        """Forward function."""
-        # padding
-        _, _, H, W = x.size()
-        if W % self.patch_size[1] != 0:
-            x = F.pad(x, (0, self.patch_size[1] - W % self.patch_size[1]))
-        if H % self.patch_size[0] != 0:
-            x = F.pad(
-                x, (0, 0, 0, self.patch_size[0] - H % self.patch_size[0]))
-
-        x = self.proj(x)  # B C Wh Ww
-        if self.norm is not None:
-            Wh, Ww = x.size(2), x.size(3)
-            x = x.flatten(2).transpose(1, 2)
-            x = self.norm(x)
-            x = x.transpose(1, 2).view(-1, self.embed_dim, Wh, Ww)
-
-        return x
-
-
 class SwinEncoder(nn.Module):
     """ Swin Transformer backbone.
         A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
@@ -589,7 +604,7 @@ class SwinEncoder(nn.Module):
                  patch_size=4,
                  in_chans=3,
                  embed_dim=96,
-                 depths=[2, 2, 6, 2],
+                 depths=[2, 2, 2, 2],
                  num_heads=[3, 6, 12, 24],
                  window_size=7,
                  mlp_ratio=4.,
@@ -736,7 +751,7 @@ class SwinEncoder(nn.Module):
                                  self.num_features[i]).permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
 
-        return tuple(outs)
+        return list(outs)
 
     def train(self, mode=True):
         """Convert the model into training mode while keep layers freezed."""
@@ -777,7 +792,7 @@ class SwinDecoder(nn.Module):
                  pretrain_img_size=224,
                  out_chans=3,
                  embed_dim=768,
-                 depths=[2, 6, 2, 2],
+                 depths=[2, 2, 2, 2],
                  num_heads=[24, 12, 6, 3],
                  window_size=7,
                  mlp_ratio=4.,
@@ -898,21 +913,36 @@ class SwinDecoder(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
-    def forward(self, x):
+    def forward(self, x_layers):
         """Forward function."""
 
-        Wh, Ww = x.size(2), x.size(3)
-        if self.ape:
-            # interpolate the position embedding to the corresponding size
-            absolute_pos_embed = F.interpolate(
-                self.absolute_pos_embed, size=(Wh, Ww), mode='bicubic')
-            x = (x + absolute_pos_embed).flatten(2).transpose(1, 2)  # B Wh*Ww C
-        else:
-            x = x.flatten(2).transpose(1, 2)
+        # if self.ape:
+        #     # interpolate the position embedding to the corresponding size
+        #     absolute_pos_embed = F.interpolate(
+        #         self.absolute_pos_embed, size=(Wh, Ww), mode='bicubic')
+        #     x = (x + absolute_pos_embed).flatten(2).transpose(1, 2)  # B Wh*Ww C
+        # else:
+        #     x = x.flatten(2).transpose(1, 2)
+
         # x = self.pos_drop(x)
 
+        # reverse output of encoder for res connections
+        x_layers.reverse()
+
+        # first input
+        x = x_layers[0]
+
+        Wh, Ww = x.size(2), x.size(3)
+        x = x.flatten(2).transpose(1, 2)
         outs = []
         for i in range(self.num_layers):
+
+            # add res conection for all but first layer
+            if i > 0:
+                res_conn = x_layers[i]
+                res_conn = res_conn.flatten(2).transpose(1, 2)
+                x = x+res_conn
+
             layer = self.layers[i]
             x_out, H, W, x, Wh, Ww = layer(x, Wh, Ww)
 
@@ -951,6 +981,5 @@ class SwinUNet(nn.Module):
     def forward(self, x):
         x_layers = self.encoder(x)
 
-        last_layer_out = x_layers[-1]
-        x = self.decoder(last_layer_out)
+        x = self.decoder(x_layers)
         return x
