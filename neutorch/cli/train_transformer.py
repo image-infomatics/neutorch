@@ -50,8 +50,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               help='how many training examples the network will see before completion.'
               )
 @click.option('--output-dir', '-o',
-              type=click.Path(file_okay=False, dir_okay=True,
-                              writable=True, resolve_path=True),
+              type=click.Path(),
               required=True,
               default='./output',
               help='the directory to save all the outputs, such as checkpoints.'
@@ -74,7 +73,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=int, default=50000, help='interval when to log checkpoints.'
               )
 @click.option('--lsd',
-              type=bool, default=True, help='whether to train with mutlitask lsd'
+              type=bool, default=False, help='whether to train with mutlitask lsd'
               )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
@@ -103,6 +102,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     if verbose:
         print("init...")
+
+    # make output folder if doesnt exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # clear in case was stopped before
     tqdm._instances.clear()
