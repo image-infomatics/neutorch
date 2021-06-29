@@ -2,8 +2,8 @@
 *.DS_Store
 
 data
-*output
-preds
+*output*
+*preds*
 Pip*
 
 # Byte-compiled / optimized / DLL files
