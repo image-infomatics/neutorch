@@ -1,10 +1,8 @@
-from math import log
 import random
 import os
 from time import time
 from torch.nn.modules import loss
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 import click
 import numpy as np
@@ -15,8 +13,8 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.dataloader import DataLoader
 
-from neutorch.model.swin_transformer import SwinUNet
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, log_2d_affinity_output, load_chkpt, log_segmentation
+from neutorch.model.swin_transformer3D import SwinUNet3D
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.affinity import Dataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
@@ -76,7 +74,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=int, default=50000, help='interval when to log checkpoints.'
               )
 @click.option('--lsd',
-              type=bool, default=False, help='whether to train with mutlitask lsd'
+              type=bool, default=True, help='whether to train with mutlitask lsd'
               )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
@@ -95,8 +93,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           lsd: bool, load: str, verbose: bool, logstd: bool, aug: bool):
-
-    in_channels = 1
 
     # redirect stdout to logfile
     if logstd:
@@ -134,7 +130,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             out_channels = 3
 
     # init model
-    model = SwinUNet(in_channels=in_channels, out_channels=2)
+    model = SwinUNet3D(in_channels, out_channels)
     # make parallel
     model = nn.DataParallel(model)
     # load chkpt
@@ -144,6 +140,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     pin_memory = False
     if torch.cuda.is_available():
         model = model.cuda()
+        # fine tune convolutions, see: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html
+        torch.backends.cudnn.benchmark = True
         pin_memory = True
 
     # init optimizer, loss, dataset, dataloader
@@ -162,13 +160,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     for step, batch in enumerate(dataloader):
 
-        z_index = random.randint(0, patch_size[0]-1)
         # get batch
         image, target = batch
-
-        image = image[:, :, z_index, :, :]
-        target = target[:, :, z_index, :, :]
-        target = target[:, 0:2, :, :]
 
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
@@ -177,9 +170,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
         # foward pass
         logits = model(image)
-
-        # target: B, C, ... ouput: B, ..., C
-        logits = torch.moveaxis(logits, -1, 1)
 
         # compute loss
         loss = loss_module(logits, target)
@@ -220,14 +210,12 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             # compute predict
             predict = torch.sigmoid(logits)
 
-            image = torch.unsqueeze(image, 2)
-
             # log values
             t_writer.add_scalar('Loss', per_voxel_loss, example_number)
-            log_2d_affinity_output(t_writer, 'train/target',
-                                   target, example_number)
-            log_2d_affinity_output(t_writer, 'train/predict',
-                                   predict, example_number)
+            log_affinity_output(t_writer, 'train/target',
+                                target, example_number)
+            log_affinity_output(t_writer, 'train/predict',
+                                predict, example_number)
             log_image(t_writer, 'train/image', image, example_number)
 
             # reset acc loss
@@ -242,10 +230,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             validation_image = torch.from_numpy(batch.images)
             validation_target = torch.from_numpy(batch.targets)
 
-            validation_image = validation_image[:, :, z_index, :, :]
-            validation_target = validation_target[:, :, z_index, :, :]
-            validation_target = validation_target[:, 0:2, :, :]
-
             # transfer Data to GPU if available
             if torch.cuda.is_available():
                 validation_image = validation_image.cuda()
@@ -253,64 +237,61 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
             # pass with validation example
             with torch.no_grad():
-
                 # compute loss
                 validation_logits = model(validation_image)
-                # target: B, C, ... ouput: B, ..., C
-                validation_logits = torch.moveaxis(validation_logits, -1, 1)
+                validation_predict = torch.sigmoid(validation_logits)
 
                 validation_loss = loss_module(
                     validation_logits, validation_target)
+
                 per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
-
-                validation_predict = torch.sigmoid(validation_logits)
-
-                validation_image = torch.unsqueeze(validation_image, 2)
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
-                log_2d_affinity_output(v_writer, 'validation/prediction',
-                                       validation_predict, example_number,)
-                log_2d_affinity_output(v_writer, 'validation/target',
-                                       validation_target, example_number)
+                log_affinity_output(v_writer, 'validation/prediction',
+                                    validation_predict, example_number,)
+                log_affinity_output(v_writer, 'validation/target',
+                                    validation_target, example_number)
                 log_image(v_writer, 'validation/image',
                           validation_image, example_number)
 
+                ping = time()
                 # do aggolmoration and metrics
-                # metrics = {'voi_split': 0, 'voi_merge': 0,
-                #            'adapted_rand': 0, 'cremi_score': 0}
+                metrics = {'voi_split': 0, 'voi_merge': 0,
+                           'adapted_rand': 0, 'cremi_score': 0}
 
-                # # only compute over first in batch for time saving
-                # i = 0
-                # # get true segmentation and affinity map
-                # segmentation_truth = np.squeeze(batch.labels[i])
-                # affinity = validation_predict[i][0:3].cpu().numpy()
+                # only compute over first in batch for time saving
+                i = 0
+                # get true segmentation and affinity map
+                segmentation_truth = np.squeeze(batch.labels[i])
+                affinity = validation_predict[i][0:3].cpu().numpy()
 
-                # # get predicted segmentation from affinity map
-                # segmentation_pred = do_agglomeration(affinity)
+                # get predicted segmentation from affinity map
+                segmentation_pred = do_agglomeration(affinity)
 
-                # # get the CREMI metrics from true segmentation vs predicted segmentation
-                # metric = cremi_metrics(
-                #     segmentation_pred, segmentation_truth)
-                # for m in metric.keys():
-                #     metrics[m] += metric[m]/batch_size
+                # get the CREMI metrics from true segmentation vs predicted segmentation
+                metric = cremi_metrics(
+                    segmentation_pred, segmentation_truth)
+                for m in metric.keys():
+                    metrics[m] += metric[m]/batch_size
 
-                # # log the picture for first in batch
-                # if i == 0:
-                #     log_segmentation(v_writer, 'validation/seg_true',
-                #                      segmentation_truth, example_number)
-                #     log_segmentation(v_writer, 'validation/seg_pred',
-                #                      segmentation_pred, example_number)
+                # log the picture for first in batch
+                if i == 0:
+                    log_segmentation(v_writer, 'validation/seg_true',
+                                     segmentation_truth, example_number)
+                    log_segmentation(v_writer, 'validation/seg_pred',
+                                     segmentation_pred, example_number)
 
-                # # log metrics
-                # for k, v in metrics.items():
-                #     v_writer.add_scalar(
-                #         f'cremi_metrics/{k}', v, example_number)
+                # log metrics
+                for k, v in metrics.items():
+                    v_writer.add_scalar(
+                        f'cremi_metrics/{k}', v, example_number)
+
+                print(f'aggo+metrics takes {round(time()-ping, 3)} seconds.')
 
         # save checkpoint
         if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
             save_chkpt(model, output_dir, example_number, optimizer)
-            # log_weights(m_writer, model, iter_idx)
 
     # close all
     t_writer.close()
