@@ -1,4 +1,0 @@
-voi_split:0.50118
-voi_merge:1.357
-adapted_rand:0.36443
-cremi_score:0.82291
