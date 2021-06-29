@@ -87,13 +87,15 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 @click.option('--logstd',
               type=bool, default=False, help='whether to redirect stdout to a logfile.'
               )
+@click.option('--aug',
+              type=bool, default=True, help='whether to use data augmentation.'
+              )
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           start_example: int,  num_examples: int, num_workers: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
-          lsd: bool, load: str, verbose: bool, logstd: bool):
+          lsd: bool, load: str, verbose: bool, logstd: bool, aug: bool):
 
-    patch_size = '(6,64,64)'
     in_channels = 1
 
     # redirect stdout to logfile
@@ -150,7 +152,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     optimizer = torch.optim.Adam(parameters, lr=learning_rate)
 
     dataset = Dataset(path, patch_size=patch_size,
-                      length=num_examples, lsd=lsd, batch_size=batch_size, )
+                      length=num_examples, lsd=lsd, batch_size=batch_size, aug=aug)
     dataloader = DataLoader(
         dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, drop_last=True)
 

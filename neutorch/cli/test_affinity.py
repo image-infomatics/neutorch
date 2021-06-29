@@ -45,7 +45,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=bool, default=False, help='whether to save the affinity file'
               )
 @click.option('--save-seg',
-              type=bool, default=False, help='whether to save the affinity file'
+              type=bool, default=False, help='whether to save the segmentation file'
               )
 def test(path: str, patch_size: str, output_dir: str, in_channels: int, out_channels: int, load: str,
          agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool):

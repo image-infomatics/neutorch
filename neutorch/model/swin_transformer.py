@@ -338,7 +338,6 @@ class PatchExpanding(nn.Module):
         """
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
-
         x = self.norm(x)
         x = self.expansion(x)  # B L 2C
 
@@ -356,16 +355,19 @@ class PatchExpanding(nn.Module):
         c2 = x[:, :, :, 2*c:3*c]  # B H W 2C/4
         c3 = x[:, :, :, 3*c:]  # B H W 2C/4
 
-        # insert side by side
-        x = torch.reshape(x, (B, H*2, W*2, c))  # B 2H 2W C/2
-        x[:, 0::2, 0::2, :] = c0
-        x[:, 1::2, 0::2, :] = c1
-        x[:, 0::2, 1::2, :] = c2
-        x[:, 1::2, 1::2, :] = c3
+        # insert side by side into new array
+        # maybe there is better way to do this that doesnt init new array
+        new_x = torch.zeros(
+            (B, H*2, W*2, c), device=x.get_device())  # B 2H 2W C/2
 
-        x = x.view(B, -1, C//2)  # B L C/2
+        new_x[:, 0::2, 0::2, :] = c0
+        new_x[:, 1::2, 0::2, :] = c1
+        new_x[:, 0::2, 1::2, :] = c2
+        new_x[:, 1::2, 1::2, :] = c3
 
-        return x
+        new_x = new_x.view(B, -1, C//2)  # B L C/2
+
+        return new_x
 
 
 class PatchUnembed(nn.Module):
@@ -383,6 +385,7 @@ class PatchUnembed(nn.Module):
         self.conv = nn.Conv2d(
             dim, out_channels, kernel_size=5, stride=1, padding=2)
         self.out_channels = out_channels
+        self.embed = nn.Linear(dim, out_channels, bias=False)
 
     def forward(self, x, H, W):
 
@@ -391,13 +394,15 @@ class PatchUnembed(nn.Module):
         assert C == self.dim, "dim is wrong"
 
         x = self.norm(x)
-
-        avg = torch.mean(x, -1)
-        for i in range(self.out_channels):
-            x[:, :, i] = avg
-
-        x = x[:, :, :self.out_channels]
+        x = self.embed(x)  # B L 2C
         x = x.view(B, H, W, self.out_channels)
+
+        # avg = torch.mean(x, -1)
+        # for i in range(self.out_channels):
+        #     x[:, :, i] = avg
+
+        # x = x[:, :, :self.out_channels]
+        # x = x.view(B, H, W, self.out_channels)
 
         return x
 
@@ -816,9 +821,12 @@ class SwinDecoder(nn.Module):
         self.out_indices = out_indices
         self.frozen_stages = frozen_stages
 
-        out_emb_dim = int(embed_dim / 2 ** (self.num_layers + 1))
+        out_emb_dim = int(embed_dim / 2 ** (self.num_layers))
+
+        self.final_patch_expand = PatchExpanding(dim=out_emb_dim)
+
         self.patch_unembed = PatchUnembed(
-            dim=out_emb_dim, out_channels=out_chans,
+            dim=out_emb_dim//2, out_channels=out_chans,
             norm_layer=norm_layer if self.patch_norm else None)
 
         # # absolute position embedding
@@ -954,9 +962,9 @@ class SwinDecoder(nn.Module):
                 outs.append(out)
 
         # one more patch expand then unembed
-        pe = PatchExpanding(dim=x.shape[-1])
-        x = pe(x, Wh, Ww)
+        x = self.final_patch_expand(x, Wh, Ww)
         x = self.patch_unembed(x, Wh*2, Ww*2)
+
         return x
 
     def train(self, mode=True):

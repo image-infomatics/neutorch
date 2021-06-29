@@ -22,7 +22,7 @@ class Dataset(torch.utils.data.Dataset):
                  lsd: bool,
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
-
+                 aug: bool = True,
                  ):
         """
         Parameters:
@@ -31,6 +31,7 @@ class Dataset(torch.utils.data.Dataset):
             lsd (bool): whether to use multiask lsd target
             patch_size (int or tuple): the patch size we are going to provide.
             batch_size (int): the number of batches in each batch
+            aug (bool): whether to use data augmentation
         """
 
         super().__init__()
@@ -40,7 +41,7 @@ class Dataset(torch.utils.data.Dataset):
 
         # keep track of total length and current index
         self.length = length
-
+        self.aug = aug
         self.batch_size = batch_size
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
@@ -190,7 +191,11 @@ class Dataset(torch.utils.data.Dataset):
         # compose transforms
         transforms = [rescale, transposeXY,
                       spacial, intensity, transposeXY, clip]
+
         self.transform = tio.Compose(transforms)
+
+        if not self.aug:
+            self.transform = tio.Compose([rescale, clip])
 
     def __getitem__(self, idx):
         patch = self.random_training_patch
