@@ -1087,7 +1087,7 @@ class SwinUNet3D(nn.Module):
         layer_residuals.reverse()
         for reiduals in layer_residuals:
             reiduals.reverse()
-            reiduals[-1] = None
+            # reiduals[-1] = None
 
         # decode
         x = self.decoder(x, layer_residuals=layer_residuals)
