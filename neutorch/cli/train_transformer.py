@@ -1,23 +1,24 @@
-import random
-import os
-from time import time
-from torch.nn.modules import loss
-from tqdm import tqdm
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data.distributed import DistributedSampler
 
-import click
-import numpy as np
-
-import sys
-import torch
-import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data.dataloader import DataLoader
-
-from neutorch.model.swin_transformer3D import SwinUNet3D
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
-from neutorch.model.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.affinity import Dataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
+from neutorch.dataset.affinity import Dataset
+from neutorch.model.loss import BinomialCrossEntropyWithLogits
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
+from neutorch.model.swin_transformer3D import SwinUNet3D
+from torch.utils.data.dataloader import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+import torch.nn as nn
+import torch
+import sys
+import numpy as np
+import click
+from tqdm import tqdm
+from time import time
+import os
+import random
 
 
 @click.command()
@@ -87,43 +88,61 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 @click.option('--aug',
               type=bool, default=True, help='whether to use data augmentation.'
               )
+@click.option('--ddp',
+              type=bool, default=True, help='whether to use distrubited data parallel vs normal data parallel.'
+              )
+def train_wrapper(*args, **kwargs):
+    if kwargs['ddp']:
+        world_size = torch.cuda.device_count()
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12355'
+        mp.spawn(train_parallel, nprocs=world_size, args=(world_size, kwargs,))
+    else:
+        train(**kwargs)
+
+
+def train_parallel(rank, world_size, kwargs):
+    dist.init_process_group("nccl", init_method='env://',
+                            rank=rank, world_size=world_size)
+
+    kwargs['world_size'] = world_size
+    kwargs['rank'] = rank
+    train(**kwargs)
+
+
 def train(path: str, seed: int, patch_size: str, batch_size: int,
           start_example: int,  num_examples: int, num_workers: int, output_dir: str,
           in_channels: int, out_channels: int, learning_rate: float,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
-          lsd: bool, load: str, verbose: bool, logstd: bool, aug: bool):
+          lsd: bool, load: str, verbose: bool, logstd: bool, aug: bool,
+          ddp: bool, rank: int = 0, world_size: int = 1):
 
-    # redirect stdout to logfile
-    if logstd:
-        old_stdout = sys.stdout
-        log_path = os.path.join(output_dir, 'message.log')
-        log_file = open(log_path, "w")
-        sys.stdout = log_file
-
+    # only print root process
     if verbose:
-        print("init...")
+        print(f"init process rank {rank}")
+    if rank != 0:
+        verbose = False
 
-    # make output folder if doesnt exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    # clear in case was stopped before
-    tqdm._instances.clear()
+    if rank == 0:
+        # make output folder if doesnt exist
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        # clear in case was stopped before
+        tqdm._instances.clear()
 
     # set up
-    patch_size = eval(patch_size)
     random.seed(seed)
+    t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
+    v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
+    patch_size = eval(patch_size)
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.0
     pbar = tqdm(total=num_examples)
     # total number of iterations for training
     total_itrs = num_examples // batch_size
     training_iters = 0  # number of iterations that happened since last training_interval
-
-    # init log writers
-    # m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/model'))
-    t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
-    v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
+    dataset = Dataset(path, patch_size=patch_size,
+                      length=num_examples, lsd=lsd, batch_size=batch_size, aug=aug)
 
     # compute automatically
     if out_channels == 0:
@@ -134,16 +153,25 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # init model
     model = SwinUNet3D(in_channels, out_channels)
-    # make parallel
-    model = nn.DataParallel(model)
-    # load chkpt
     if load != '':
         model = load_chkpt(model, load)
 
+    # handle GPU and parallelism
     pin_memory = False
+    sampler = None
     if torch.cuda.is_available():
-        model = model.cuda()
-        # fine tune convolutions, see: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html
+        # gpu with DistributedDataParallel
+        if ddp:
+            model = model.to(rank)
+            DistributedDataParallel(model, device_ids=[rank])
+            sampler = DistributedSampler(
+                dataset, world_size, rank, seed=seed)
+        # gpu with DataParallel
+        else:
+            model = model.cuda()
+            model = nn.DataParallel(model)
+
+        # any gpu use
         torch.backends.cudnn.benchmark = True
         pin_memory = True
 
@@ -151,11 +179,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     loss_module = BinomialCrossEntropyWithLogits()
     parameters = model.parameters()
     optimizer = torch.optim.Adam(parameters, lr=learning_rate)
-
-    dataset = Dataset(path, patch_size=patch_size,
-                      length=num_examples, lsd=lsd, batch_size=batch_size, aug=aug)
     dataloader = DataLoader(
-        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, drop_last=True)
+        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=True)
 
     if verbose:
         print("gpu: ", torch.cuda.is_available())
@@ -187,7 +212,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         optimizer.step()
 
         # record loss
-        cur_loss = loss.cpu().tolist()
+        cur_loss = loss.item()
         accumulated_loss += cur_loss
 
         # record progress
@@ -293,18 +318,16 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 print(f'aggo+metrics takes {round(time()-ping, 3)} seconds.')
 
         # save checkpoint
-        if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
+        if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1 and rank == 0:
             save_chkpt(model, output_dir, example_number, optimizer)
 
     # close all
-    t_writer.close()
-    v_writer.close()
-    # m_writer.close()
-    pbar.close()
-    if logstd:
-        sys.stdout = old_stdout
-        log_file.close()
+    if rank == 0:
+        t_writer.close()
+        v_writer.close()
+        # m_writer.close()
+        pbar.close()
 
 
 if __name__ == '__main__':
-    train()
+    train_wrapper()
