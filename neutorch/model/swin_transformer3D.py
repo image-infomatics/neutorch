@@ -1,3 +1,4 @@
+from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -502,7 +503,7 @@ class BasicLayer(nn.Module):
         for i, blk in enumerate(self.blocks):
 
             # add residual connections if given
-            if residuals is not None:
+            if residuals is not None and residuals[i] is not None:
                 x += residuals[i]
 
             x = blk(x, attn_mask)
@@ -1066,12 +1067,16 @@ class SwinUNet3D(nn.Module):
     Symmetric SwinU-Net3D
     """
 
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, in_channels: int, out_channels: int, depth: List = [2, 2, 2, 2]):
         super().__init__()
 
         self.encoder = SwinEncoder3D(
-            in_chans=in_channels, return_residuals=True)
-        self.decoder = SwinDecoder3D(out_chans=out_channels)
+            in_chans=in_channels, depths=depth, return_residuals=True)
+
+        # alter params for decoder
+        depth.reverse()
+
+        self.decoder = SwinDecoder3D(out_chans=out_channels, depths=depth)
 
     def forward(self, x):
 
@@ -1082,6 +1087,7 @@ class SwinUNet3D(nn.Module):
         layer_residuals.reverse()
         for reiduals in layer_residuals:
             reiduals.reverse()
+            reiduals[-1] = None
 
         # decode
         x = self.decoder(x, layer_residuals=layer_residuals)
