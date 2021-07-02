@@ -1112,7 +1112,7 @@ class SwinUNet3D(nn.Module):
                 for _ in range(depths[i]):
                     conns.append(res_conns)
                 new_res_conns.append(conns)
-        res_conns = new_res_conns
+            res_conns = new_res_conns
 
         assert len(res_conns) == len(depths)
         for i in range(len(depths)):
