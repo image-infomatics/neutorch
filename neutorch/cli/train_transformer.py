@@ -100,14 +100,11 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
     # unpack config
     num_examples = config.dataset.num_examples
     patch_size = config.dataset.patch_size
-    lsd = config.dataset.lsd
-    aug = config.dataset.aug
-
-    print(f"init process rank {rank+1}/{world_size}")
 
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
     cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
+    sync_every = 16  # after how many iters to sync gradients across gpus
 
     # auto set
     if num_workers == -1:
@@ -122,10 +119,6 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
     if rank != 0:
         verbose = False
 
-    if verbose:
-        print(
-            f"ddp: {ddp}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, workers/process: {num_workers}")
-
     if rank == 0:
         output_dir = f'./run_{config.name}'
         # make output folder if doesnt exist
@@ -136,7 +129,7 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
         f = open(f"{output_dir}/config.txt", "w")
         f.write(config.toString())
         f.write(
-            f'TRAINING\nseed: {seed}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, total_gpus: {gpus}, num_workers: {num_workers}\n')
+            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, total_gpus: {gpus}, num_workers: {num_workers}\n')
         f.close()
 
         # clear in case was stopped before
@@ -152,8 +145,8 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
     training_iters = 0  # number of iterations that happened since last training_interval
-    dataset = Dataset(path, patch_size=patch_size,
-                      length=num_examples, lsd=lsd, batch_size=batch_size, aug=aug)
+    dataset = Dataset(path, patch_size=patch_size, length=num_examples,
+                      lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug)
 
     # init model
     model = build_model_from_config(config.model)
@@ -186,7 +179,6 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
     # init optimizer, lr_scheduler, loss, dataloader, scaler
     params = model.parameters()
     optimizer = build_optimizer_from_config(config.optimizer, params)
-
     dataloader = DataLoader(
         dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=True)
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -197,7 +189,6 @@ def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
             f'total_itrs: {total_itrs}')
         print("starting...")
 
-    sync_every = 32
     for step, batch in enumerate(dataloader):
 
         # determien when to sync gradients in ddp
