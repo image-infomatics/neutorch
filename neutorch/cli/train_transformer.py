@@ -67,10 +67,6 @@ import random
               type=bool, default=True, help='whether to use distrubited data parallel vs normal data parallel.'
               )
 def train_wrapper(*args, **kwargs):
-    config_name = kwargs['config']
-    config = get_config(config_name)
-    kwargs['config'] = config
-
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
         os.environ['MASTER_ADDR'] = 'localhost'
@@ -91,11 +87,14 @@ def train_parallel(rank, world_size, kwargs):
     train(**kwargs)
 
 
-def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
+def train(config: str, path: str, seed: int, batch_size: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool,
           use_amp: bool, ddp: bool, rank: int = 0, world_size: int = 1):
+
+    # get config
+    config = get_config(config)
 
     # unpack config
     num_examples = config.dataset.num_examples
