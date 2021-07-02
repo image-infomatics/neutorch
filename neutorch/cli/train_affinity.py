@@ -181,7 +181,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
         optimizer.step()
 
         # record loss
-        cur_loss = loss.cpu().tolist()
+        cur_loss = loss.item()
         accumulated_loss += cur_loss
 
         # record progress
@@ -241,7 +241,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 validation_loss = loss_module(
                     validation_logits, validation_target)
 
-                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                per_voxel_loss = loss.item() / patch_voxel_num
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
@@ -258,26 +258,27 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                            'adapted_rand': 0, 'cremi_score': 0}
 
                 # only compute over first in batch for time saving
-                i = 0
-                # get true segmentation and affinity map
-                segmentation_truth = np.squeeze(batch.labels[i])
-                affinity = validation_predict[i][0:3].cpu().numpy()
+                cremi_batch = min(2, batch_size)
+                for i in range(cremi_batch):
+                    # get true segmentation and affinity map
+                    segmentation_truth = np.squeeze(batch.labels[i])
+                    affinity = validation_predict[i][0:3].cpu().numpy()
 
-                # get predicted segmentation from affinity map
-                segmentation_pred = do_agglomeration(affinity)
+                    # get predicted segmentation from affinity map
+                    segmentation_pred = do_agglomeration(affinity)
 
-                # get the CREMI metrics from true segmentation vs predicted segmentation
-                metric = cremi_metrics(
-                    segmentation_pred, segmentation_truth)
-                for m in metric.keys():
-                    metrics[m] += metric[m]/batch_size
+                    # get the CREMI metrics from true segmentation vs predicted segmentation
+                    metric = cremi_metrics(
+                        segmentation_pred, segmentation_truth)
+                    for m in metric.keys():
+                        metrics[m] += metric[m] / cremi_batch
 
-                # log the picture for first in batch
-                if i == 0:
-                    log_segmentation(v_writer, 'validation/seg_true',
-                                     segmentation_truth, example_number)
-                    log_segmentation(v_writer, 'validation/seg_pred',
-                                     segmentation_pred, example_number)
+                    # log the picture for first in batch
+                    if i == 0:
+                        log_segmentation(v_writer, 'validation/seg_true',
+                                         segmentation_truth, example_number)
+                        log_segmentation(v_writer, 'validation/seg_pred',
+                                         segmentation_pred, example_number)
 
                 # log metrics
                 for k, v in metrics.items():
