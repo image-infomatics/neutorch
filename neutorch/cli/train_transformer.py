@@ -108,7 +108,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     gpus = torch.cuda.device_count()
     cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
 
-    print(num_workers, cpus, world_size)
     # auto set
     if num_workers == -1:
         if ddp:
@@ -117,7 +116,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             num_workers = 1
         else:
             num_workers = cpus
-    print(num_workers)
 
     # only print root process
     if rank != 0:
