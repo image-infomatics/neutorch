@@ -1065,29 +1065,89 @@ class SwinDecoder3D(nn.Module):
 class SwinUNet3D(nn.Module):
     """
     Symmetric SwinU-Net3D
+    Args:
+        patch_size (int | tuple(int)): Patch size. Default: (2,4,4).
+        in_chans (int): Number of input image channels. Default: 3.
+        embed_dim (int): Number of linear projection output channels. Default: 96.
+        depths (tuple[int]): Depths of each Swin Transformer stage.
+        res_conns (List(List(bool))): whether to have a residual connection between Encoder and Decoder at specified stage/depth
+        num_heads (tuple[int]): Number of attention head of each stage.
+        window_size (int): Window size. Default: 7.
+        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4.
+        qkv_bias (bool): If True, add a learnable bias to query, key, value. Default: Truee
+        qk_scale (float): Override default qk scale of head_dim ** -0.5 if set.
+        drop_rate (float): Dropout rate.
+        attn_drop_rate (float): Attention dropout rate. Default: 0.
+        drop_path_rate (float): Stochastic depth rate. Default: 0.2.
+        norm_layer: Normalization layer. Default: nn.LayerNorm.
+        patch_norm (bool): If True, add normalization after patch embedding. Default: False.
+        frozen_stages (int): Stages to be frozen (stop grad and set eval mode).
+            -1 means not freezing any parameters.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, depth: List = [2, 2, 2, 2]):
+    def __init__(self, in_channels=1, out_channels=3,
+                 patch_size=(2, 4, 4),
+                 embed_dim=96,
+                 depths=[2, 8, 2, 2],
+                 res_conns=[[True, True], [True, True, True, True, True, True, True, True],
+                            [True, True], [True, True]],
+                 num_heads=[3, 6, 12, 24],
+                 window_size=(2, 7, 7),
+                 mlp_ratio=4.,
+                 qkv_bias=True,
+                 qk_scale=None,
+                 drop_rate=0.,
+                 attn_drop_rate=0.,
+                 drop_path_rate=0.2,
+                 norm_layer=nn.LayerNorm,
+                 patch_norm=False,
+                 frozen_stages=-1,
+                 use_checkpoint=False,):
         super().__init__()
 
+        assert len(res_conns) == len(depths)
+        for i in range(len(depths)):
+            assert len(res_conns[i]) == depths[i]
+
+        self.res_conns = res_conns
         self.encoder = SwinEncoder3D(
-            in_chans=in_channels, depths=depth, return_residuals=True)
+            in_chans=in_channels,
+            embed_dim=embed_dim, patch_size=patch_size, depths=depths, num_heads=num_heads, window_size=window_size,
+            mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+            drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate,
+            norm_layer=norm_layer, patch_norm=patch_norm,
+            use_checkpoint=use_checkpoint, frozen_stages=frozen_stages, return_residuals=True)
 
         # alter params for decoder
-        depth.reverse()
+        depths.reverse()
+        num_heads.reverse()
+        embed_dim = embed_dim*(2 ** (len(depths)-1))
 
-        self.decoder = SwinDecoder3D(out_chans=out_channels, depths=depth)
+        self.decoder = SwinDecoder3D(
+            out_chans=out_channels,
+            embed_dim=embed_dim,  patch_size=patch_size, depths=depths, num_heads=num_heads, window_size=window_size,
+            mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+            drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate,
+            norm_layer=norm_layer, patch_norm=patch_norm,
+            use_checkpoint=use_checkpoint, frozen_stages=frozen_stages,)
 
     def forward(self, x):
 
         # encode
         x, layer_residuals = self.encoder(x)
 
+        # mask residuals according to self.res_conns
+        for i in range(len(layer_residuals)):
+            residuals = layer_residuals[i]
+            connection = self.res_conns[i]
+            for i in range(len(residuals)):
+                if not connection[i]:
+                    residuals[i] = None
+
         # flip residuals order for decoder
         layer_residuals.reverse()
-        for reiduals in layer_residuals:
-            reiduals.reverse()
-            # reiduals[-1] = None
+        for residuals in layer_residuals:
+            residuals.reverse()
 
         # decode
         x = self.decoder(x, layer_residuals=layer_residuals)

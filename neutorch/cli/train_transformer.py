@@ -5,9 +5,8 @@ from torch.utils.data.distributed import DistributedSampler
 
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 from neutorch.dataset.affinity import Dataset
-from neutorch.model.loss import BinomialCrossEntropyWithLogits
+from neutorch.model.config import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
-from neutorch.model.swin_transformer3D import SwinUNet3D
 from torch.utils.data.dataloader import DataLoader
 import torch.cuda.amp as amp
 from torch.utils.tensorboard import SummaryWriter
@@ -30,13 +29,13 @@ import random
               type=int, default=7,
               help='for reproducibility'
               )
-@click.option('--patch-size', '-p',
-              type=str, default='(6, 64, 64)',
-              help='patch size from volume.'
+@click.option('--config',
+              type=str,
+              help='name of the configuration defined in the config list'
               )
 @click.option('--batch-size', '-b',
-              type=int, default=1,
-              help='size of mini-batch, generally can be 1 be should be equal to num_gpu if you want take advatnage of parallel training.'
+              type=int, default=2,
+              help='size of mini-batch.'
               )
 @click.option('--start_example', '-s',
               type=int, default=0,
@@ -45,24 +44,6 @@ import random
 @click.option('--num_workers', '-w',
               type=int, default=-1,
               help='num workers for pytorch dataloader. -1 means automatically set.'
-              )
-@click.option('--num_examples', '-e',
-              type=int, default=500000,
-              help='how many training examples the network will see before completion.'
-              )
-@click.option('--output-dir', '-o',
-              type=click.Path(),
-              required=True,
-              default='./output',
-              help='the directory to save all the outputs, such as checkpoints.'
-              )
-@click.option('--in-channels', '-c',
-              type=int, default=1, help='channel number of input tensor.'
-              )
-@click.option('--out-channels', '-n',
-              type=int, default=0, help='channel number of output tensor. 0 means automatically computed.')
-@click.option('--learning-rate', '-l',
-              type=float, default=0.0005, help='the learning rate.'
               )
 @click.option('--training-interval', '-t',
               type=int, default=200, help='training interval in terms of examples seen to record data points.'
@@ -73,17 +54,11 @@ import random
 @click.option('--checkpoint-interval', '-ch',
               type=int, default=50000, help='interval when to log checkpoints.'
               )
-@click.option('--lsd',
-              type=bool, default=False, help='whether to train with mutlitask lsd'
-              )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
 @click.option('--verbose',
               type=bool, default=False, help='whether to print messages.'
-              )
-@click.option('--aug',
-              type=bool, default=True, help='whether to use data augmentation.'
               )
 @click.option('--use-amp',
               type=bool, default=True, help='whether to use distrubited automatic mixed percision.'
@@ -92,6 +67,10 @@ import random
               type=bool, default=True, help='whether to use distrubited data parallel vs normal data parallel.'
               )
 def train_wrapper(*args, **kwargs):
+    config_name = kwargs['config']
+    config = get_config(config_name)
+    kwargs['config'] = config
+
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
         os.environ['MASTER_ADDR'] = 'localhost'
@@ -112,12 +91,17 @@ def train_parallel(rank, world_size, kwargs):
     train(**kwargs)
 
 
-def train(path: str, seed: int, patch_size: str, batch_size: int,
-          start_example: int,  num_examples: int, num_workers: int, output_dir: str,
-          in_channels: int, out_channels: int, learning_rate: float,
+def train(config: TransformerConfig, path: str, seed: int, batch_size: int,
+          start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
-          lsd: bool, load: str, verbose: bool, aug: bool,
+          load: str, verbose: bool,
           use_amp: bool, ddp: bool, rank: int = 0, world_size: int = 1):
+
+    # unpack config
+    num_examples = config.dataset.num_examples
+    patch_size = config.dataset.patch_size
+    lsd = config.dataset.lsd
+    aug = config.dataset.aug
 
     print(f"init process rank {rank+1}/{world_size}")
 
@@ -129,6 +113,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     if num_workers == -1:
         if ddp:
             num_workers = cpus//world_size
+        if not use_gpu:
+            num_workers = 1
         else:
             num_workers = cpus
 
@@ -141,9 +127,18 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             f"ddp: {ddp}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, workers/process: {num_workers}")
 
     if rank == 0:
+        output_dir = f'./run_{config.name}'
         # make output folder if doesnt exist
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+
+        # write config
+        f = open(f"{output_dir}/config.txt", "w")
+        f.write(config.toString())
+        f.write(
+            f'TRAINING\nseed: {seed}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, total_gpus: {gpus}, num_workers: {num_workers}\n')
+        f.close()
+
         # clear in case was stopped before
         tqdm._instances.clear()
         t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
@@ -153,7 +148,6 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # set up
     random.seed(seed)
-    patch_size = eval(patch_size)
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
@@ -161,16 +155,9 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
     dataset = Dataset(path, patch_size=patch_size,
                       length=num_examples, lsd=lsd, batch_size=batch_size, aug=aug)
 
-    # compute automatically
-    if out_channels == 0:
-        if lsd:
-            out_channels = 13
-        else:
-            out_channels = 3
-
     # init model
-    model = SwinUNet3D(in_channels, out_channels)
-    loss_module = BinomialCrossEntropyWithLogits()
+    model = build_model_from_config(config.model)
+    loss_module = build_loss_from_config(config.loss)
     if load != '':
         model = load_chkpt(model, load)
 
@@ -198,8 +185,8 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
 
     # init optimizer, lr_scheduler, loss, dataloader, scaler
     params = model.parameters()
-    optimizer = torch.optim.AdamW(
-        params, lr=learning_rate, betas=(0.9, 0.999), weight_decay=0.05)
+    optimizer = build_optimizer_from_config(config.optimizer, params)
+
     dataloader = DataLoader(
         dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=True)
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -251,10 +238,10 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
             pbar.update(batch_size * world_size)
 
         # the previous number of examples the network has seen
-        prev_example_number = ((step) * batch_size)+start_example
+        prev_example_number = ((step) * batch_size*world_size)+start_example
 
         # the current number of examples the network has seen
-        example_number = ((step+1) * batch_size)+start_example
+        example_number = ((step+1) * batch_size*world_size)+start_example
 
         # number of iterations that happened since last training_interval
         training_iters += 1
@@ -304,7 +291,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                     validation_loss = loss_module(
                         validation_logits, validation_target)
 
-                    per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                    per_voxel_loss = validation_loss.item() / patch_voxel_num
 
                     # log values
                     v_writer.add_scalar(
@@ -334,7 +321,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                     metric = cremi_metrics(
                         segmentation_pred, segmentation_truth)
                     for m in metric.keys():
-                        metrics[m] += metric[m]/batch_size
+                        metrics[m] += metric[m]
 
                     # log the picture for first in batch
                     if i == 0:
