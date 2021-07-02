@@ -241,7 +241,7 @@ def train(path: str, seed: int, patch_size: str, batch_size: int,
                 validation_loss = loss_module(
                     validation_logits, validation_target)
 
-                per_voxel_loss = loss.item() / patch_voxel_num
+                per_voxel_loss = validation_loss.item() / patch_voxel_num
 
                 # log values
                 v_writer.add_scalar('Loss', per_voxel_loss, example_number)
