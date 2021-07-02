@@ -21,8 +21,7 @@ class TransformerConfig(object):
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
                  depths=[2, 8, 2, 2],
-                 res_conns=[[True, True], [True, True, True, True, True, True, True, True],
-                            [True, True], [True, True]],
+                 res_conns=True,
                  num_heads=[3, 6, 12, 24],
                  window_size=(2, 7, 7),
                  #### Optimizer ####
@@ -108,14 +107,12 @@ def get_config(name):
     raise ValueError(f'config {name} not found.')
 
 
-res_c1 = TransformerConfig('res_full', res_conns=[[True, True], [True, True, True, True, True, True, True, True],
-                                                  [True, True], [True, True]])
-res_c2 = TransformerConfig('res_partial', res_conns=[[False, True], [False, False, False, False, True, True, True, True],
-                                                     [False, True], [False, True]])
-res_c3 = TransformerConfig('res_deep', res_conns=[[False, False], [False, False, False, False, False, False, True, True],
-                                                  [True, True], [True, True]])
-res_c4 = TransformerConfig('res_none', res_conns=[[False, False], [False, False, False, False, False, False, False, False],
-                                                  [False, False], [False, False]])
+res_c1 = TransformerConfig('res_full', res_conns=True)
+res_c2 = TransformerConfig('res_partial', res_conns=[False, True, False, False, False, False, True, True, True, True,
+                                                     False, True, False, True])
+res_c3 = TransformerConfig('res_deep', res_conns=[False, False, False, False, False, False, False, False, True, True,
+                                                  True, True, True, True])
+res_c4 = TransformerConfig('res_none', res_conns=False)
 
 
 CONFIGS = [res_c1, res_c2, res_c3, res_c4]

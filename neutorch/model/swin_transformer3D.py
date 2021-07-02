@@ -1089,8 +1089,7 @@ class SwinUNet3D(nn.Module):
                  patch_size=(2, 4, 4),
                  embed_dim=96,
                  depths=[2, 8, 2, 2],
-                 res_conns=[[True, True], [True, True, True, True, True, True, True, True],
-                            [True, True], [True, True]],
+                 res_conns=True,
                  num_heads=[3, 6, 12, 24],
                  window_size=(2, 7, 7),
                  mlp_ratio=4.,
@@ -1104,6 +1103,16 @@ class SwinUNet3D(nn.Module):
                  frozen_stages=-1,
                  use_checkpoint=False,):
         super().__init__()
+
+        # constrcut res_conn if just bool
+        if type(res_conns) == bool:
+            new_res_conns = []
+            for i in range(len(depths)):
+                conns = []
+                for _ in range(depths[i]):
+                    conns.append(res_conns)
+                new_res_conns.append(conns)
+        res_conns = new_res_conns
 
         assert len(res_conns) == len(depths)
         for i in range(len(depths)):
