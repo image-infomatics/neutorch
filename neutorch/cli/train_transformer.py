@@ -103,7 +103,7 @@ def train(config: str, path: str, seed: int, batch_size: int,
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
     cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
-    sync_every = 16  # after how many iters to sync gradients across gpus
+    sync_every = 32  # after how many iters to sync gradients across gpus
 
     # auto set
     if num_workers == -1:
