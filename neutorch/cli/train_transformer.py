@@ -37,6 +37,10 @@ import random
               type=int, default=2,
               help='size of mini-batch.'
               )
+@click.option('--sync-every', '-y',
+              type=int, default=32,
+              help='after how many iters to sync gradients across gpus'
+              )
 @click.option('--start_example', '-s',
               type=int, default=0,
               help='which example we are starting from if loading from checkpoint, does not affect num_examples.'
@@ -87,7 +91,7 @@ def train_parallel(rank, world_size, kwargs):
     train(**kwargs)
 
 
-def train(config: str, path: str, seed: int, batch_size: int,
+def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int,
           load: str, verbose: bool,
@@ -103,7 +107,6 @@ def train(config: str, path: str, seed: int, batch_size: int,
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
     cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
-    sync_every = 32  # after how many iters to sync gradients across gpus
 
     # auto set
     if num_workers == -1:
