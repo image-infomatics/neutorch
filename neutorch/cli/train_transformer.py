@@ -113,7 +113,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     if num_workers == -1:
         if ddp:
             num_workers = cpus//world_size
-        if not use_gpu:
+        elif not use_gpu:
             num_workers = 1
         else:
             num_workers = cpus
