@@ -21,6 +21,10 @@ import random
 
 
 @click.command()
+@click.option('--config',
+              type=str,
+              help='name of the configuration defined in the config list'
+              )
 @click.option('--path',
               type=str, default='./data',
               help='path to the training data'
@@ -28,10 +32,6 @@ import random
 @click.option('--seed',
               type=int, default=7,
               help='for reproducibility'
-              )
-@click.option('--config',
-              type=str,
-              help='name of the configuration defined in the config list'
               )
 @click.option('--batch-size', '-b',
               type=int, default=2,
@@ -108,6 +108,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     gpus = torch.cuda.device_count()
     cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
 
+    print(num_workers)
     # auto set
     if num_workers == -1:
         if ddp:
@@ -116,6 +117,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             num_workers = 1
         else:
             num_workers = cpus
+    print(num_workers)
 
     # only print root process
     if rank != 0:
@@ -131,7 +133,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         f = open(f"{output_dir}/config.txt", "w")
         f.write(config.toString())
         f.write(
-            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, total_gpus: {gpus}, num_workers: {num_workers}\n')
+            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, world_size:{world_size}, num_workers: {num_workers}\n')
         f.close()
 
         # clear in case was stopped before
