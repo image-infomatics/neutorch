@@ -245,6 +245,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
         # all io and validation done root process
         if rank == 0:
+
             # log for training
             if example_number // training_interval > prev_example_number // training_interval:
 
@@ -346,6 +347,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                                      run_name=f'{config.name}_{example_number}')
                 v_writer.add_scalar(
                     f'cremi_metrics/cremi_score_full', v, metrics['cremi_score'])
+
+    dist.barrier()
 
     if rank == 0:
         t_writer.close()
