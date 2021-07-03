@@ -107,6 +107,8 @@ def get_config(name):
     raise ValueError(f'config {name} not found.')
 
 
+d = TransformerConfig('default')
+
 # d1 = TransformerConfig('deeper', depths=[2, 2, 18, 2])
 # d2 = TransformerConfig('wider', depths=[4, 4, 4, 4])
 # d3 = TransformerConfig(
@@ -116,4 +118,4 @@ def get_config(name):
 d1 = TransformerConfig('bigger_window', swin_patch_size=(
     2, 4, 4), window_size=(3, 10, 10), embed_dim=96,)
 
-CONFIGS = [d1]
+CONFIGS = [d, d1]

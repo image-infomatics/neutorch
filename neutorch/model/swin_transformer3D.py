@@ -360,27 +360,31 @@ class PatchExpanding(nn.Module):
         if pad_input:
             x = F.pad(x, (0, 0, 0, W % 2, 0, H % 2))
 
-        c = 2*C//4
-        # get mutliple pixel repesentation from channels
-        c0 = x[:, :, :, :, :c]       # B D H W 2C/4
-        c1 = x[:, :, :, :, c:2*c]    # B D H W 2C/4
-        c2 = x[:, :, :, :, 2*c:3*c]  # B D H W 2C/4
-        c3 = x[:, :, :, :, 3*c:]     # B D H W 2C/4
+        x = rearrange(x, 'b d h w (vx vy c)-> b d (h vx) (w vy) c',
+                      vx=2, vy=2, c=max(2*C//4, 1))
 
-        # insert side by side into new array
-        # maybe there is better way to do this that doesnt init new array
-        device = x.get_device()
-        if device < 0:
-            device = None
-        new_x = torch.zeros(
-            (B, D, H*2, W*2, c), device=device)  # B 2H 2W C/2
+        return x
 
-        new_x[:, :, 0::2, 0::2, :] = c0
-        new_x[:, :, 1::2, 0::2, :] = c1
-        new_x[:, :, 0::2, 1::2, :] = c2
-        new_x[:, :, 1::2, 1::2, :] = c3
+        # # get mutliple pixel repesentation from channels
+        # c0 = x[:, :, :, :, :c]       # B D H W 2C/4
+        # c1 = x[:, :, :, :, c:2*c]    # B D H W 2C/4
+        # c2 = x[:, :, :, :, 2*c:3*c]  # B D H W 2C/4
+        # c3 = x[:, :, :, :, 3*c:]     # B D H W 2C/4
 
-        return new_x
+        # # insert side by side into new array
+        # # maybe there is better way to do this that doesnt init new array
+        # device = x.get_device()
+        # if device < 0:
+        #     device = None
+        # new_x = torch.zeros(
+        #     (B, D, H*2, W*2, c), device=device)  # B 2H 2W C/2
+
+        # new_x[:, :, 0::2, 0::2, :] = c0
+        # new_x[:, :, 1::2, 0::2, :] = c1
+        # new_x[:, :, 0::2, 1::2, :] = c2
+        # new_x[:, :, 1::2, 1::2, :] = c3
+
+        # return new_x
 
 
 # cache each stage results
