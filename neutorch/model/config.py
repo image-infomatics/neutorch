@@ -114,10 +114,6 @@ def get_config(name):
 
 
 d1 = TransformerConfig('bigger_window', swin_patch_size=(
-    2, 4, 4), window_size=(4, 14, 14), embed_dim=96,)
-d2 = TransformerConfig('bigger_window_patch', swin_patch_size=(
-    3, 6, 6), window_size=(4, 14, 14), embed_dim=96,)
-d3 = TransformerConfig('bigger_window_bigger_embd',  swin_patch_size=(
-    2, 4, 4), window_size=(4, 14, 14), embed_dim=196,)
+    2, 4, 4), window_size=(3, 10, 10), embed_dim=96,)
 
-CONFIGS = [d1, d2, d3]
+CONFIGS = [d1]
