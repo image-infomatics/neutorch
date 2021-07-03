@@ -108,16 +108,12 @@ def get_config(name):
 
 
 c0 = TransformerConfig('default')
-
-# d1 = TransformerConfig('deeper', depths=[2, 2, 18, 2])
-# d2 = TransformerConfig('wider', depths=[4, 4, 4, 4])
-# d3 = TransformerConfig(
-#     'bottle', depths=[2, 8, 2, 2, 1], num_heads=[3, 6, 12, 24, 48],)
+c1 = TransformerConfig('res_full', depths=[2, 8, 2, 2])
 
 
-c1 = TransformerConfig('bigger_window', swin_patch_size=(
+c2 = TransformerConfig('bigger_window', swin_patch_size=(
     2, 4, 4), window_size=(3, 10, 10), embed_dim=96,)
 
-c2 = TransformerConfig('swin_c', depths=[2, 2, 18, 2], embed_dim=192,)
+c3 = TransformerConfig('swin_c', depths=[2, 2, 18, 2], embed_dim=192,)
 
-CONFIGS = [c0, c1, c2]
+CONFIGS = [c0, c1, c2, c3]
