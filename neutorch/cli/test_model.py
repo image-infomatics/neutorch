@@ -25,7 +25,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               )
 @click.option('--load', type=str, default='', help='load from checkpoint, path to ckpt file or chkpt number.'
               )
-@click.option('--parallel',  type=str, default='ddp', help='used to wrap model in necessary parallism module.'
+@click.option('--parallel',  type=str, default='dp', help='used to wrap model in necessary parallism module.'
               )
 @click.option('--agglomerate',
               type=bool, default=True, help='whether to run agglomerations as well'
@@ -40,7 +40,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=bool, default=False, help='whether to save the segmentation file'
               )
 @click.option('--threshold',
-              type=int, default=0.7, help='threshold to use for agglomeration step.'
+              type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
 def test(path: str, config: str, patch_size: str, load: str, parallel: str,
          agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool, threshold: int):
@@ -54,9 +54,6 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
 
     if parallel == 'dp':
         model = torch.nn.DataParallel(model)
-    if parallel == 'ddp':
-        model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[0], find_unused_parameters=True)
 
     output_dir = f'./run_{config.name}/tests'
 
@@ -76,7 +73,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
                with_label=with_label, save_aff=save_aff, save_seg=save_seg, path=path, threshold=threshold)
 
 
-def test_model(model, patch_size, output_dir: str,
+def test_model(model, patch_size, output_dir: str, run_name: str = '',
                agglomerate: bool = True, threshold: float = 0.7, with_label: bool = True, save_aff: bool = False, save_seg: bool = False, path: str = './data/sample_A_pad.hdf',):
 
     if not os.path.exists(output_dir):
@@ -131,12 +128,15 @@ def test_model(model, patch_size, output_dir: str,
             for k, v in metrics.items():
                 print(f'{k}:{round(v,5)}')
 
-            f = open(f"{output_dir}/metrics.txt", "w")
-            f.write(f'threshold: {threshold} data: {path}\n')
+            f = open(f"{output_dir}/metrics.txt", "a")
+            f.write(f'run: {run_name} threshold: {threshold} data: {path}\n')
             f.write(f'===================================\n')
             for k, v in metrics.items():
                 f.write(f'{k}:{round(v,5)}\n')
+            f.write(f'-----------------------------------\n')
             f.close()
+
+            return metrics
 
 
 if __name__ == '__main__':
