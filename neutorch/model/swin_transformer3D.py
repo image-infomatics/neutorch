@@ -573,7 +573,7 @@ class PatchEmbed3D(nn.Module):
         return x
 
 
-class PatchUnembed3D(nn.Module):
+class PatchUnembedConv3D(nn.Module):
     """ Embedding to 3D Vol
 
     Args:
@@ -918,7 +918,7 @@ class SwinDecoder3D(nn.Module):
         self.norm = norm_layer(self.out_features)
 
         # finally project back into output space
-        self.patch_unembed = PatchUnembed3D(
+        self.patch_unembed = PatchUnembedConv3D(
             self.out_features,  out_chans, patch_size=patch_size)
 
         self._freeze_stages()
