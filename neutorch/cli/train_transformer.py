@@ -342,7 +342,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
             # run test
             if example_number // test_interval > prev_example_number // test_interval or step == total_itrs-1:
-                metrics = test_model(model, patch_size,
+                metrics = test_model(model, patch_size, f'{output_dir}/tests',
                                      run_name=f'{config.name}_{example_number}')
                 v_writer.add_scalar(
                     f'cremi_metrics/cremi_score_full', v, metrics['cremi_score'])
