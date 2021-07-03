@@ -145,12 +145,6 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]
 
-    # def log_channels(channels, subtag):
-    #     imgs = [torch.squeeze(tensor[..., slice(channels[0], channels[1]), z, :, :], axis=0)
-    #             for z in range(depth_index)]
-    #     img = make_grid(imgs, padding=0, nrow=nrow)
-    #     writer.add_image(f'{tag}_{subtag}_{channels}', img, iter_idx)
-
     # log affinity map, channels [0,3)
     a_maps = torch.reshape(slice[0:3, :, :], (3, 1, w, h))
     grid = make_grid(a_maps, padding=0, nrow=2)

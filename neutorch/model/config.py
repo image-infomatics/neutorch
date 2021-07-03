@@ -116,4 +116,6 @@ c2 = TransformerConfig('bigger_window', swin_patch_size=(
 
 c3 = TransformerConfig('swin_c', depths=[2, 2, 18, 2], embed_dim=192,)
 
-CONFIGS = [c0, c1, c2, c3]
+c4 = TransformerConfig('lsd', lsd=True, out_channels=13)
+
+CONFIGS = [c0, c1, c2, c3, c4]
