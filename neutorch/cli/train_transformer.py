@@ -8,7 +8,7 @@ from neutorch.dataset.affinity import Dataset
 from neutorch.model.config import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
 from torch.utils.data.dataloader import DataLoader
-from .test_model import test_model
+from neutorch.cli.test_model import test_model
 import torch.cuda.amp as amp
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
