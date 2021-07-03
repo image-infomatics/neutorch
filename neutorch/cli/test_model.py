@@ -43,7 +43,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
 def test(path: str, config: str, patch_size: str, load: str, parallel: str,
-         agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool, threshold: int):
+         agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool, threshold: float):
 
     # convert
     patch_size = eval(patch_size)
