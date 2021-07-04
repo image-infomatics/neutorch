@@ -339,9 +339,9 @@ class PatchExpanding(nn.Module):
 
     def __init__(self, dim, norm_layer=nn.LayerNorm):
         super().__init__()
-        self.dim = dim
-        self.norm = norm_layer(dim)
+
         self.expansion = nn.Linear(dim, 2 * dim, bias=False)
+        self.norm = norm_layer(dim//2)
 
     def forward(self, x):
         """ Forward function.
@@ -352,7 +352,6 @@ class PatchExpanding(nn.Module):
         """
         B, D, H, W, C = x.shape
 
-        x = self.norm(x)
         x = self.expansion(x)  # B D H W 2C
 
         # padding
@@ -380,7 +379,33 @@ class PatchExpanding(nn.Module):
         new_x[:, :, 0::2, 1::2, :] = c2
         new_x[:, :, 1::2, 1::2, :] = c3
 
+        new_x = self.norm(new_x)
+
         return new_x
+
+
+class Expanding3DConv(nn.Module):
+    """ Patch Expanding with 3DTransposeConv
+
+    Args:
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super().__init__()
+
+        # how to do patch size ?
+        self.proj = nn.ConvTranspose3d(
+            dim, dim//2, kernel_size=(1, 2, 2), stride=(1, 2, 2), padding=0)
+        self.norm = norm_layer(dim//2)
+
+    def forward(self, x):
+
+        x = self.proj(x)  # B C D Wh Ww
+        x = self.norm(x)
+
+        return x
 
 
 # cache each stage results
@@ -907,7 +932,7 @@ class SwinDecoder3D(nn.Module):
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                 norm_layer=norm_layer,
-                upsample=PatchExpanding if i_layer > 0 else None,
+                upsample=Expanding3DConv if i_layer > 0 else None,
                 use_checkpoint=use_checkpoint)
             self.layers.append(layer)
 
