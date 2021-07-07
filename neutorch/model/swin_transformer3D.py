@@ -1,4 +1,4 @@
-from typing import List
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -408,6 +408,44 @@ class Expanding3DConv(nn.Module):
         x = self.norm(x)
 
         return x
+
+
+class ExpandingBilinear(nn.Module):
+    """ Patch Expanding with BilinearUpsample
+    Caffe style bilinear upsampling.
+    Currently everything's hardcoded and only supports upsampling factor of 2.
+    Args:
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super(ExpandingBilinear, self).__init__()
+        self.groups = dim
+        self.init_weights()
+        self.norm = norm_layer(dim//2)
+        self.reduction = nn.Linear(dim, dim//2, bias=False)
+
+    def forward(self, x):
+        x = F.conv_transpose3d(x, self.weight,
+                               stride=(1, 2, 2), padding=(0, 1, 1), groups=self.groups
+                               )
+        x = self.reduction(x)
+        x = self.norm(x)
+
+        return x
+
+    def init_weights(self):
+        weight = torch.Tensor(self.groups, 1, 1, 4, 4)
+        width = weight.size(-1)
+        hight = weight.size(-2)
+        assert width == hight
+        f = float(math.ceil(width / 2.0))
+        c = float(width - 1) / (2.0 * f)
+        for w in range(width):
+            for h in range(hight):
+                weight[..., h, w] = (1 - abs(w/f - c)) * (1 - abs(h/f - c))
+        self.register_buffer('weight', weight)
 
 
 # cache each stage results
@@ -878,6 +916,7 @@ class SwinDecoder3D(nn.Module):
         attn_drop_rate (float): Attention dropout rate. Default: 0.
         drop_path_rate (float): Stochastic depth rate. Default: 0.2.
         norm_layer: Normalization layer. Default: nn.LayerNorm.
+        upsampler: (str): which upsample method, "patch", "conv", "bilinear". Default: "patch"
         patch_norm (bool): If True, add normalization after patch embedding. Default: False.
         frozen_stages (int): Stages to be frozen (stop grad and set eval mode).
             -1 means not freezing any parameters.
@@ -900,6 +939,7 @@ class SwinDecoder3D(nn.Module):
                  drop_path_rate=0.2,
                  norm_layer=nn.LayerNorm,
                  patch_norm=False,
+                 upsampler="patch",
                  frozen_stages=-1,
                  use_checkpoint=False):
         super().__init__()
@@ -919,6 +959,17 @@ class SwinDecoder3D(nn.Module):
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate,
                                                 sum(depths))]  # stochastic depth decay rule
 
+        upsample = None
+        if upsampler == "patch":
+            upsample = PatchExpanding
+        elif upsampler == "conv":
+            upsample = Expanding3DConv
+        elif upsampler == "bilinear":
+            upsample = ExpandingBilinear
+        else:
+            print(f'upsampler {upsampler} not supported. aborting.')
+            return
+
         # build layers
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
@@ -934,7 +985,7 @@ class SwinDecoder3D(nn.Module):
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                 norm_layer=norm_layer,
-                upsample=Expanding3DConv if i_layer > 0 else None,
+                upsample=upsample if i_layer > 0 else None,
                 use_checkpoint=use_checkpoint)
             self.layers.append(layer)
 
@@ -1107,6 +1158,7 @@ class SwinUNet3D(nn.Module):
         attn_drop_rate (float): Attention dropout rate. Default: 0.
         drop_path_rate (float): Stochastic depth rate. Default: 0.2.
         norm_layer: Normalization layer. Default: nn.LayerNorm.
+        upsampler: (str): which upsample method, "patch", "conv", "bilinear". Default: "patch"
         patch_norm (bool): If True, add normalization after patch embedding. Default: False.
         frozen_stages (int): Stages to be frozen (stop grad and set eval mode).
             -1 means not freezing any parameters.
@@ -1126,6 +1178,7 @@ class SwinUNet3D(nn.Module):
                  attn_drop_rate=0.,
                  drop_path_rate=0.2,
                  norm_layer=nn.LayerNorm,
+                 upsampler="patch",
                  patch_norm=False,
                  frozen_stages=-1,
                  use_checkpoint=False,):
@@ -1164,7 +1217,7 @@ class SwinUNet3D(nn.Module):
             embed_dim=embed_dim,  patch_size=patch_size, depths=depths, num_heads=num_heads, window_size=window_size,
             mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate,
-            norm_layer=norm_layer, patch_norm=patch_norm,
+            norm_layer=norm_layer, patch_norm=patch_norm, upsampler=upsampler,
             use_checkpoint=use_checkpoint, frozen_stages=frozen_stages,)
 
     def forward(self, x):

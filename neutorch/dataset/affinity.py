@@ -1,4 +1,3 @@
-from sys import prefix
 from .utils import from_h5
 import random
 from typing import Union
