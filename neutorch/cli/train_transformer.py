@@ -341,13 +341,19 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
                 save_chkpt(model, output_dir, example_number, optimizer)
 
-            # # test checkpoint
-            # if example_number // test_interval > prev_example_number // test_interval or step == total_itrs-1:
-            #     metrics = test_model(model, patch_size, output_dir,
-            #                          config.name, threshold=0.7)
-            #     v_writer.add_scalar(
-            #         f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
-            #     print(metrics)
+            # test checkpoint
+            if example_number // test_interval > prev_example_number // test_interval:
+                ping = time()
+                affinity_pred, segmentation_pred,  metrics = test_model(model, patch_size, output_dir,
+                                                                        config.name, threshold=0.7, writer=v_writer)
+                log_affinity_output(v_writer, 'test/full_affinity_pred',
+                                    affinity_pred, example_number)
+                log_segmentation(v_writer, 'test/full_segmentation_pred',
+                                 segmentation_pred, example_number)
+                v_writer.add_scalar(
+                    f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
+
+                print(f'full test took {round(time()-ping, 3)} seconds.')
 
     if rank == 0:
         t_writer.close()

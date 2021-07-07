@@ -74,7 +74,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
 
 
 def test_model(model, patch_size, output_dir: str, run_name: str = '',
-               agglomerate: bool = True, threshold: float = 0.7, save_aff: bool = False, save_seg: bool = False, full_agglomerate=False, path: str = './data/sample_A_pad.hdf',):
+               agglomerate: bool = True, threshold: float = 0.7, save_aff: bool = False, save_seg: bool = False, full_agglomerate=False, path: str = './data/sample_A_pad.hdf'):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -105,18 +105,18 @@ def test_model(model, patch_size, output_dir: str, run_name: str = '',
             pred_affs = predict[0:3, ...]
             affinity[:, iz:iz+pz, iy:iy+py, ix:ix+px] = pred_affs.cpu()
 
+    label = dataset.label
+    (sz, sy, sx) = label.shape
+    (oz, oy, ox) = dataset.label_offset
+
+    # crop before agglomerate
+    if not full_agglomerate:
+        affinity = affinity[:, oz:oz+sz, oy:oy+sy, ox:ox+sx]
+
     if save_aff:
         np.save(f'{output_dir}/affinity.npy', affinity)
 
     if agglomerate:
-
-        label = dataset.label
-        (sz, sy, sx) = label.shape
-        (oz, oy, ox) = dataset.label_offset
-
-        # crop before agglomerate
-        if not full_agglomerate:
-            affinity = affinity[oz:oz+sz, oy:oy+sy, ox:ox+sx]
 
         # get predicted segmentation from affinity map
         segmentation_pred = do_agglomeration(
@@ -144,7 +144,7 @@ def test_model(model, patch_size, output_dir: str, run_name: str = '',
         f.write(f'-----------------------------------\n')
         f.close()
 
-        return metrics
+        return affinity, segmentation_pred,  metrics
 
 
 if __name__ == '__main__':

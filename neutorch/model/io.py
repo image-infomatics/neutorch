@@ -9,7 +9,6 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 
-
 def colorize(tensor):
     tensor.unsqueeze_(0)
     tesnor = tensor.repeat(3, 1, 1)
