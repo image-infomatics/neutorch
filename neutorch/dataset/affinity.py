@@ -18,7 +18,7 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
                  length: int,
-                 lsd: bool,
+                 lsd: bool = True,
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
                  aug: bool = True,
