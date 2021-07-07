@@ -59,9 +59,9 @@ import random
 @click.option('--checkpoint-interval', '-ch',
               type=int, default=50000, help='interval when to log checkpoints.'
               )
-# @click.option('--test-interval', '-ts',
-#               type=int, default=100000, help='interval when to run full test.'
-#               )
+@click.option('--test-interval', '-ts',
+              type=int, default=100000, help='interval when to run full test.'
+              )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
@@ -97,7 +97,7 @@ def train_parallel(rank, world_size, kwargs):
 
 def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
-          training_interval: int, validation_interval: int, checkpoint_interval: int,
+          training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int,
           load: str, verbose: bool,
           use_amp: bool, ddp: bool, rank: int = 0, world_size: int = 1):
 
@@ -340,6 +340,14 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             # save checkpoint
             if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
                 save_chkpt(model, output_dir, example_number, optimizer)
+
+            # # test checkpoint
+            # if example_number // test_interval > prev_example_number // test_interval or step == total_itrs-1:
+            #     metrics = test_model(model, patch_size, output_dir,
+            #                          config.name, threshold=0.7)
+            #     v_writer.add_scalar(
+            #         f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
+            #     print(metrics)
 
     if rank == 0:
         t_writer.close()

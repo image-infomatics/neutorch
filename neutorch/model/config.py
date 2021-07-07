@@ -24,6 +24,7 @@ class TransformerConfig(object):
                  res_conns=True,
                  num_heads=[3, 6, 12, 24],
                  window_size=(2, 7, 7),
+                 upsampler='patch',
                  #### Optimizer ####
                  optimizer='AdamW',
                  learning_rate=0.0005,
@@ -47,7 +48,8 @@ class TransformerConfig(object):
             'depths': depths,
             'res_conns': res_conns,
             'num_heads': num_heads,
-            'window_size':  window_size
+            'window_size':  window_size,
+            'upsampler': upsampler
         })
         self.loss = dotdict({
             'loss': loss,
@@ -81,7 +83,8 @@ def build_model_from_config(config):
                       depths=config.depths,
                       res_conns=config.res_conns,
                       num_heads=config.num_heads,
-                      window_size=config.window_size)
+                      window_size=config.window_size,
+                      upsampler=config.upsampler)
 
 
 def build_optimizer_from_config(config, params):
@@ -108,11 +111,9 @@ def get_config(name):
 
 
 c0 = TransformerConfig('default')
-c1 = TransformerConfig('res_full', depths=[2, 8, 2, 2])
+c1 = TransformerConfig('bilinear', upsampler='bilinear')
+c2 = TransformerConfig('trilinear', upsampler='trilinear')
 
-
-c2 = TransformerConfig('bigger_window', swin_patch_size=(
-    2, 4, 4), window_size=(3, 10, 10), embed_dim=96,)
 
 c3 = TransformerConfig('swin_c', depths=[2, 2, 18, 2], embed_dim=192,)
 

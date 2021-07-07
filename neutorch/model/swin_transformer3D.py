@@ -422,20 +422,22 @@ class ExpandingBilinear(nn.Module):
     def __init__(self, dim, norm_layer=nn.LayerNorm):
         super(ExpandingBilinear, self).__init__()
         self.groups = dim
-        self.init_weights()
+        self._init_weights()
         self.norm = norm_layer(dim//2)
         self.reduction = nn.Linear(dim, dim//2, bias=False)
 
     def forward(self, x):
+        x = rearrange(x, 'n d h w c -> n c d h w')
         x = F.conv_transpose3d(x, self.weight,
                                stride=(1, 2, 2), padding=(0, 1, 1), groups=self.groups
                                )
+        x = rearrange(x, 'n c d h w -> n d h w c')
         x = self.reduction(x)
         x = self.norm(x)
 
         return x
 
-    def init_weights(self):
+    def _init_weights(self):
         weight = torch.Tensor(self.groups, 1, 1, 4, 4)
         width = weight.size(-1)
         hight = weight.size(-2)
@@ -446,6 +448,50 @@ class ExpandingBilinear(nn.Module):
             for h in range(hight):
                 weight[..., h, w] = (1 - abs(w/f - c)) * (1 - abs(h/f - c))
         self.register_buffer('weight', weight)
+
+
+class ExpandingTrilinear(nn.Module):
+    """ Patch Expanding with TrilinearUpsample
+    Caffe style bilinear upsampling.
+    Currently everything's hardcoded and only supports upsampling factor of 2.
+    Args:
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super(ExpandingTrilinear, self).__init__()
+        self.groups = dim
+        self._init_weights()
+        self.norm = norm_layer(dim//2)
+        self.reduction = nn.Linear(dim, dim//2, bias=False)
+
+    def _init_weights(self):
+        weight = torch.Tensor(self.groups, 1, 1, 4, 4)
+        width = weight.size(-1)
+        hight = weight.size(-2)
+        depth = weight.size(-3)
+        assert width == hight
+        f = float(math.ceil(width / 2.0))
+        c = float(width - 1) / (2.0 * f)
+        for w in range(width):
+            for h in range(hight):
+                for d in range(depth):
+                    weight[..., d, h, w] = (
+                        1 - abs(w/f - c)) * (1 - abs(h/f - c)) * (1 - abs(d/f - c))
+        self.register_buffer('weight', weight)
+
+    def forward(self, x):
+
+        x = rearrange(x, 'n d h w c -> n c d h w')
+        x = nn.functional.conv_transpose3d(x, self.weight,
+                                           stride=(1, 2, 2), padding=(0, 1, 1), groups=self.groups
+                                           )
+        x = rearrange(x, 'n c d h w -> n d h w c')
+        x = self.reduction(x)
+        x = self.norm(x)
+
+        return x
 
 
 # cache each stage results
@@ -966,6 +1012,8 @@ class SwinDecoder3D(nn.Module):
             upsample = Expanding3DConv
         elif upsampler == "bilinear":
             upsample = ExpandingBilinear
+        elif upsampler == 'trilinear':
+            upsample = ExpandingTrilinear
         else:
             print(f'upsampler {upsampler} not supported. aborting.')
             return
