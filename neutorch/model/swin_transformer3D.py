@@ -402,7 +402,9 @@ class Expanding3DConv(nn.Module):
 
     def forward(self, x):
 
+        x = rearrange(x, 'n d h w c -> n c d h w')
         x = self.proj(x)  # B C D Wh Ww
+        x = rearrange(x, 'n c d h w -> n d h w c')
         x = self.norm(x)
 
         return x

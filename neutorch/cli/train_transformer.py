@@ -351,6 +351,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         metrics = test_model(model, patch_size, f'{output_dir}/tests',
                              run_name=f'{config.name}_{example_number}')
         print(metrics)
+        dist.destroy_process_group()
 
 
 if __name__ == '__main__':
