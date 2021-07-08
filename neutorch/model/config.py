@@ -1,5 +1,8 @@
 import torch
 from neutorch.model.swin_transformer3D import SwinUNet3D
+from neutorch.model.RSUNet import UNetModel
+from neutorch.model.FunUnet import FunUnet
+
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 import pprint
 
@@ -18,6 +21,8 @@ class TransformerConfig(object):
                  #### Model ####
                  in_channels=1,
                  out_channels=3,
+                 model='swin',
+                 # swin
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
                  depths=[2, 2, 8, 2],
@@ -41,6 +46,7 @@ class TransformerConfig(object):
 
         self.name = name
         self.model = dotdict({
+            'model': model,
             'in_channels': in_channels,
             'out_channels': out_channels,
             'swin_patch_size': swin_patch_size,
@@ -76,15 +82,24 @@ class TransformerConfig(object):
 
 
 def build_model_from_config(config):
-    return SwinUNet3D(in_channels=config.in_channels,
-                      out_channels=config.out_channels,
-                      patch_size=config.swin_patch_size,
-                      embed_dim=config.embed_dim,
-                      depths=config.depths,
-                      res_conns=config.res_conns,
-                      num_heads=config.num_heads,
-                      window_size=config.window_size,
-                      upsampler=config.upsampler)
+    model = config.model
+    if model == 'swin':
+        return SwinUNet3D(in_channels=config.in_channels,
+                          out_channels=config.out_channels,
+                          patch_size=config.swin_patch_size,
+                          embed_dim=config.embed_dim,
+                          depths=config.depths,
+                          res_conns=config.res_conns,
+                          num_heads=config.num_heads,
+                          window_size=config.window_size,
+                          upsampler=config.upsampler)
+    elif model == 'RSUnet':
+        return UNetModel(config.in_channels, config.out_channels)
+    elif model == 'FunUnet':
+        return FunUnet(config.in_channels, config.out_channels)
+    else:
+        print(f'model {model} not supported. aborting.')
+        return
 
 
 def build_optimizer_from_config(config, params):
@@ -110,16 +125,9 @@ def get_config(name):
     raise ValueError(f'config {name} not found.')
 
 
-c0 = TransformerConfig('default')
-c1 = TransformerConfig('bilinear', upsampler='bilinear')
-c2 = TransformerConfig('trilinear', upsampler='trilinear')
+c0 = TransformerConfig('swin', model='swin')
+c1 = TransformerConfig('RSUnet', model='RSUnet')
+c2 = TransformerConfig('FunUnet', model='FunUnet', patch_size=(26, 256, 256),)
 
 
-c3 = TransformerConfig('swin_c', depths=[2, 2, 18, 2], embed_dim=192,)
-
-c4 = TransformerConfig('lsd', lsd=True, out_channels=13)
-
-c5 = TransformerConfig('small_patch', swin_patch_size=(1, 2, 2))
-
-
-CONFIGS = [c0, c1, c2, c3, c4, c5]
+CONFIGS = [c0, c1, c2]
