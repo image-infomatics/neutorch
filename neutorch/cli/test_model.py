@@ -1,10 +1,8 @@
 import numpy as np
-import os
 import torch
 import click
 
 from neutorch.dataset.affinity import TestDataset
-from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
 from neutorch.dataset.affinity import TestDataset
@@ -42,6 +40,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
 @click.option('--threshold',
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
+
 def test(path: str, config: str, patch_size: str, load: str, parallel: str,
          agglomerate: bool, with_label: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float):
 
@@ -55,13 +54,13 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
     if parallel == 'dp':
         model = torch.nn.DataParallel(model)
 
-    output_dir = f'./run_{config.name}/tests'
+    output_dir = f'./{config.name}_run/tests'
 
     # load chkpt
     if load != '':
         # if load is a number infer path
         if load.isnumeric():
-            load = f'./run_{config.name}/chkpts/model_{load}.chkpt'
+            load = f'./{config.name}_run/chkpts/model_{load}.chkpt'
         model = load_chkpt(model, load)
 
     # gpu settings
@@ -69,15 +68,13 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
         model = model.cuda()
         torch.backends.cudnn.benchmark = True
 
-    test_model(model, patch_size, output_dir, agglomerate=agglomerate,
-               save_aff=save_aff, save_seg=save_seg, full_agglomerate=full_agglomerate, path=path, threshold=threshold)
+    res = test_model(model, patch_size, agglomerate=agglomerate,
+                     full_agglomerate=full_agglomerate, path=path, threshold=threshold)
 
 
-def test_model(model, patch_size, output_dir: str, run_name: str = '',
-               agglomerate: bool = True, threshold: float = 0.7, save_aff: bool = False, save_seg: bool = False, full_agglomerate=False, path: str = './data/sample_A_pad.hdf'):
+def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 0.7, full_agglomerate=False, path: str = './data/sample_C_pad.hdf'):
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    res = {}  # results
 
     dataset = TestDataset(path, patch_size, with_label=True)
 
@@ -86,7 +83,7 @@ def test_model(model, patch_size, output_dir: str, run_name: str = '',
     affinity = np.zeros((3, *range))
     (pz, py, px) = patch_size
 
-    print('evaluating test set...')
+    print('building affinity...')
     for (index, image) in enumerate(dataset):
         (iz, iy, ix) = dataset.get_indices(index)
 
@@ -113,38 +110,29 @@ def test_model(model, patch_size, output_dir: str, run_name: str = '',
     if not full_agglomerate:
         affinity = affinity[:, oz:oz+sz, oy:oy+sy, ox:ox+sx]
 
-    if save_aff:
-        np.save(f'{output_dir}/affinity.npy', affinity)
+    res['affinity'] = affinity
 
     if agglomerate:
 
+        print('doing agglomeration...')
         # get predicted segmentation from affinity map
-        segmentation_pred = do_agglomeration(
+        segmentation = do_agglomeration(
             affinity, threshold=threshold)
-        if save_seg:
-            np.save(f'{output_dir}/segmentation.npy', segmentation_pred)
 
         # crop after agglomerate
         if full_agglomerate:
-            segmentation_pred = segmentation_pred[oz:oz+sz, oy:oy+sy, ox:ox+sx]
+            segmentation = segmentation[oz:oz+sz, oy:oy+sy, ox:ox+sx]
             # TODO connected component analysic after full agglomerate
 
+        res['segmentation'] = segmentation
+
+        print('computing metrics...')
         # get the CREMI metrics from true segmentation vs predicted segmentation
-        metrics = cremi_metrics(segmentation_pred, label)
+        metrics = cremi_metrics(segmentation, label)
 
-        # log metrics
-        for k, v in metrics.items():
-            print(f'{k}:{round(v,5)}')
+        res['metrics'] = metrics
 
-        f = open(f"{output_dir}/metrics.txt", "a")
-        f.write(f'run: {run_name} threshold: {threshold} data: {path}\n')
-        f.write(f'===================================\n')
-        for k, v in metrics.items():
-            f.write(f'{k}:{round(v,5)}\n')
-        f.write(f'-----------------------------------\n')
-        f.close()
-
-        return affinity, segmentation_pred,  metrics
+    return res
 
 
 if __name__ == '__main__':

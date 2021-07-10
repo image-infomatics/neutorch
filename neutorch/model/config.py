@@ -22,6 +22,8 @@ class TransformerConfig(object):
                  in_channels=1,
                  out_channels=3,
                  model='swin',
+                 # RSUnet
+                 io_kernel = (1, 5, 5),
                  # swin
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
@@ -49,6 +51,7 @@ class TransformerConfig(object):
             'model': model,
             'in_channels': in_channels,
             'out_channels': out_channels,
+            'io_kernel':io_kernel,
             'swin_patch_size': swin_patch_size,
             'embed_dim': embed_dim,
             'depths': depths,
@@ -94,7 +97,7 @@ def build_model_from_config(config):
                           window_size=config.window_size,
                           upsampler=config.upsampler)
     elif model == 'RSUnet':
-        return UNetModel(config.in_channels, config.out_channels)
+        return UNetModel(config.in_channels, config.out_channels, io_kernel=config.io_kernel)
     elif model == 'FunUnet':
         return FunUnet(config.in_channels, config.out_channels)
     else:
@@ -126,8 +129,11 @@ def get_config(name):
 
 
 c0 = TransformerConfig('swin', model='swin')
-c1 = TransformerConfig('RSUnet', model='RSUnet')
-c2 = TransformerConfig('FunUnet', model='FunUnet', patch_size=(26, 256, 256),)
+c1 = TransformerConfig('RSUnet', model='RSUnet',
+                       learning_rate=0.001)
+c2 = TransformerConfig('ioRSUnet', model='RSUnet',
+                       learning_rate=0.001,  io_kernel = (3, 4, 4),)
+
 
 
 CONFIGS = [c0, c1, c2]

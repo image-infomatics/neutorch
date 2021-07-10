@@ -185,7 +185,7 @@ class Dataset(torch.utils.data.Dataset):
         intensity = tio.Compose([bias, gamma, brightness, noise, blur, loss])
 
         # clip
-        clip = Clip(min_max=(0.2, 0.98))
+        clip = Clip(min_max=(0.0, 1.0))
 
         # compose transforms
         transforms = [rescale, transposeXY,

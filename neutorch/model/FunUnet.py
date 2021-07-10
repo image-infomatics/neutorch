@@ -736,7 +736,7 @@ class FunUnet(nn.Module):
 
     """
 
-    def __init__(self, in_channels: int, out_channels: int, num_fmaps: int = 12, fmap_inc_factors: int = 6, downsample_factors=[(1, 2, 2), (1, 2, 2), (2, 4, 4,)]):
+    def __init__(self, in_channels: int, out_channels: int, num_fmaps: int = 12, fmap_inc_factors: int = 6, downsample_factors=[(1, 2, 2), (2, 4, 4), (1, 4, 4,)]):
         super().__init__()
 
         self.unet = UNet(

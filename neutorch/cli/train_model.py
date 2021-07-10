@@ -51,10 +51,10 @@ import random
               help='num workers for pytorch dataloader. -1 means automatically set.'
               )
 @click.option('--training-interval', '-t',
-              type=int, default=200, help='training interval in terms of examples seen to record data points.'
+              type=int, default=1000, help='training interval in terms of examples seen to record data points.'
               )
 @click.option('--validation-interval', '-v',
-              type=int, default=1000, help='validation interval in terms of examples seen to record validation data.'
+              type=int, default=5000, help='validation interval in terms of examples seen to record validation data.'
               )
 @click.option('--checkpoint-interval', '-ch',
               type=int, default=50000, help='interval when to log checkpoints.'
@@ -74,6 +74,9 @@ import random
 @click.option('--ddp',
               type=bool, default=True, help='whether to use distrubited data parallel vs normal data parallel.'
               )
+@click.option('--fup', default=True, help='find unused parameters.'
+              )
+              
 def train_wrapper(*args, **kwargs):
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
@@ -99,7 +102,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int,
           load: str, verbose: bool,
-          use_amp: bool, ddp: bool, rank: int = 0, world_size: int = 1):
+          use_amp: bool, ddp: bool, fup:bool, rank: int = 0, world_size: int = 1):
+
 
     # get config
     config = get_config(config)
@@ -121,12 +125,17 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         else:
             num_workers = cpus
 
+    agg_threshold = 0.7
+    sync_every = sync_every // batch_size
+
     # only print root process
     if rank != 0:
         verbose = False
 
+    output_dir = f'./{config.name}_run'
+
     if rank == 0:
-        output_dir = f'./run_{config.name}'
+    
         # make output folder if doesnt exist
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -142,10 +151,10 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         tqdm._instances.clear()
         t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
         v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
-        # m_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
         pbar = tqdm(total=num_examples)
 
     # set up
+    
     random.seed(seed)
     patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.0
@@ -168,7 +177,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         if ddp:
             model = model.cuda(rank)
             model = DistributedDataParallel(
-                model, device_ids=[rank], find_unused_parameters=True)
+                model, device_ids=[rank], find_unused_parameters=fup)
             sampler = DistributedSampler(
                 dataset, world_size, rank, seed=seed)
             loss_module.cuda(rank)
@@ -194,6 +203,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         print(
             f'total_itrs: {total_itrs}')
         print("starting...")
+
+    
 
     for step, batch in enumerate(dataloader):
 
@@ -301,41 +312,38 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     log_image(v_writer, 'validation/image',
                               validation_image, example_number)
 
-                    ping = time()
                     # do aggolmoration and metrics
-                    metrics = {'voi_split': 0, 'voi_merge': 0,
-                               'adapted_rand': 0, 'cremi_score': 0}
+                    # but skip first couple
+                    if example_number // validation_interval > 5:
+                        metrics = {'voi_split': 0, 'voi_merge': 0,
+                                   'adapted_rand': 0, 'cremi_score': 0}
 
-                    # only compute over first in batch for time saving
-                    cremi_batch = min(2, batch_size)
-                    for i in range(cremi_batch):
-                        # get true segmentation and affinity map
-                        segmentation_truth = np.squeeze(batch.labels[i])
-                        affinity = validation_predict[i][0:3].cpu().numpy()
+                        # only compute over first in batch for time saving
+                        cremi_batch = min(2, batch_size)
+                        for i in range(cremi_batch):
+                            # get true segmentation and affinity map
+                            segmentation_truth = np.squeeze(batch.labels[i])
+                            affinity = validation_predict[i][0:3].cpu().numpy()
 
-                        # get predicted segmentation from affinity map
-                        segmentation_pred = do_agglomeration(affinity)
+                            # get predicted segmentation from affinity map
+                            segmentation_pred = do_agglomeration(affinity)
 
-                        # get the CREMI metrics from true segmentation vs predicted segmentation
-                        metric = cremi_metrics(
-                            segmentation_pred, segmentation_truth)
-                        for m in metric.keys():
-                            metrics[m] += metric[m] / cremi_batch
+                            # get the CREMI metrics from true segmentation vs predicted segmentation
+                            metric = cremi_metrics(
+                                segmentation_pred, segmentation_truth)
+                            for m in metric.keys():
+                                metrics[m] += metric[m] / cremi_batch
 
-                        # log the picture for first in batch
-                        if i == 0:
-                            log_segmentation(v_writer, 'validation/seg_true',
-                                             segmentation_truth, example_number)
-                            log_segmentation(v_writer, 'validation/seg_pred',
-                                             segmentation_pred, example_number)
-
-                    # log metrics
-                    for k, v in metrics.items():
-                        v_writer.add_scalar(
-                            f'cremi_metrics/{k}', v, example_number)
-
-                    print(
-                        f'aggo+metrics for {cremi_batch} patches takes {round(time()-ping, 3)} seconds.')
+                            # log the picture for first in batch
+                            if i == 0:
+                                log_segmentation(v_writer, 'validation/seg_true',
+                                                 segmentation_truth, example_number)
+                                log_segmentation(v_writer, 'validation/seg_pred',
+                                                 segmentation_pred, example_number)
+                        # log metrics
+                        for k, v in metrics.items():
+                            v_writer.add_scalar(
+                                f'cremi_metrics/{k}', v, example_number)
 
             # save checkpoint
             if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
@@ -344,29 +352,58 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             # test checkpoint
             if example_number // test_interval > prev_example_number // test_interval:
                 ping = time()
-                test_model(model, patch_size, output_dir, config.name,
-                           threshold=0.7, save_aff=True, agglomerate=False)
-                # affinity_pred, segmentation_pred,  metrics = test_model(model, patch_size, output_dir,
-                #                                                         config.name, threshold=0.7, writer=v_writer)
-                # log_affinity_output(v_writer, 'test/full_affinity_pred',
-                #                     affinity_pred, example_number)
-                # log_segmentation(v_writer, 'test/full_segmentation_pred',
-                #                  segmentation_pred, example_number)
-                # v_writer.add_scalar(
-                #     f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
+
+                res = test_model(model, patch_size, threshold=agg_threshold)
+                affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
+
+                # convert to torch, add batch dim
+                affinity = torch.unsqueeze(torch.tensor(affinity), 0)
+
+                # log
+                log_affinity_output(v_writer, 'test/full_affinity_pred',
+                                    affinity, example_number)
+                log_segmentation(v_writer, 'test/full_segmentation_pred',
+                                 segmentation, example_number)
+                v_writer.add_scalar(
+                    f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
 
                 print(f'full test took {round(time()-ping, 3)} seconds.')
+
+    file = None
+    if rank == 0:
+        file = 'sample_A_pad'
+    elif rank == 1:
+        file = 'sample_B_pad'
+    elif rank == 2:
+        file = 'sample_C_pad'
+
+    if file is not None:
+        # run test
+        res = test_model(model, patch_size, f'{output_dir}/tests',
+                         path=f'./data/{file}.hdf', threshold=agg_threshold)
+        affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
+
+        # write metrics
+        f = open(f"{output_dir}/metrics.txt", "a")
+        f.write(
+            f'run: {config.name}_{example_number} threshold: {agg_threshold} data: {file}\n')
+        f.write(f'===================================\n')
+        for k, v in metrics.items():
+            f.write(f'{k}:{round(v,5)}\n')
+        f.write(f'-----------------------------------\n')
+        f.close()
+
+        big_output_dir = f'/mnt/home/jberman/ceph/{config.name}'
+        if not os.path.exists(big_output_dir):
+            os.makedirs(big_output_dir)
+
+        np.save(f'{big_output_dir}/segmentation_{file}.npy', segmentation)
+        np.save(f'{big_output_dir}/affinity_{file}.npy', affinity)
 
     if rank == 0:
         t_writer.close()
         v_writer.close()
-        # m_writer.close()
         pbar.close()
-
-        # run test
-        metrics = test_model(model, patch_size, f'{output_dir}/tests',
-                             run_name=f'{config.name}_{example_number}')
-        print(metrics)
         dist.destroy_process_group()
 
 

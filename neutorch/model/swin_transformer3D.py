@@ -699,13 +699,8 @@ class PatchUnembedConv3D(nn.Module):
         self.proj = nn.ConvTranspose3d(in_embed_dim, out_channels,
                                        kernel_size=patch_size, stride=patch_size, padding=0)
 
-        # maybe is best to just have linear layer ??
-        self.embed = nn.Linear(in_embed_dim, out_channels, bias=False)
-
     def forward(self, x):
-        _, _, D, H, W = x.size()
 
-        # x = self.embed(x)  # B L 2C
         x = self.proj(x)  # B C D Wh Ww
 
         return x
