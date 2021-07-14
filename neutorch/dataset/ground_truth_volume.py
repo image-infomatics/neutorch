@@ -139,34 +139,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
-    # it turns out that this sampling is biased to patches containing T-bar
-    # the net will always try to find at least one T-bar in the input patch.
-    # the result will have a low precision containing a lot of false positive prediction.
-    # @property
-    # def random_patch(self):
-    #     point_num = self.annotation_points.shape[0]
-    #     idx = random.randint(0, point_num-1)
-    #     point = self.annotation_points[idx, :]
-    #     center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
-    #     center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-    #     center_start = tuple(
-    #         max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
-    #     )
-    #     center_stop = tuple(
-    #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
-    #     )
-    #     for ct, cp in zip(center_start, center_stop):
-    #         if ct >= cp:
-    #             breakpoint()
-
-    #     return self.random_patch_from_center_range(center_start, center_stop)
-
-    # @property
-    # def volume_sampling_weight(self):
-    #     # use number of annotated points as weight
-    #     # to sample volume
-    #     return self.annotation_points.shape[0]
-
     def _points_to_label(self, image: np.ndarray,
                          expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes

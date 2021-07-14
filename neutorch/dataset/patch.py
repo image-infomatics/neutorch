@@ -5,7 +5,7 @@ from typing import Optional
 from .border_mask import create_border_mask
 
 # (int): the amount of border added to the affinity maps (for thicker lines)
-AFF_BORDER_WIDTH = 3
+AFF_BORDER_WIDTH = 2
 
 
 class Patch(object):
