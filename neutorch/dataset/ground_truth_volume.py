@@ -26,6 +26,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                  patch_size: Union[tuple, int],
                  forbbiden_distance_to_boundary: tuple = None,
                  lsd_label: Optional[np.ndarray] = None,
+                 border_width:int=1, 
                  name: str = '') -> None:
         """Image volume with ground truth annotations
 
@@ -66,6 +67,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
 
+        self.border_width = border_width
         self.image = image
         self.label = label
         self.lsd_label = lsd_label
@@ -109,7 +111,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                                        bx: bx + self.patch_size[-1]
                                        ]
 
-        return AffinityPatch(image_patch, label_patch, lsd_label=lsd_label)
+        return AffinityPatch(image_patch, label_patch, lsd_label=lsd_label, border_width=self.border_width)
 
     @property
     def volume_sampling_weight(self):

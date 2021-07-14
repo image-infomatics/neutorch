@@ -44,6 +44,7 @@ class TransformerConfig(object):
                  patch_size=(26, 256, 256),
                  lsd=False,
                  aug=True,
+                 border_width=2,
                  ):
 
         self.name = name
@@ -74,6 +75,7 @@ class TransformerConfig(object):
             'patch_size': patch_size,
             'lsd': lsd,
             'aug': aug,
+            'border_width': border_width
         })
 
     def toString(self):
@@ -130,7 +132,7 @@ def get_config(name):
 
 c0 = TransformerConfig('swin', model='swin')
 c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
-c2 = TransformerConfig('swin_bigWin', model='swin', window_size=(5,5,5))
-c3 = TransformerConfig('RSUnetSM', model='RSUnet',
+c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7,7,7))
+c3 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
-CONFIGS = [c0, c1, c2,c3]
+CONFIGS = [c0, c1, c2, c3]

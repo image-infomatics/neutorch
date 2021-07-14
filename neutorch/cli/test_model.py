@@ -77,7 +77,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
         torch.backends.cudnn.benchmark = True
 
     res = test_model(model, patch_size, agglomerate=agglomerate,
-                     full_agglomerate=full_agglomerate, test_vol=test_vol, path=path, threshold=threshold)
+                     full_agglomerate=full_agglomerate, test_vol=test_vol, path=path, threshold=threshold, border_width=config.border_width)
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
@@ -109,7 +109,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
         np.save(f'{big_output_dir}/affinity_{example_num}_{file}.npy', affinity)
 
 
-def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 0.7, full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
+def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1, full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
 
     res = {}  # results
 
@@ -169,7 +169,7 @@ def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 
 
         print('computing metrics...')
         # get the CREMI metrics from true segmentation vs predicted segmentation
-        metrics = cremi_metrics(segmentation, label)
+        metrics = cremi_metrics(segmentation, label, border_threshold=border_width)
 
         res['metrics'] = metrics
 

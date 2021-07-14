@@ -1,7 +1,6 @@
 from waterz import agglomerate
 import numpy as np
 from neutorch.cremi.neuron_ids import NeuronIds
-from neutorch.dataset.patch import AFF_BORDER_WIDTH
 import math
 
 
@@ -25,8 +24,8 @@ def do_agglomeration(affs, threshold=0.7, aff_threshold_low=0.001,  aff_threshol
     return res
 
 
-def cremi_metrics(test, truth):
-    neuron_ids_evaluation = NeuronIds(truth, border_threshold=AFF_BORDER_WIDTH)
+def cremi_metrics(test, truth, border_width=1):
+    neuron_ids_evaluation = NeuronIds(truth, border_threshold=border_width)
     (voi_split, voi_merge) = neuron_ids_evaluation.voi(test)
     adapted_rand = neuron_ids_evaluation.adapted_rand(test)
     # the geometric mean of (VOI split + VOI merge) and ARAND.

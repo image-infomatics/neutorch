@@ -161,7 +161,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     total_itrs = num_examples // batch_size
     training_iters = 0  # number of iterations that happened since last training_interval
     dataset = Dataset(path, patch_size=patch_size, length=num_examples,
-                      lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug)
+                      lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug, border_width=config.dataset.border_width)
 
     # init model
     model = build_model_from_config(config.model)
@@ -354,7 +354,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                 ping = time()
                 files = [ 'sample_A_pad', 'sample_B_pad', 'sample_C_pad']
                 for file in files:
-                    res = test_model(model, patch_size, threshold=agg_threshold, path=f'./data/{file}.hdf')
+                    res = test_model(model, patch_size, threshold=agg_threshold, border_width=config.dataset.border_width, path=f'./data/{file}.hdf')
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
                     # convert to torch, add batch dim
@@ -381,7 +381,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     if file is not None:
         # run test
         res = test_model(model, patch_size, f'{output_dir}/tests',
-                         path=f'./data/{file}.hdf', threshold=agg_threshold)
+                         path=f'./data/{file}.hdf', threshold=agg_threshold, border_width=config.dataset.border_width)
         affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
         # write metrics

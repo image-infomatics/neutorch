@@ -4,10 +4,6 @@ from typing import Optional
 
 from .border_mask import create_border_mask
 
-# (int): the amount of border added to the affinity maps (for thicker lines)
-AFF_BORDER_WIDTH = 2
-
-
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
                  delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
@@ -71,7 +67,8 @@ class Patch(object):
 
 class AffinityPatch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
-                 lsd_label: Optional[np.ndarray] = None):
+                 lsd_label: Optional[np.ndarray] = None,
+                 border_width:int=1):
         """A patch of volume containing both image and label
 
         Args:
@@ -94,13 +91,14 @@ class AffinityPatch(object):
             self.is_lsd = True
             # add background mask
             mask = np.zeros(label.shape)
-            create_border_mask(label, mask, AFF_BORDER_WIDTH, 0)
+            create_border_mask(label, mask, border_width, 0)
             lsd_label[:, mask == 0] = 0
 
             tio_lsd = tio.LabelMap(tensor=lsd_label)
             subject.add_image(tio_lsd, 'lsd')
 
         self.subject = subject
+        self.border_width = border_width
 
     # segmentation label into affinty map
     def compute_affinity(self):
@@ -110,7 +108,7 @@ class AffinityPatch(object):
 
         # add background mask
         masked_label = np.zeros(label.shape, dtype=np.uint64)
-        create_border_mask(label, masked_label, AFF_BORDER_WIDTH, 0)
+        create_border_mask(label, masked_label, self.border_width, 0)
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
         affinity = np.zeros((3, z0, y0, x0))

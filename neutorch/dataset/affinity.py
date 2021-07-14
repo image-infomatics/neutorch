@@ -22,6 +22,7 @@ class Dataset(torch.utils.data.Dataset):
                  patch_size: Union[int, tuple] = (64, 64, 64),
                  batch_size=1,
                  aug: bool = True,
+                 border_width=1,
                  ):
         """
         Parameters:
@@ -31,6 +32,7 @@ class Dataset(torch.utils.data.Dataset):
             patch_size (int or tuple): the patch size we are going to provide.
             batch_size (int): the number of batches in each batch
             aug (bool): whether to use data augmentation
+            border_width (int): border width for affinty map
         """
 
         super().__init__()
@@ -97,11 +99,11 @@ class Dataset(torch.utils.data.Dataset):
                     lsd_label = lsd_label[..., vs:, :, :]
 
                 val_ground_truth_volume = GroundTruthVolume(
-                    val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label, name=f'{file}_val')
+                    val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label, border_width=border_width, name=f'{file}_val')
                 validation_volumes.append(val_ground_truth_volume)
 
             train_ground_truth_volume = GroundTruthVolume(
-                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label, name=f'{file}_train')
+                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
             training_volumes.append(train_ground_truth_volume)
 
         self.training_volumes = training_volumes
