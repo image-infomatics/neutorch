@@ -352,22 +352,23 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             # test checkpoint
             if example_number // test_interval > prev_example_number // test_interval:
                 ping = time()
+                files = [ 'sample_A_pad', 'sample_B_pad', 'sample_C_pad']
+                for file in files:
+                    res = test_model(model, patch_size, threshold=agg_threshold, path=f'./data/{file}.hdf')
+                    affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
-                res = test_model(model, patch_size, threshold=agg_threshold)
-                affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
+                    # convert to torch, add batch dim
+                    affinity = torch.unsqueeze(torch.tensor(affinity), 0)
 
-                # convert to torch, add batch dim
-                affinity = torch.unsqueeze(torch.tensor(affinity), 0)
+                    # log
+                    log_affinity_output(v_writer, f'test/full_affinity_{file}',
+                                        affinity, example_number)
+                    log_segmentation(v_writer, f'test/full_segmentation_{file}',
+                                    segmentation, example_number)
+                    v_writer.add_scalar(
+                        f'cremi_metrics/full_cremi_score_{file}', metrics['cremi_score'], example_number)
 
-                # log
-                log_affinity_output(v_writer, 'test/full_affinity_pred',
-                                    affinity, example_number)
-                log_segmentation(v_writer, 'test/full_segmentation_pred',
-                                 segmentation, example_number)
-                v_writer.add_scalar(
-                    f'cremi_metrics/full_cremi_score', metrics['cremi_score'], example_number)
-
-                print(f'full test took {round(time()-ping, 3)} seconds.')
+                    print(f'full test took {round(time()-ping, 3)} seconds.')
 
     file = None
     if rank == 0:
@@ -397,8 +398,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         if not os.path.exists(big_output_dir):
             os.makedirs(big_output_dir)
 
-        np.save(f'{big_output_dir}/segmentation_{file}.npy', segmentation)
-        np.save(f'{big_output_dir}/affinity_{file}.npy', affinity)
+        np.save(f'{big_output_dir}/segmentation_{example_number}_{file}.npy', segmentation)
+        np.save(f'{big_output_dir}/affinity_{example_number}_{file}.npy', affinity)
 
     if rank == 0:
         t_writer.close()

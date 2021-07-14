@@ -27,7 +27,7 @@ class TransformerConfig(object):
                  # swin
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
-                 depths=[2, 2, 8, 2],
+                 depths=[2, 8, 8, 2],
                  res_conns=True,
                  num_heads=[3, 6, 12, 24],
                  window_size=(2, 7, 7),
@@ -40,7 +40,7 @@ class TransformerConfig(object):
                  #### Loss ####
                  loss='BNCE',
                  #### Dataset ####
-                 num_examples=500000,
+                 num_examples=600000,
                  patch_size=(26, 256, 256),
                  lsd=False,
                  aug=True,
@@ -129,11 +129,8 @@ def get_config(name):
 
 
 c0 = TransformerConfig('swin', model='swin')
-c1 = TransformerConfig('RSUnet', model='RSUnet',
+c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
+c2 = TransformerConfig('swin_bigWin', model='swin', window_size=(5,5,5))
+c3 = TransformerConfig('RSUnetSM', model='RSUnet',
                        learning_rate=0.001)
-c2 = TransformerConfig('ioRSUnet', model='RSUnet',
-                       learning_rate=0.001,  io_kernel = (3, 4, 4),)
-
-
-
-CONFIGS = [c0, c1, c2]
+CONFIGS = [c0, c1, c2,c3]
