@@ -133,6 +133,17 @@ def get_config(name):
 c0 = TransformerConfig('swin', model='swin')
 c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
 c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7,7,7))
-c3 = TransformerConfig('RSUnet2', model='RSUnet',
+c3 = TransformerConfig('swin_bigbigwin', model='swin', window_size=(9,9,9))
+c4 = TransformerConfig('RSUnet6', model='RSUnet',
                        learning_rate=0.001)
-CONFIGS = [c0, c1, c2, c3]
+c5 = TransformerConfig('RSUnet4', model='RSUnet',
+                       learning_rate=0.001)
+c6 = TransformerConfig('RSUnet5', model='RSUnet',
+                       learning_rate=0.001)
+c7 = TransformerConfig('RSUnet3', model='RSUnet',
+                       learning_rate=0.001)
+c8 = TransformerConfig('RSUnet7', model='RSUnet',
+                       learning_rate=0.001)
+c9 = TransformerConfig('RSUnet8', model='RSUnet',
+                       learning_rate=0.001)
+CONFIGS = [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9]

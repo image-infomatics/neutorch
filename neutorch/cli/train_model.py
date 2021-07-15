@@ -154,14 +154,12 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         pbar = tqdm(total=num_examples)
 
     # set up
-    
     random.seed(seed)
-    patch_voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
-    training_iters = 0  # number of iterations that happened since last training_interval
     dataset = Dataset(path, patch_size=patch_size, length=num_examples,
                       lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug, border_width=config.dataset.border_width)
+    patch_volume = np.product(patch_size)
 
     # init model
     model = build_model_from_config(config.model)
@@ -239,10 +237,11 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         cur_loss = loss.item()
         accumulated_loss += cur_loss
 
+
         # record progress
         if rank == 0:
             pbar.set_postfix(
-                {'cur_loss': round(cur_loss / patch_voxel_num, 3)})
+                {'cur_loss': round(cur_loss / patch_volume, 3)})
             pbar.update(batch_size * world_size)
 
         # the previous number of examples the network has seen
@@ -251,17 +250,14 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         # the current number of examples the network has seen
         example_number = ((step+1) * batch_size*world_size)+start_example
 
-        # number of iterations that happened since last training_interval
-        training_iters += 1
-
         # all io and validation done root process
         if rank == 0:
 
             # log for training
             if example_number // training_interval > prev_example_number // training_interval:
-
+                
                 # compute loss
-                per_voxel_loss = accumulated_loss / training_iters / patch_voxel_num
+                per_voxel_loss = accumulated_loss / patch_volume / training_interval
 
                 # compute predict
                 predict = torch.sigmoid(logits)
@@ -276,7 +272,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
                 # reset acc loss
                 accumulated_loss = 0.0
-                training_iters = 0
 
             # log for validation
             if example_number // validation_interval > prev_example_number // validation_interval:
@@ -330,7 +325,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
                             # get the CREMI metrics from true segmentation vs predicted segmentation
                             metric = cremi_metrics(
-                                segmentation_pred, segmentation_truth)
+                                segmentation_pred, segmentation_truth, border_width=config.dataset.border_width)
                             for m in metric.keys():
                                 metrics[m] += metric[m] / cremi_batch
 

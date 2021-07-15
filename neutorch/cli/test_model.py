@@ -111,6 +111,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
 
 def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1, full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
 
+
     res = {}  # results
 
     dataset = TestDataset(path, patch_size, with_label=not test_vol)
@@ -169,7 +170,7 @@ def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 
 
         print('computing metrics...')
         # get the CREMI metrics from true segmentation vs predicted segmentation
-        metrics = cremi_metrics(segmentation, label, border_threshold=border_width)
+        metrics = cremi_metrics(segmentation, label, border_width=border_width)
 
         res['metrics'] = metrics
 
