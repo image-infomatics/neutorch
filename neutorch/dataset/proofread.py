@@ -14,6 +14,7 @@ class ProofreadDataset(torch.utils.data.Dataset):
                  pred_label: np.ndarray,
                  true_label: np.ndarray,
                  min_volume: int = 300,
+                 max_volume: int = 26*256*256*2,
                  patch_size: Tuple = (1, 16, 16),
                  expd_amt: Tuple = (4, 40, 40),
                  name: str = '') -> None:
@@ -50,22 +51,29 @@ class ProofreadDataset(torch.utils.data.Dataset):
 
         self.classes = []
         classes, counts = np.unique(pred_label, return_counts=True)
+        counts.sort()
+        counts = np.flip(counts)
         self.min_volume = min_volume
+        self.max_volume = max_volume
         for i, c in enumerate(counts):
             if c > self.min_volume:
                 self.classes.append(classes[i])
+            if c > self.max_volume:
+                print(c)
 
     # given some label, c, within the entire volume
     # then splites the neurite defined by this label into patches
     # then returns two arrays (images, labels) where each array contains the patches
     # the image_patches contrains 4 channels, c0 = image, c1,c2,c3, contrain orignal z,y,x coords
     def get_patch_array(self, c):
-
+        print(c)
         indices = np.argwhere(self.pred_label == c)  # get location of labels
 
         # build ranges to crop neurite
         mins = np.amin(indices, axis=0)
         maxs = np.amax(indices, axis=0)
+
+        print(mins, maxs)
 
         for i in range(3):
             mins[i] = max(mins[i] - self.expd_amt[i], 0)
@@ -74,6 +82,8 @@ class ProofreadDataset(torch.utils.data.Dataset):
         # crop
         crop_sl = np.s_[mins[0]:maxs[0]+1,
                         mins[1]:maxs[1]+1, mins[2]:maxs[2]+1]
+
+        print(crop_sl)
 
         true_label_sec = self.true_label[crop_sl]
         label_sec = self.pred_label[crop_sl]
@@ -89,7 +99,7 @@ class ProofreadDataset(torch.utils.data.Dataset):
         label_sec_b[label_sec == c] = 1
 
         c = 1
-
+        print('expand')
         expanded = np.zeros_like(label_sec)
         ez, ey, ex = self.expd_amt
         # we are assuming ey == ez, could be better way to expand labels here
@@ -110,10 +120,12 @@ class ProofreadDataset(torch.utils.data.Dataset):
         expanded = np.expand_dims(expanded, 0)
         true = np.expand_dims(true_label_sec, 0)
         combined = np.concatenate((image_sec, true, expanded), 0)
+        print('_patchify')
         combined_arr = self._patchify(combined,  (1, *self.patch_size))
         image_arr = combined_arr[:, :-2, ...]
         label_arr = combined_arr[:, -2:-1, ...]
         exp_label_arr = combined_arr[:, -1:, ...]
+        print('drop_p')
         image_arr, label_arr = self._drop_patches_without_expanded_label(
             image_arr, label_arr, exp_label_arr, c)
 
