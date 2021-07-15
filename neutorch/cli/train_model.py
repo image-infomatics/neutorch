@@ -257,7 +257,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             if example_number // training_interval > prev_example_number // training_interval:
                 
                 # compute loss
-                per_voxel_loss = accumulated_loss / patch_volume / training_interval
+                per_voxel_loss = accumulated_loss / patch_volume / training_interval / batch_size 
 
                 # compute predict
                 predict = torch.sigmoid(logits)
@@ -295,7 +295,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     validation_loss = loss_module(
                         validation_logits, validation_target)
 
-                    per_voxel_loss = validation_loss.item() / patch_voxel_num
+                    per_voxel_loss = validation_loss.item() / patch_volume / batch_size 
 
                     # log values
                     v_writer.add_scalar(
