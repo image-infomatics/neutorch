@@ -212,15 +212,15 @@ class TestDataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
                  patch_size: tuple,
+                 stride: tuple,
                  with_label: bool = False,
-                 overlap: tuple = (0, 0, 0)
                  ):
         """
         Parameters:
             path (str): file_path to the test  data.
             patch_size (tuple): the patch size we are going to provide.
             with_label (bool): get label also
-            overlap (tuple): amount each batch should overlap in each dim
+            stride (tuple): amount to over sampling area each example
         """
 
         super().__init__()
@@ -232,23 +232,24 @@ class TestDataset(torch.utils.data.Dataset):
             self.label, self.label_offset = from_h5(
                 path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
 
+        self.full_shape = volume.shape
         (z, y, x) = volume.shape
         (pz, py, px) = patch_size
-
-        self.overlap = overlap
+        (sz, sy, sx) = stride
+        self.stride = stride
         self.patch_size = patch_size
         self.volume = volume
-        self.indices = (0, 0, 0)  # cur indices to sample from z, y, x
-        self.z_len = (z) // pz
-        self.y_len = (y) // py
-        self.x_len = (x) // px
-        self.length = (self.z_len * self.y_len * self.x_len)-1
+        self.z_len = (z-pz) // sz
+        self.y_len = (y-py) // sy
+        self.x_len = (x-px) // sx
+        self.length = (self.z_len * self.y_len * self.x_len) - 1
 
         # pregenerate all sampling indices
         self.all_indices = self._gen_indices()
+        self.length = len(self.all_indices)
 
     def _gen_indices(self):
-        (pz, py, px) = self.patch_size
+        (pz, py, px) = self.stride
         (iz, iy, ix) = (0, 0, 0)
         all_indices = [(iz, iy, ix)]
         for _ in range(self.length):
@@ -267,10 +268,6 @@ class TestDataset(torch.utils.data.Dataset):
 
     def get_indices(self, idx):
         return self.all_indices[idx]
-
-    def get_range(self):
-        (pz, py, px) = self.patch_size
-        return (self.z_len*pz, self.y_len*py, self.x_len*px)
 
     def __getitem__(self, idx):
 

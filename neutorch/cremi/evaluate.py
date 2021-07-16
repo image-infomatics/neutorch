@@ -2,6 +2,9 @@ from waterz import agglomerate
 import numpy as np
 from neutorch.cremi.neuron_ids import NeuronIds
 import math
+import os
+from cremi import Annotations, Volume
+from cremi.io import CremiFile
 
 
 def do_agglomeration(affs, threshold=0.7, aff_threshold_low=0.001,  aff_threshold_high=0.999, flip=True):
@@ -32,3 +35,37 @@ def cremi_metrics(test, truth, border_width=1):
     cremi_score = math.sqrt((voi_split + voi_merge) * adapted_rand)
 
     return {'voi_split': voi_split, 'voi_merge': voi_merge, 'adapted_rand': adapted_rand, 'cremi_score': cremi_score}
+
+
+def write_output_data(aff, seg, metrics,  config_name='', example_number='', file='',
+                      output_dir=f'/mnt/home/jberman/ceph'):
+
+    output_dir = f'{output_dir}/{config_name}_{example_number}'
+    # out dir
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # write metrics
+    if metrics is not None:
+        f = open(f"{output_dir}/metrics.txt", "a")
+        f.write(
+            f'config: {config_name} example_number: {example_number} file: {file} \n')
+        f.write(f'===================================\n')
+        for k, v in metrics.items():
+            f.write(f'{k}:{round(v,5)}\n')
+        f.write(f'-----------------------------------\n')
+        f.close()
+
+    # write seg
+    if seg is not None:
+        file = CremiFile(f'{output_dir}/seg_{file}.hdf', "w")
+        neuron_ids = Volume(seg, dtype=np.uint64, resolution=(
+            40.0, 4.0, 4.0), comment=f'seg_{file}')
+        file.write_neuron_ids(neuron_ids)
+
+    # write aff
+    if aff is not None:
+        file = CremiFile(f'{output_dir}/aff_{file}.hdf', "w")
+        neuron_ids = Volume(aff, dtype=np.uint64, resolution=(
+            40.0, 4.0, 4.0), comment=f'aff_{file}')
+        file.write_neuron_ids(neuron_ids)

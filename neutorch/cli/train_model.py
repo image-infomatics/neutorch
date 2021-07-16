@@ -3,7 +3,7 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
-from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
+from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
 from neutorch.dataset.affinity import Dataset
 from neutorch.model.config import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
@@ -76,7 +76,6 @@ import random
               )
 @click.option('--fup', default=True, help='find unused parameters.'
               )
-              
 def train_wrapper(*args, **kwargs):
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
@@ -102,8 +101,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int,
           load: str, verbose: bool,
-          use_amp: bool, ddp: bool, fup:bool, rank: int = 0, world_size: int = 1):
-
+          use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
 
     # get config
     config = get_config(config)
@@ -135,7 +133,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     output_dir = f'./{config.name}_run'
 
     if rank == 0:
-    
+
         # make output folder if doesnt exist
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -202,8 +200,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             f'total_itrs: {total_itrs}')
         print("starting...")
 
-    
-
     for step, batch in enumerate(dataloader):
 
         # determien when to sync gradients in ddp
@@ -237,7 +233,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         cur_loss = loss.item()
         accumulated_loss += cur_loss
 
-
         # record progress
         if rank == 0:
             pbar.set_postfix(
@@ -255,9 +250,9 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
             # log for training
             if example_number // training_interval > prev_example_number // training_interval:
-                
+
                 # compute loss
-                per_voxel_loss = accumulated_loss / patch_volume / training_interval / batch_size 
+                per_voxel_loss = accumulated_loss / patch_volume / training_interval / batch_size
 
                 # compute predict
                 predict = torch.sigmoid(logits)
@@ -295,7 +290,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     validation_loss = loss_module(
                         validation_logits, validation_target)
 
-                    per_voxel_loss = validation_loss.item() / patch_volume / batch_size 
+                    per_voxel_loss = validation_loss.item() / patch_volume / batch_size
 
                     # log values
                     v_writer.add_scalar(
@@ -347,9 +342,10 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             # test checkpoint
             if example_number // test_interval > prev_example_number // test_interval:
                 ping = time()
-                files = [ 'sample_A_pad', 'sample_B_pad', 'sample_C_pad']
+                files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
                 for file in files:
-                    res = test_model(model, patch_size, threshold=agg_threshold, border_width=config.dataset.border_width, path=f'./data/{file}.hdf')
+                    res = test_model(model, patch_size, threshold=agg_threshold,
+                                     border_width=config.dataset.border_width, path=f'./data/{file}.hdf')
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
                     # convert to torch, add batch dim
@@ -359,11 +355,9 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     log_affinity_output(v_writer, f'test/full_affinity_{file}',
                                         affinity, example_number)
                     log_segmentation(v_writer, f'test/full_segmentation_{file}',
-                                    segmentation, example_number)
+                                     segmentation, example_number)
                     v_writer.add_scalar(
                         f'cremi_metrics/full_cremi_score_{file}', metrics['cremi_score'], example_number)
-
-                    print(f'full test took {round(time()-ping, 3)} seconds.')
 
     file = None
     if rank == 0:
@@ -375,26 +369,16 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
     if file is not None:
         # run test
-        res = test_model(model, patch_size, f'{output_dir}/tests',
-                         path=f'./data/{file}.hdf', threshold=agg_threshold, border_width=config.dataset.border_width)
+        res = test_model(model,
+                         patch_size,
+                         threshold=agg_threshold,
+                         border_width=config.dataset.border_width,
+                         full_agglomerate=True)
+
         affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
-        # write metrics
-        f = open(f"{output_dir}/metrics.txt", "a")
-        f.write(
-            f'run: {config.name}_{example_number} threshold: {agg_threshold} data: {file}\n')
-        f.write(f'===================================\n')
-        for k, v in metrics.items():
-            f.write(f'{k}:{round(v,5)}\n')
-        f.write(f'-----------------------------------\n')
-        f.close()
-
-        big_output_dir = f'/mnt/home/jberman/ceph/{config.name}'
-        if not os.path.exists(big_output_dir):
-            os.makedirs(big_output_dir)
-
-        np.save(f'{big_output_dir}/segmentation_{example_number}_{file}.npy', segmentation)
-        np.save(f'{big_output_dir}/affinity_{example_number}_{file}.npy', affinity)
+        write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
+                          output_dir=f'/mnt/home/jberman/ceph')
 
     if rank == 0:
         t_writer.close()
