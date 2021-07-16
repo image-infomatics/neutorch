@@ -3,6 +3,7 @@ import torch
 import click
 import os
 import cc3d
+from tqdm import tqdm
 
 from neutorch.dataset.affinity import TestDataset
 from neutorch.model.config import *
@@ -75,7 +76,7 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
         torch.backends.cudnn.benchmark = True
 
     res = test_model(model, patch_size, agglomerate=agglomerate,
-                     full_agglomerate=full_agglomerate, test_vol=test_vol, path=path, threshold=threshold, border_width=config.border_width)
+                     full_agglomerate=full_agglomerate, test_vol=test_vol, path=path, threshold=threshold, border_width=config.dataset.border_width)
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
@@ -91,12 +92,13 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
-def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1, full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
+def test_model(model, patch_size, stride = (10, 100, 100),
+    agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1, 
+    full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
 
     res = {}  # results
 
     # set up
-    stride = (8, 80, 80)
     begin = []
     for i in range(len(patch_size)):
         c = patch_size[i] // 2
@@ -107,8 +109,7 @@ def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 
     dataset = TestDataset(path, patch_size, stride, with_label=not test_vol)
 
     # over allocate then we will crop
-    rg = dataset.get_range()
-    affinity = np.zeros((3, *rg))
+    affinity = np.zeros((3,*dataset.full_shape))
 
     print('building affinity...')
     (sz, sy, sx) = stride
@@ -130,7 +131,7 @@ def test_model(model, patch_size,  agglomerate: bool = True, threshold: float = 
             predict = torch.sigmoid(logits)
             predict = torch.squeeze(predict)
             pred_affs = predict[0:3, ...]
-            pred_affs.cpu()
+            pred_affs = pred_affs.cpu()
             affinity[:, iz+bz:iz+sz+bz, iy+by:iy+sy+by, ix+bx:ix +
                      sx+bx] = pred_affs[:, bz:bz+sz, by:by+sy, bx:bx+sx]
 

@@ -16,7 +16,7 @@ import torch
 import numpy as np
 import click
 from tqdm import tqdm
-from time import time
+import time
 import os
 import random
 
@@ -74,7 +74,7 @@ import random
 @click.option('--ddp',
               type=bool, default=True, help='whether to use distrubited data parallel vs normal data parallel.'
               )
-@click.option('--fup', default=True, help='find unused parameters.'
+@click.option('--fup', default=False, help='find unused parameters.'
               )
 def train_wrapper(*args, **kwargs):
     if kwargs['ddp']:
@@ -341,7 +341,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
             # test checkpoint
             if example_number // test_interval > prev_example_number // test_interval:
-                ping = time()
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
                 for file in files:
                     res = test_model(model, patch_size, threshold=agg_threshold,
@@ -359,13 +358,18 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     v_writer.add_scalar(
                         f'cremi_metrics/full_cremi_score_{file}', metrics['cremi_score'], example_number)
 
+
     file = None
+    # sleep to avoid race
     if rank == 0:
         file = 'sample_A_pad'
+        time.sleep(5)
     elif rank == 1:
         file = 'sample_B_pad'
+        time.sleep(10)
     elif rank == 2:
         file = 'sample_C_pad'
+        time.sleep(15)
 
     if file is not None:
         # run test
@@ -384,7 +388,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         t_writer.close()
         v_writer.close()
         pbar.close()
-        dist.destroy_process_group()
 
 
 if __name__ == '__main__':

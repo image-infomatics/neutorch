@@ -59,13 +59,11 @@ def write_output_data(aff, seg, metrics,  config_name='', example_number='', fil
     # write seg
     if seg is not None:
         file = CremiFile(f'{output_dir}/seg_{file}.hdf', "w")
-        neuron_ids = Volume(seg, dtype=np.uint64, resolution=(
-            40.0, 4.0, 4.0), comment=f'seg_{file}')
+        neuron_ids = Volume(seg, resolution=(40.0, 4.0, 4.0), comment=f'seg_{file}')
         file.write_neuron_ids(neuron_ids)
 
     # write aff
     if aff is not None:
         file = CremiFile(f'{output_dir}/aff_{file}.hdf', "w")
-        neuron_ids = Volume(aff, dtype=np.uint64, resolution=(
-            40.0, 4.0, 4.0), comment=f'aff_{file}')
+        neuron_ids = Volume(aff, resolution=(40.0, 4.0, 4.0), comment=f'aff_{file}')
         file.write_neuron_ids(neuron_ids)

@@ -40,7 +40,7 @@ class TransformerConfig(object):
                  #### Loss ####
                  loss='BNCE',
                  #### Dataset ####
-                 num_examples=600000,
+                 num_examples=1000000,
                  patch_size=(26, 256, 256),
                  lsd=False,
                  aug=True,
@@ -134,16 +134,8 @@ c0 = TransformerConfig('swin', model='swin')
 c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
 c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7,7,7))
 c3 = TransformerConfig('swin_bigbigwin', model='swin', window_size=(9,9,9))
-c4 = TransformerConfig('RSUnet6', model='RSUnet',
+c4 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
-c5 = TransformerConfig('RSUnet4', model='RSUnet',
-                       learning_rate=0.001)
-c6 = TransformerConfig('RSUnet5', model='RSUnet',
-                       learning_rate=0.001)
-c7 = TransformerConfig('RSUnet3', model='RSUnet',
-                       learning_rate=0.001)
-c8 = TransformerConfig('RSUnet7', model='RSUnet',
-                       learning_rate=0.001)
-c9 = TransformerConfig('RSUnet8', model='RSUnet',
-                       learning_rate=0.001)
-CONFIGS = [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9]
+c5 = TransformerConfig('test2', model='RSUnet',
+                       learning_rate=0.001, num_examples=400)
+CONFIGS = [c0, c1, c2, c3, c4, c5]
