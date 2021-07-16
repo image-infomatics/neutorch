@@ -3,8 +3,8 @@ import numpy as np
 from neutorch.cremi.neuron_ids import NeuronIds
 import math
 import os
-from cremi import Annotations, Volume
-from cremi.io import CremiFile
+from neutorch.cremi.volume import Volume
+from neutorch.cremi.io import CremiFile
 
 
 def do_agglomeration(affs, threshold=0.7, aff_threshold_low=0.001,  aff_threshold_high=0.999, flip=True):
