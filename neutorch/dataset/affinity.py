@@ -232,17 +232,25 @@ class TestDataset(torch.utils.data.Dataset):
             self.label, self.label_offset = from_h5(
                 path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
 
-        self.full_shape = volume.shape
+        # true shape is what we finially crop to
+        self.true_shape = volume.shape
         (z, y, x) = volume.shape
         (pz, py, px) = patch_size
         (sz, sy, sx) = stride
+
+        # add padding for overlap
+        volume = np.pad(volume, ((0, pz), (0, py), (0, px)))
+
+        # full shape is with all the padding
+        self.full_shape = volume.shape
+
         self.stride = stride
         self.patch_size = patch_size
         self.volume = volume
-        self.z_len = (z-pz) // sz
-        self.y_len = (y-py) // sy
-        self.x_len = (x-px) // sx
-        self.length = (self.z_len * self.y_len * self.x_len) - 1
+        self.z_len = z // sz
+        self.y_len = y // sy
+        self.x_len = x // sx
+        self.length = (self.z_len * self.y_len * self.x_len)
 
         # pregenerate all sampling indices
         self.all_indices = self._gen_indices()

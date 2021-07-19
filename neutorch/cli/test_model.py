@@ -92,9 +92,9 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
-def test_model(model, patch_size, stride = (10, 100, 100),
-    agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1, 
-    full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
+def test_model(model, patch_size, stride=(10, 100, 100),
+               agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1,
+               full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
 
     res = {}  # results
 
@@ -109,7 +109,7 @@ def test_model(model, patch_size, stride = (10, 100, 100),
     dataset = TestDataset(path, patch_size, stride, with_label=not test_vol)
 
     # over allocate then we will crop
-    affinity = np.zeros((3,*dataset.full_shape))
+    affinity = np.zeros((3, *dataset.full_shape))
 
     print('building affinity...')
     (sz, sy, sx) = stride
@@ -117,6 +117,7 @@ def test_model(model, patch_size, stride = (10, 100, 100),
 
     for (index, image) in enumerate(dataset):
         (iz, iy, ix) = dataset.get_indices(index)
+        (shz, shy, skx) = image.shape
 
         # add dimension for batch
         image = torch.unsqueeze(image, 0)
@@ -132,8 +133,19 @@ def test_model(model, patch_size, stride = (10, 100, 100),
             predict = torch.squeeze(predict)
             pred_affs = predict[0:3, ...]
             pred_affs = pred_affs.cpu()
+
+            # write on edges, only need for full agg as otherwise we crop in
+            if full_agglomerate and (iz == 0 or iy == 0 or ix == 0):
+                affinity[:, iz:iz+shz, iy:iy+shy,
+                         ix:ix+skx] = pred_affs[:, :, :, :]
+
+            # write in center of patches
             affinity[:, iz+bz:iz+sz+bz, iy+by:iy+sy+by, ix+bx:ix +
                      sx+bx] = pred_affs[:, bz:bz+sz, by:by+sy, bx:bx+sx]
+
+    # crop to true shape
+    (tz, ty, tx) = dataset.true_shape
+    affinity = affinity[:, :tz, :ty, :tx]
 
     if not test_vol:
         label = dataset.label

@@ -62,6 +62,9 @@ import random
 @click.option('--test-interval', '-ts',
               type=int, default=100000, help='interval when to run full test.'
               )
+@click.option('--final-test', '-ts',
+              type=bool, default=True, help='weather to run a final test using best performing checkpoint.'
+              )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
@@ -99,7 +102,7 @@ def train_parallel(rank, world_size, kwargs):
 
 def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
-          training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int,
+          training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int, final_test: bool,
           load: str, verbose: bool,
           use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
 
@@ -158,6 +161,10 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     dataset = Dataset(path, patch_size=patch_size, length=num_examples,
                       lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug, border_width=config.dataset.border_width)
     patch_volume = np.product(patch_size)
+
+    # metrics to keep track of
+    best_avg_cremi_score = 9999
+    best_example_ckpt = 0
 
     # init model
     model = build_model_from_config(config.model)
@@ -302,46 +309,13 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     log_image(v_writer, 'validation/image',
                               validation_image, example_number)
 
-                    # do aggolmoration and metrics
-                    # but skip first couple
-                    if example_number // validation_interval > 5:
-                        metrics = {'voi_split': 0, 'voi_merge': 0,
-                                   'adapted_rand': 0, 'cremi_score': 0}
-
-                        # only compute over first in batch for time saving
-                        cremi_batch = min(2, batch_size)
-                        for i in range(cremi_batch):
-                            # get true segmentation and affinity map
-                            segmentation_truth = np.squeeze(batch.labels[i])
-                            affinity = validation_predict[i][0:3].cpu().numpy()
-
-                            # get predicted segmentation from affinity map
-                            segmentation_pred = do_agglomeration(affinity)
-
-                            # get the CREMI metrics from true segmentation vs predicted segmentation
-                            metric = cremi_metrics(
-                                segmentation_pred, segmentation_truth, border_width=config.dataset.border_width)
-                            for m in metric.keys():
-                                metrics[m] += metric[m] / cremi_batch
-
-                            # log the picture for first in batch
-                            if i == 0:
-                                log_segmentation(v_writer, 'validation/seg_true',
-                                                 segmentation_truth, example_number)
-                                log_segmentation(v_writer, 'validation/seg_pred',
-                                                 segmentation_pred, example_number)
-                        # log metrics
-                        for k, v in metrics.items():
-                            v_writer.add_scalar(
-                                f'cremi_metrics/{k}', v, example_number)
-
-            # save checkpoint
-            if example_number // checkpoint_interval > prev_example_number // checkpoint_interval or step == total_itrs-1:
-                save_chkpt(model, output_dir, example_number, optimizer)
-
             # test checkpoint
             if example_number // test_interval > prev_example_number // test_interval:
+
+                save_chkpt(model, output_dir, example_number, optimizer)
+                sum_cremi_score = 0
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
+
                 for file in files:
                     res = test_model(model, patch_size, threshold=agg_threshold,
                                      border_width=config.dataset.border_width, path=f'./data/{file}.hdf')
@@ -355,34 +329,47 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                                         affinity, example_number)
                     log_segmentation(v_writer, f'test/full_segmentation_{file}',
                                      segmentation, example_number)
+                    cremi_score = metrics['cremi_score']
+                    sum_cremi_score += cremi_score
                     v_writer.add_scalar(
-                        f'cremi_metrics/full_cremi_score_{file}', metrics['cremi_score'], example_number)
+                        f'cremi_metrics/full_cremi_score_{file}', cremi_score, example_number)
 
+                avg_cremi_score = sum_cremi_score / len(files)
 
-    file = None
-    # sleep to avoid race
-    if rank == 0:
-        file = 'sample_A_pad'
-        time.sleep(5)
-    elif rank == 1:
-        file = 'sample_B_pad'
-        time.sleep(10)
-    elif rank == 2:
-        file = 'sample_C_pad'
-        time.sleep(15)
+                if avg_cremi_score < best_avg_cremi_score:
+                    best_avg_cremi_score = avg_cremi_score
+                    best_example_ckpt = example_number
 
-    if file is not None:
-        # run test
-        res = test_model(model,
-                         patch_size,
-                         threshold=agg_threshold,
-                         border_width=config.dataset.border_width,
-                         full_agglomerate=True)
+                v_writer.add_scalar(
+                    f'cremi_metrics/avg_cremi_score_{file}', avg_cremi_score, example_number)
 
-        affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
+    if final_test:
 
-        write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
-                          output_dir=f'/mnt/home/jberman/ceph')
+        file = None
+        # sleep to avoid race
+        if rank == 0:
+            file = 'sample_A_pad'
+            time.sleep(5)
+        elif rank == 1:
+            file = 'sample_B_pad'
+            time.sleep(10)
+        elif rank == 2:
+            file = 'sample_C_pad'
+            time.sleep(15)
+
+        if file is not None:
+            # run test
+            res = test_model(model,
+                             patch_size,
+                             threshold=agg_threshold,
+                             load=f'{best_example_ckpt}',
+                             border_width=config.dataset.border_width,
+                             full_agglomerate=True)
+
+            affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
+
+            write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
+                              output_dir=f'/mnt/home/jberman/ceph')
 
     if rank == 0:
         t_writer.close()
