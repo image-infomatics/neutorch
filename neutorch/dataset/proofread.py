@@ -7,6 +7,7 @@ from .tio_transforms import *
 from .utils import from_h5
 from skimage.segmentation import expand_labels
 from einops import rearrange
+from time import time
 
 
 class ProofreadDataset(torch.utils.data.Dataset):
@@ -17,6 +18,7 @@ class ProofreadDataset(torch.utils.data.Dataset):
                  max_volume: int = 26*256*256*2,
                  patch_size: Tuple = (1, 16, 16),
                  expd_amt: Tuple = (4, 40, 40),
+                 shuffle: bool = True,
                  name: str = '') -> None:
         """Image volume with ground truth annotations
 
@@ -48,18 +50,21 @@ class ProofreadDataset(torch.utils.data.Dataset):
         self.pred_label = pred_label
         self.patch_size = patch_size
         self.expd_amt = expd_amt
+        self.shuffle = shuffle
 
         self.classes = []
         classes, counts = np.unique(pred_label, return_counts=True)
-        counts.sort()
-        counts = np.flip(counts)
+        sort_indices = np.argsort(counts)
+        sort_indices = np.flip(sort_indices)
+        classes = classes[sort_indices]
+        counts = counts[sort_indices]
         self.min_volume = min_volume
         self.max_volume = max_volume
         for i, c in enumerate(counts):
             if c > self.min_volume:
                 self.classes.append(classes[i])
             if c > self.max_volume:
-                print(c)
+                print(c, classes[i])
 
     # given some label, c, within the entire volume
     # then splites the neurite defined by this label into patches
@@ -67,8 +72,10 @@ class ProofreadDataset(torch.utils.data.Dataset):
     # the image_patches contrains 4 channels, c0 = image, c1,c2,c3, contrain orignal z,y,x coords
     def get_patch_array(self, c):
         print(c)
+        ping = time()
         indices = np.argwhere(self.pred_label == c)  # get location of labels
-
+        print(f'indices took {round(time() - ping, 3)}')
+        ping = time()
         # build ranges to crop neurite
         mins = np.amin(indices, axis=0)
         maxs = np.amax(indices, axis=0)
@@ -89,17 +96,21 @@ class ProofreadDataset(torch.utils.data.Dataset):
         label_sec = self.pred_label[crop_sl]
         image_sec = self.image[crop_sl]
         coord_sec = np.mgrid[crop_sl]
-
+        print(f'crop took {round(time() - ping, 3)}')
+        ping = time()
         # add channel for coordinates
         image_sec = np.expand_dims(image_sec, 0)
         image_sec = np.concatenate((image_sec, coord_sec), axis=0)
-
+        print(f'add channel took {round(time() - ping, 3)}')
+        ping = time()
         # zero other classes
         label_sec_b = np.zeros_like(label_sec)
         label_sec_b[label_sec == c] = 1
+        print(f'zero other classes took {round(time() - ping, 3)}')
+        ping = time()
 
+        # expand
         c = 1
-        print('expand')
         expanded = np.zeros_like(label_sec)
         ez, ey, ex = self.expd_amt
         # we are assuming ey == ez, could be better way to expand labels here
@@ -116,23 +127,53 @@ class ProofreadDataset(torch.utils.data.Dataset):
         for i in range(expanded.shape[0]):
             expanded[i, :, :] = expand_labels(
                 expanded[i, :, :], ex-(ez//2))
+        print(f'expandtook {round(time() - ping, 3)}')
+        ping = time()
 
         expanded = np.expand_dims(expanded, 0)
         true = np.expand_dims(true_label_sec, 0)
         combined = np.concatenate((image_sec, true, expanded), 0)
-        print('_patchify')
+        print(f'combined {round(time() - ping, 3)}')
+        ping = time()
+
         combined_arr = self._patchify(combined,  (1, *self.patch_size))
+
         image_arr = combined_arr[:, :-2, ...]
         label_arr = combined_arr[:, -2:-1, ...]
         exp_label_arr = combined_arr[:, -1:, ...]
-        print('drop_p')
+        print(f'split {round(time() - ping, 3)}')
+        ping = time()
+
         image_arr, label_arr = self._drop_patches_without_expanded_label(
             image_arr, label_arr, exp_label_arr, c)
+        print(f'drop {round(time() - ping, 3)}')
+        ping = time()
+
+        print('pre len:', image_arr.shape[0])
+        # shuffle
+        if self.shuffle:
+            shuffle_indices = np.random.rand(image_arr.shape[0]).argsort()
+            np.take(image_arr, shuffle_indices, axis=0, out=image_arr)
+            np.take(label_arr, shuffle_indices, axis=0, out=label_arr)
+
+        total_vol = np.product(image_arr.shape)
+        print('total vol:', total_vol)
+
+        if total_vol > self.max_volume:
+            max_patches = self.max_volume // np.product(self.patch_size)
+            print('max_patches', max_patches)
+            image_arr = image_arr[:max_patches]
+            label_arr = label_arr[:max_patches]
+        print('post len:', image_arr.shape[0])
+
+        print(f'drop again {round(time() - ping, 3)}')
+        ping = time()
 
         return (image_arr, label_arr)
 
     def _patchify(self, vol, patch_size):
 
+        ping = time()
         # pad, could do so we pad wth actual data is possible
         vol_shape = vol.shape
         pad_width = []
@@ -145,7 +186,8 @@ class ProofreadDataset(torch.utils.data.Dataset):
                 pad_width.append((0, 0))
         padded = np.pad(vol, pad_width)
         vol_shape = padded.shape
-
+        print(f'pad took {round(time() - ping, 3)}')
+        ping = time()
         # check
         assert vol_shape[-1] % patch_size[-1] == 0 and vol_shape[-2] % patch_size[-2] == 0 and vol_shape[-3] % patch_size[-3] == 0, 'Image dimensions must be divisible by the patch size.'
 
@@ -153,7 +195,8 @@ class ProofreadDataset(torch.utils.data.Dataset):
         pz, py, px = patch_size[-3:]
         arr = rearrange(
             padded, 'c (z pz) (y py) (x px) -> (z y x) c pz py px', pz=pz, py=py, px=px)
-
+        print(f'rearrange took {round(time() - ping, 3)}')
+        ping = time()
         return arr
 
     # drop zero patches
