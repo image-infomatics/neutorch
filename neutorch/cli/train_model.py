@@ -3,7 +3,7 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
-from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
+from neutorch.cremi.evaluate import write_output_data
 from neutorch.dataset.affinity import Dataset
 from neutorch.model.config import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
@@ -158,11 +158,11 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     random.seed(seed)
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
-    dataset = Dataset(path, patch_size=patch_size, length=num_examples,
-                      lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug, border_width=config.dataset.border_width)
+    dataset = build_dataset_from_config(config, path)
+
     patch_volume = np.product(patch_size)
     steps_since_training_interval = 0
-    
+
     # metrics to keep track of
     best_avg_cremi_score = 9999
     best_example_ckpt = 0
@@ -262,7 +262,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             if example_number // training_interval > prev_example_number // training_interval:
 
                 # compute loss
-                per_voxel_loss = accumulated_loss / patch_volume / steps_since_training_interval / batch_size
+                per_voxel_loss = accumulated_loss / patch_volume / \
+                    steps_since_training_interval / batch_size
 
                 # compute predict
                 predict = torch.sigmoid(logits)

@@ -9,9 +9,7 @@ import torch
 from .tio_transforms import *
 from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
-from .patch import AffinityBatch
 import torchio as tio
-from multiprocessing.pool import ThreadPool
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -19,10 +17,10 @@ class Dataset(torch.utils.data.Dataset):
                  path: str,
                  length: int,
                  lsd: bool = True,
-                 patch_size: Union[int, tuple] = (64, 64, 64),
-                 batch_size=1,
+                 patch_size: Union[int, tuple] = (26, 256, 256),
                  aug: bool = True,
                  border_width=1,
+                 affinity_offsets=[(1, 1, 1)]
                  ):
         """
         Parameters:
@@ -30,7 +28,6 @@ class Dataset(torch.utils.data.Dataset):
             length (int): number of examples
             lsd (bool): whether to use multiask lsd target
             patch_size (int or tuple): the patch size we are going to provide.
-            batch_size (int): the number of batches in each batch
             aug (bool): whether to use data augmentation
             border_width (int): border width for affinty map
         """
@@ -43,11 +40,17 @@ class Dataset(torch.utils.data.Dataset):
         # keep track of total length and current index
         self.length = length
         self.aug = aug
-        self.batch_size = batch_size
         self.patch_size = patch_size
         # we oversample the patch to create buffer for any transformation
-        self.over_sample = 4
-        patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
+        mz, my, mx = (2, 2, 2)
+        for os in affinity_offsets:
+            mz, my, mx = max(os[0], mz), max(os[1], my), max(os[2], mx)
+        self.over_sample = (mz*2, my*2, mx*2)
+        patch_size_oversized = tuple(
+            p+o for p, o in zip(patch_size, self.over_sample))
+
+        print(patch_size_oversized)
+
         # number of slices used to make validation volume
         # use the z dim of the patch size plus how ever much we oversample plus a little extra
         val_slices_bonus = 10
@@ -99,11 +102,17 @@ class Dataset(torch.utils.data.Dataset):
                     lsd_label = lsd_label[..., vs:, :, :]
 
                 val_ground_truth_volume = GroundTruthVolume(
-                    val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label, border_width=border_width, name=f'{file}_val')
+                    val_image, val_label, patch_size=patch_size_oversized,
+                    affinity_offsets=affinity_offsets,
+                    lsd_label=val_lsd_label,
+                    border_width=border_width, name=f'{file}_val')
                 validation_volumes.append(val_ground_truth_volume)
 
             train_ground_truth_volume = GroundTruthVolume(
-                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
+                image, label, patch_size=patch_size_oversized,
+                affinity_offsets=affinity_offsets,
+                lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
+
             training_volumes.append(train_ground_truth_volume)
 
         self.training_volumes = training_volumes
@@ -116,20 +125,6 @@ class Dataset(torch.utils.data.Dataset):
     @property
     def random_validation_batch(self):
         return self.get_batch_threaded(validation=True)
-
-    def get_batch_threaded(self, validation: bool = False):
-        # probably could be done without map...
-        num_threads = min(self.batch_size, 16)
-
-        def get_patch(_):
-            if validation:
-                return self.random_validation_patch
-            return self.random_training_patch
-
-        with ThreadPool(processes=num_threads) as pool:
-            patches = pool.map(get_patch, range(self.batch_size))
-
-        return AffinityBatch(patches)
 
     @property
     def random_training_patch(self):
@@ -147,7 +142,8 @@ class Dataset(torch.utils.data.Dataset):
         # print(f'transform takes {round(time()-ping, 3)} seconds.')
         patch.compute_affinity()
         # crop down from over sample to true patch size, crop after compute affinity
-        crop = tio.Crop(bounds_parameters=self.over_sample//2)
+        crop_bds = tuple([x//2 for x in self.over_sample])
+        crop = tio.Crop(bounds_parameters=crop_bds)
         patch.subject = crop(patch.subject)
 
         return patch

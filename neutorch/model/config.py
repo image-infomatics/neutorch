@@ -2,6 +2,7 @@ import torch
 from neutorch.model.swin_transformer3D import SwinUNet3D
 from neutorch.model.RSUNet import UNetModel
 from neutorch.model.FunUnet import FunUnet
+from neutorch.dataset.affinity import Dataset
 
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 import pprint
@@ -23,7 +24,7 @@ class TransformerConfig(object):
                  out_channels=3,
                  model='swin',
                  # RSUnet
-                 io_kernel = (1, 5, 5),
+                 io_kernel=(1, 5, 5),
                  # swin
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
@@ -42,6 +43,7 @@ class TransformerConfig(object):
                  #### Dataset ####
                  num_examples=1000000,
                  patch_size=(26, 256, 256),
+                 affinity_offsets=[(1, 1, 1)],
                  lsd=False,
                  aug=True,
                  border_width=2,
@@ -52,7 +54,7 @@ class TransformerConfig(object):
             'model': model,
             'in_channels': in_channels,
             'out_channels': out_channels,
-            'io_kernel':io_kernel,
+            'io_kernel': io_kernel,
             'swin_patch_size': swin_patch_size,
             'embed_dim': embed_dim,
             'depths': depths,
@@ -75,7 +77,8 @@ class TransformerConfig(object):
             'patch_size': patch_size,
             'lsd': lsd,
             'aug': aug,
-            'border_width': border_width
+            'border_width': border_width,
+            'affinity_offsets': affinity_offsets,
         })
 
     def toString(self):
@@ -123,6 +126,14 @@ def build_loss_from_config(config):
     raise ValueError(f'loss {config.loss} not implemented yet.')
 
 
+def build_dataset_from_config(config, path):
+    return Dataset(path, patch_size=config.patch_size, length=config.num_examples,
+                   affinity_offsets=config.affinity_offsets,
+                   lsd=config.lsd,
+                   aug=config.aug,
+                   border_width=config.border_width)
+
+
 def get_config(name):
     for c in CONFIGS:
         if c.name == name:
@@ -132,10 +143,10 @@ def get_config(name):
 
 c0 = TransformerConfig('swin', model='swin')
 c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
-c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7,7,7))
-c3 = TransformerConfig('swin_bigbigwin', model='swin', window_size=(9,9,9))
+c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7, 7, 7))
+c3 = TransformerConfig('swin_bigbigwin', model='swin', window_size=(9, 9, 9))
 c4 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
-c5 = TransformerConfig('test2', model='RSUnet',
-                       learning_rate=0.001, num_examples=400)
+c5 = TransformerConfig('RSUnet_LR', model='RSUnet',
+                       learning_rate=0.001, affinity_offsets=[(1, 1, 1), (2, 3, 3),  (3, 9, 9), (4, 27, 27)])
 CONFIGS = [c0, c1, c2, c3, c4, c5]

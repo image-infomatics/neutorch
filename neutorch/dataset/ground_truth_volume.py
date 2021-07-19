@@ -24,9 +24,10 @@ class AbstractGroundTruthVolume(ABC):
 class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
                  patch_size: Union[tuple, int],
+                 affinity_offsets,
                  forbbiden_distance_to_boundary: tuple = None,
                  lsd_label: Optional[np.ndarray] = None,
-                 border_width:int=1, 
+                 border_width: int = 1,
                  name: str = '') -> None:
         """Image volume with ground truth annotations
 
@@ -40,7 +41,9 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 if this is an integer, then all dimension is the same.
                 if this is a tuple of three integers, the positive and negative is the same
                 if this is a tuple of six integers, the positive and negative 
-                direction is defined separately. 
+                direction is defined separately.
+            affinity_offsets (tuple of 3uples): the amount of offsets to compute the long range affinity maps.
+                each tuple will create 3 channels in the target affinity map.
             lsd_label Optional[np.ndarray]:
                 an auxiliary label such as LSD which is treated similarly to normal label 
             name (str): name of volume
@@ -70,6 +73,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         self.border_width = border_width
         self.image = image
         self.label = label
+        self.affinity_offsets = affinity_offsets
         self.lsd_label = lsd_label
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
@@ -111,7 +115,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                                        bx: bx + self.patch_size[-1]
                                        ]
 
-        return AffinityPatch(image_patch, label_patch, lsd_label=lsd_label, border_width=self.border_width)
+        return AffinityPatch(image_patch, label_patch, affinity_offsets=self.affinity_offsets, lsd_label=lsd_label, border_width=self.border_width)
 
     @property
     def volume_sampling_weight(self):

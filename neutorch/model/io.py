@@ -116,7 +116,7 @@ def log_image(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
 
 
 def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-                        iter_idx: int, batch_index: int = 0,  slice_index: int = 0):
+                        iter_idx: int, batch_index: int = 0,  slice_index: int = 0, lsd=False):
     """write a Affinity Output tensor in tensorboard log
 
     Args:
@@ -141,11 +141,6 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     # look halfway in
     if slice_index == 0:
         slice_index = d // 2
-
-    # figure out whether these is lsd target
-    lsd = False
-    if c > 3:
-        lsd = True
 
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]

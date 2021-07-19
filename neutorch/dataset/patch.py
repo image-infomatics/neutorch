@@ -4,6 +4,7 @@ from typing import Optional
 
 from .border_mask import create_border_mask
 
+
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
                  delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
@@ -67,8 +68,9 @@ class Patch(object):
 
 class AffinityPatch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
+                 affinity_offsets,
                  lsd_label: Optional[np.ndarray] = None,
-                 border_width:int=1):
+                 border_width: int = 1):
         """A patch of volume containing both image and label
 
         Args:
@@ -99,12 +101,12 @@ class AffinityPatch(object):
 
         self.subject = subject
         self.border_width = border_width
+        self.affinity_offsets = affinity_offsets
 
-    # segmentation label into affinty map
-    def compute_affinity(self):
+    def _compute_affinty_from_offset(self, label, affinity_offset):
 
-        label = np.squeeze(self.subject.label.tensor.numpy())
         z0, y0, x0 = label.shape
+        (zo, yo, xo) = affinity_offset
 
         # add background mask
         masked_label = np.zeros(label.shape, dtype=np.uint64)
@@ -112,17 +114,30 @@ class AffinityPatch(object):
 
         # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
         affinity = np.zeros((3, z0, y0, x0))
-        affinity[2, 1:, :, :] = masked_label[..., 1:, :,
-                                             :] == masked_label[..., 0:-1, :, :]  # z channel
-        affinity[1, :, 1:, :] = masked_label[..., :, 1:,
-                                             :] == masked_label[..., :, 0:-1, :]  # y channel
-        affinity[0, :, :, 1:] = masked_label[..., :, :,
-                                             1:] == masked_label[..., :, :, 0:-1]  # x channel
+        affinity[2, zo:, :, :] = masked_label[..., zo:, :,
+                                              :] == masked_label[..., 0:-zo, :, :]  # z channel
+        affinity[1, :, yo:, :] = masked_label[..., :, yo:,
+                                              :] == masked_label[..., :, 0:-yo, :]  # y channel
+        affinity[0, :, :, xo:] = masked_label[..., :, :,
+                                              xo:] == masked_label[..., :, :, 0:-xo]  # x channel
 
         # but back in background labels
         affinity[:, masked_label == 0] = 0
 
-        tio_affinity = tio.LabelMap(tensor=affinity)
+        return affinity
+
+    # segmentation label into affinty map
+    def compute_affinity(self):
+
+        label = np.squeeze(self.subject.label.tensor.numpy())
+        z0, y0, x0 = label.shape
+        aff_channels = len(self.affinity_offsets) * 3
+        full_affinity = np.zeros((aff_channels, z0, y0, x0))
+        for i, off in enumerate(self.affinity_offsets):
+            aff = self._compute_affinty_from_offset(label, off)
+            full_affinity[i*3:(i+1)*3, :, :, :] = aff
+
+        tio_affinity = tio.LabelMap(tensor=full_affinity)
         self.subject.add_image(tio_affinity, 'affinity')
 
     @property
