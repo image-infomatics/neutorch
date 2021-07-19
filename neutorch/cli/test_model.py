@@ -114,11 +114,11 @@ def test_model(model, patch_size, stride=(10, 100, 100),
     print('building affinity...')
     (sz, sy, sx) = stride
     (bz, by, bx) = begin
+    (pz, py, px) = patch_size
 
     for (index, image) in enumerate(dataset):
         (iz, iy, ix) = dataset.get_indices(index)
-        (shz, shy, skx) = image.shape
-
+     
         # add dimension for batch
         image = torch.unsqueeze(image, 0)
 
@@ -136,8 +136,8 @@ def test_model(model, patch_size, stride=(10, 100, 100),
 
             # write on edges, only need for full agg as otherwise we crop in
             if full_agglomerate and (iz == 0 or iy == 0 or ix == 0):
-                affinity[:, iz:iz+shz, iy:iy+shy,
-                         ix:ix+skx] = pred_affs[:, :, :, :]
+                affinity[:, iz:iz+pz, iy:iy+py,
+                         ix:ix+px] = pred_affs[:, :, :, :]
 
             # write in center of patches
             affinity[:, iz+bz:iz+sz+bz, iy+by:iy+sy+by, ix+bx:ix +

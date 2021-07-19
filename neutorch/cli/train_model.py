@@ -145,7 +145,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         f = open(f"{output_dir}/config.txt", "w")
         f.write(config.toString())
         f.write(
-            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp:{ddp}, world_size:{world_size}, num_workers: {num_workers}\n')
+            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp: {ddp}, world_size: {world_size}, num_workers: {num_workers}\n')
         f.close()
 
         # clear in case was stopped before
@@ -161,7 +161,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     dataset = Dataset(path, patch_size=patch_size, length=num_examples,
                       lsd=config.dataset.lsd, batch_size=batch_size, aug=config.dataset.aug, border_width=config.dataset.border_width)
     patch_volume = np.product(patch_size)
-
+    steps_since_training_interval = 0
+    
     # metrics to keep track of
     best_avg_cremi_score = 9999
     best_example_ckpt = 0
@@ -252,6 +253,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         # the current number of examples the network has seen
         example_number = ((step+1) * batch_size*world_size)+start_example
 
+        steps_since_training_interval += 1
+
         # all io and validation done root process
         if rank == 0:
 
@@ -259,7 +262,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             if example_number // training_interval > prev_example_number // training_interval:
 
                 # compute loss
-                per_voxel_loss = accumulated_loss / patch_volume / training_interval / batch_size
+                per_voxel_loss = accumulated_loss / patch_volume / steps_since_training_interval / batch_size
 
                 # compute predict
                 predict = torch.sigmoid(logits)
@@ -274,6 +277,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
                 # reset acc loss
                 accumulated_loss = 0.0
+                steps_since_training_interval = 0
 
             # log for validation
             if example_number // validation_interval > prev_example_number // validation_interval:
