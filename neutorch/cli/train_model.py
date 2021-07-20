@@ -19,7 +19,7 @@ from tqdm import tqdm
 import time
 import os
 import random
-
+import shutil
 
 @click.command()
 @click.option('--config',
@@ -35,7 +35,7 @@ import random
               help='for reproducibility'
               )
 @click.option('--batch-size', '-b',
-              type=int, default=2,
+              type=int, default=1,
               help='size of mini-batch.'
               )
 @click.option('--sync-every', '-y',
@@ -51,7 +51,7 @@ import random
               help='num workers for pytorch dataloader. -1 means automatically set.'
               )
 @click.option('--training-interval', '-t',
-              type=int, default=1000, help='training interval in terms of examples seen to record data points.'
+              type=int, default=2000, help='training interval in terms of examples seen to record data points.'
               )
 @click.option('--validation-interval', '-v',
               type=int, default=5000, help='validation interval in terms of examples seen to record validation data.'
@@ -76,6 +76,7 @@ import random
               )
 @click.option('--fup', default=False, help='find unused parameters.'
               )
+
 def train_wrapper(*args, **kwargs):
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
@@ -112,7 +113,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
-    cpus = os.cpu_count()  # gets machine cpus, non avaiable, not ideal
+    cpus = len(os.sched_getaffinity(0))  # gets machine cpus
 
     # auto set
     if num_workers == -1:
@@ -130,7 +131,11 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     if rank != 0:
         verbose = False
 
+    
     output_dir = f'./{config.name}_run'
+    # if already exist make new name
+    if os.path.exists(output_dir):
+        output_dir = f'{output_dir}!'
 
     if rank == 0:
 
@@ -319,7 +324,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
 
                 for file in files:
-                    res = test_model(model, patch_size, f'./data/{file}.hdf', stride=patch_size, threshold=agg_threshold,
+                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(40,400,400), threshold=agg_threshold,
                                      border_width=config.dataset.border_width,)
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
@@ -364,7 +369,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             res = test_model(model,
                              patch_size,
                              f'{path}/{file}.hdf',
-                             stride=(20,200,200),
+                             pre_crop=None,
                              threshold=agg_threshold,
                              load=f'{best_example_ckpt}',
                              border_width=config.dataset.border_width,

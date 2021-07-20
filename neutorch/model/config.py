@@ -148,4 +148,6 @@ c3 = TransformerConfig('RSUnet', model='RSUnet',
                        learning_rate=0.001)
 c4 = TransformerConfig('RSUnet_LR', model='RSUnet',
                        learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
-CONFIGS = [c0, c1, c2, c3, c4]
+c5 = TransformerConfig('RSUnet2', model='RSUnet',
+                       learning_rate=0.001)
+CONFIGS = [c0, c1, c2, c3, c4, c5]

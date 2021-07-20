@@ -30,9 +30,9 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
               type=str, default='(26, 256, 256)',
               help='patch size from volume.'
               )
-@click.option('--stride', '-s',
-              type=str, default='(26, 256, 256)',
-              help='the size of the stride when sampling for test.'
+@click.option('--pre-crop',
+              type=str, default='None',
+              help='the amount the crop the volume before inference. Each value is applied even on either end.'
               )
 @click.option('--load', type=str, default='', help='load from checkpoint, path to ckpt file or chkpt number.'
               )
@@ -56,12 +56,12 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
 @click.option('--threshold',
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
-def test(path: str, config: str, patch_size: str, stride: str, load: str, parallel: str,
+def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, parallel: str,
          agglomerate: bool, test_vol: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float):
 
     # convert
     patch_size = eval(patch_size)
-    stride = eval(stride)
+    pre_crop = eval(pre_crop)
 
     # get config
     config = get_config(config)
@@ -82,11 +82,11 @@ def test(path: str, config: str, patch_size: str, stride: str, load: str, parall
         model = load_chkpt(model, load)
 
     # # gpu settings
-    # if torch.cuda.is_available():
-    #     model = model.cuda()
-    #     torch.backends.cudnn.benchmark = True
+    if torch.cuda.is_available():
+        model = model.cuda()
+        torch.backends.cudnn.benchmark = True
 
-    res = test_model(model, patch_size, path, stride=stride, agglomerate=agglomerate,
+    res = test_model(model, patch_size, path, pre_crop=pre_crop, agglomerate=agglomerate,
                      full_agglomerate=full_agglomerate, test_vol=test_vol, threshold=threshold, border_width=config.dataset.border_width)
 
     # save data
@@ -103,7 +103,7 @@ def test(path: str, config: str, patch_size: str, stride: str, load: str, parall
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
-def test_model(model, patch_size, path, stride=(26, 256, 256), batch_size: int = 1,
+def test_model(model, patch_size, path, pre_crop=None,
                agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1,
                full_agglomerate=False, test_vol=False):
 
@@ -115,6 +115,21 @@ def test_model(model, patch_size, path, stride=(26, 256, 256), batch_size: int =
     if not test_vol:
         label, label_offset = from_h5(
             path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
+
+
+    # numbers for cropping extra padding
+    if not test_vol:
+        (sz, sy, sx) = label.shape
+        (oz, oy, ox) = label_offset
+    else:
+        (sz, sy, sx) = (125, 1250, 1250)
+        (oz, oy, ox) = (37, 911, 911)
+
+    if pre_crop is not None:
+        (cpz, cpy, cpx) = pre_crop
+        volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
+        (oz, oy, ox) =  (oz-cpz, oy-cpy, ox-cpx)
+
     volume_chunk = Chunk(volume)
 
     print('building affinity...')
@@ -134,12 +149,7 @@ def test_model(model, patch_size, path, stride=(26, 256, 256), batch_size: int =
 
     affinity = inferencer(volume_chunk)
 
-    if not test_vol:
-        (sz, sy, sx) = label.shape
-        (oz, oy, ox) = label_offset
-    else:
-        (sz, sy, sx) = (125, 1250, 1250)
-        (oz, oy, ox) = (37, 911, 911)
+
 
     res['affinity'] = affinity
 
@@ -185,6 +195,8 @@ class MyPatchInferencer(PatchInferencerBase):
 
         self.num_output_channels = num_output_channels
         self.model = model
+        if torch.cuda.is_available():
+            self.output_patch_mask = torch.from_numpy(self.output_patch_mask).cuda()
 
     @property
     def compute_device(self):
@@ -194,7 +206,7 @@ class MyPatchInferencer(PatchInferencerBase):
         with torch.no_grad():
             input_patch = torch.from_numpy(input_patch).cuda()
             logits = self.model(input_patch)
-            predict = torch.sigmoid(logits)
+            predict = torch.sigmoid(logits) * self.output_patch_mask
             pred_affs = predict[0:3, ...]
             pred_affs = pred_affs.cpu().numpy()
         return pred_affs
