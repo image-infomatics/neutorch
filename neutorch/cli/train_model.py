@@ -56,11 +56,8 @@ import random
 @click.option('--validation-interval', '-v',
               type=int, default=5000, help='validation interval in terms of examples seen to record validation data.'
               )
-@click.option('--checkpoint-interval', '-ch',
-              type=int, default=50000, help='interval when to log checkpoints.'
-              )
 @click.option('--test-interval', '-ts',
-              type=int, default=100000, help='interval when to run full test.'
+              type=int, default=50000, help='interval when to run full test.'
               )
 @click.option('--final-test', '-ts',
               type=bool, default=True, help='weather to run a final test using best performing checkpoint.'
@@ -102,7 +99,7 @@ def train_parallel(rank, world_size, kwargs):
 
 def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
-          training_interval: int, validation_interval: int, checkpoint_interval: int, test_interval: int, final_test: bool,
+          training_interval: int, validation_interval: int, test_interval: int, final_test: bool,
           load: str, verbose: bool,
           use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
 
@@ -158,7 +155,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     random.seed(seed)
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
-    dataset = build_dataset_from_config(config, path)
+    dataset = build_dataset_from_config(config.dataset, path)
 
     patch_volume = np.product(patch_size)
     steps_since_training_interval = 0
@@ -284,7 +281,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             if example_number // validation_interval > prev_example_number // validation_interval:
 
                 # get validation_batch
-                batch = dataset.random_validation_batch
+                batch = dataset.random_validation_batch(batch_size)
                 validation_image = torch.from_numpy(batch.images)
                 validation_target = torch.from_numpy(batch.targets)
 
@@ -322,8 +319,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
 
                 for file in files:
-                    res = test_model(model, patch_size, threshold=agg_threshold,
-                                     border_width=config.dataset.border_width, path=f'./data/{file}.hdf')
+                    res = test_model(model, patch_size, f'./data/{file}.hdf', stride=patch_size, threshold=agg_threshold,
+                                     border_width=config.dataset.border_width,)
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
                     # convert to torch, add batch dim
@@ -346,7 +343,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     best_example_ckpt = example_number
 
                 v_writer.add_scalar(
-                    f'cremi_metrics/avg_cremi_score_{file}', avg_cremi_score, example_number)
+                    f'cremi_metrics/avg_cremi_score', avg_cremi_score, example_number)
 
     if final_test:
 
@@ -366,6 +363,8 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             # run test
             res = test_model(model,
                              patch_size,
+                             f'{path}/{file}.hdf',
+                             stride=(20,200,200),
                              threshold=agg_threshold,
                              load=f'{best_example_ckpt}',
                              border_width=config.dataset.border_width,

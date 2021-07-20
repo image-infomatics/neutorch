@@ -142,11 +142,10 @@ def get_config(name):
 
 
 c0 = TransformerConfig('swin', model='swin')
-c1 = TransformerConfig('swin_bi', model='swin', upsampler='bilinear')
-c2 = TransformerConfig('swin_bigwin', model='swin', window_size=(7, 7, 7))
-c3 = TransformerConfig('swin_bigbigwin', model='swin', window_size=(9, 9, 9))
-c4 = TransformerConfig('RSUnet2', model='RSUnet',
+c1 = TransformerConfig('swin_bigwin', model='swin', window_size=(7, 7, 7))
+c2 = TransformerConfig('swin_bigwin2', model='swin', window_size=(7, 7, 7), depths=[2,2,16,2], embed_dim=180)
+c3 = TransformerConfig('RSUnet', model='RSUnet',
                        learning_rate=0.001)
-c5 = TransformerConfig('RSUnet_LR', model='RSUnet',
-                       learning_rate=0.001, affinity_offsets=[(1, 1, 1), (2, 3, 3),  (3, 9, 9), (4, 27, 27)])
-CONFIGS = [c0, c1, c2, c3, c4, c5]
+c4 = TransformerConfig('RSUnet_LR', model='RSUnet',
+                       learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
+CONFIGS = [c0, c1, c2, c3, c4]

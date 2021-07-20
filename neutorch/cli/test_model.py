@@ -10,7 +10,7 @@ from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
 from neutorch.dataset.affinity import TestDataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
-
+from torch.utils.data.dataloader import DataLoader
 
 @click.command()
 @click.option('--config',
@@ -23,6 +23,10 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_outpu
 @click.option('--patch-size', '-p',
               type=str, default='(26, 256, 256)',
               help='patch size from volume.'
+              )
+@click.option('--stride', '-s',
+              type=str, default='(26, 256, 256)',
+              help='the size of the stride when sampling for test.'
               )
 @click.option('--load', type=str, default='', help='load from checkpoint, path to ckpt file or chkpt number.'
               )
@@ -46,11 +50,12 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_outpu
 @click.option('--threshold',
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
-def test(path: str, config: str, patch_size: str, load: str, parallel: str,
+def test(path: str, config: str, patch_size: str, stride: str, load: str, parallel: str,
          agglomerate: bool, test_vol: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float):
 
     # convert
     patch_size = eval(patch_size)
+    stride = eval(stride)
 
     # get config
     config = get_config(config)
@@ -75,8 +80,8 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
         model = model.cuda()
         torch.backends.cudnn.benchmark = True
 
-    res = test_model(model, patch_size, agglomerate=agglomerate,
-                     full_agglomerate=full_agglomerate, test_vol=test_vol, path=path, threshold=threshold, border_width=config.dataset.border_width)
+    res = test_model(model, patch_size, path, stride=stride, agglomerate=agglomerate,
+                     full_agglomerate=full_agglomerate, test_vol=test_vol, threshold=threshold, border_width=config.dataset.border_width)
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
@@ -92,12 +97,12 @@ def test(path: str, config: str, patch_size: str, load: str, parallel: str,
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
-def test_model(model, patch_size, stride=(10, 100, 100),
+def test_model(model, patch_size, path, stride=(26,256,256), batch_size:int = 1,
                agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1,
-               full_agglomerate=False, test_vol=False, path: str = './data/sample_C_pad.hdf'):
+               full_agglomerate=False, test_vol=False):
 
     res = {}  # results
-
+    
     # set up
     begin = []
     for i in range(len(patch_size)):
@@ -106,10 +111,12 @@ def test_model(model, patch_size, stride=(10, 100, 100),
         begin.append(c-o)
     begin = tuple(begin)
 
-    dataset = TestDataset(path, patch_size, stride, with_label=not test_vol)
+    crop_offset =  not full_agglomerate # if not full agglomerating then crop offset
+    dataset = TestDataset(path, patch_size, stride, with_label=not test_vol, crop_offset=crop_offset)
+    pbar = tqdm(total=len(dataset))
 
     # over allocate then we will crop
-    affinity = np.zeros((3, *dataset.full_shape))
+    affinity = np.zeros((3, *dataset.full_shape)) 
 
     print('building affinity...')
     (sz, sy, sx) = stride
@@ -118,7 +125,6 @@ def test_model(model, patch_size, stride=(10, 100, 100),
 
     for (index, image) in enumerate(dataset):
         (iz, iy, ix) = dataset.get_indices(index)
-     
         # add dimension for batch
         image = torch.unsqueeze(image, 0)
 
@@ -134,14 +140,17 @@ def test_model(model, patch_size, stride=(10, 100, 100),
             pred_affs = predict[0:3, ...]
             pred_affs = pred_affs.cpu()
 
-            # write on edges, only need for full agg as otherwise we crop in
-            if full_agglomerate and (iz == 0 or iy == 0 or ix == 0):
+            # # write on edges, otherwise we crop in
+            if (iz == 0 or iy == 0 or ix == 0):
                 affinity[:, iz:iz+pz, iy:iy+py,
-                         ix:ix+px] = pred_affs[:, :, :, :]
-
+                        ix:ix+px] = pred_affs[:, :, :, :]
             # write in center of patches
             affinity[:, iz+bz:iz+sz+bz, iy+by:iy+sy+by, ix+bx:ix +
-                     sx+bx] = pred_affs[:, bz:bz+sz, by:by+sy, bx:bx+sx]
+                    sx+bx] = pred_affs[:, bz:bz+sz, by:by+sy, bx:bx+sx]
+
+        pbar.update(1)
+
+    pbar.close()
 
     # crop to true shape
     (tz, ty, tx) = dataset.true_shape
@@ -155,12 +164,9 @@ def test_model(model, patch_size, stride=(10, 100, 100),
         (sz, sy, sx) = (125, 1250, 1250)
         (oz, oy, ox) = (37, 911, 911)
 
-    # crop before agglomerate
-    if not full_agglomerate:
-        affinity = affinity[:, oz:oz+sz, oy:oy+sy, ox:ox+sx]
-
     res['affinity'] = affinity
 
+    
     if agglomerate:
 
         print('doing agglomeration...')

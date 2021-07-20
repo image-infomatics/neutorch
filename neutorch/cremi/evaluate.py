@@ -3,6 +3,7 @@ import numpy as np
 from neutorch.cremi.neuron_ids import NeuronIds
 import math
 import os
+import h5py
 from neutorch.cremi.volume import Volume
 from neutorch.cremi.io import CremiFile
 
@@ -65,7 +66,6 @@ def write_output_data(aff, seg, metrics,  config_name='', example_number='', fil
 
     # write aff
     if aff is not None:
-        cremiFile = CremiFile(f'{output_dir}/aff_{file}.hdf', "w")
-        neuron_ids = Volume(aff, resolution=(
-            40.0, 4.0, 4.0), comment=f'aff_{file}')
-        cremiFile.write_neuron_ids(neuron_ids)
+        hf = h5py.File(f'{output_dir}/aff_{file}.h5', 'w')
+        hf.create_dataset('affinity', data=aff)
+        hf.close()

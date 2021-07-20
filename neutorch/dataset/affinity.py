@@ -2,13 +2,14 @@ from .utils import from_h5
 import random
 from typing import Union
 from time import time
-
+import math
 import numpy as np
 
 import torch
 from .tio_transforms import *
 from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
+from .patch import AffinityBatch
 import torchio as tio
 
 
@@ -48,8 +49,6 @@ class Dataset(torch.utils.data.Dataset):
         self.over_sample = (mz*2, my*2, mx*2)
         patch_size_oversized = tuple(
             p+o for p, o in zip(patch_size, self.over_sample))
-
-        print(patch_size_oversized)
 
         # number of slices used to make validation volume
         # use the z dim of the patch size plus how ever much we oversample plus a little extra
@@ -118,13 +117,12 @@ class Dataset(torch.utils.data.Dataset):
         self.training_volumes = training_volumes
         self.validation_volumes = validation_volumes
 
-    @property
-    def random_training_batch(self):
-        return self.get_batch_threaded(validation=False)
 
-    @property
-    def random_validation_batch(self):
-        return self.get_batch_threaded(validation=True)
+    def random_validation_batch(self, batch_size):
+        patches = []
+        for i in range(batch_size):
+            patches.append(self.random_training_patch)
+        return AffinityBatch(patches)
 
     @property
     def random_training_patch(self):
@@ -210,6 +208,7 @@ class TestDataset(torch.utils.data.Dataset):
                  patch_size: tuple,
                  stride: tuple,
                  with_label: bool = False,
+                 crop_offset: bool = False,
                  ):
         """
         Parameters:
@@ -217,6 +216,7 @@ class TestDataset(torch.utils.data.Dataset):
             patch_size (tuple): the patch size we are going to provide.
             with_label (bool): get label also
             stride (tuple): amount to over sampling area each example
+            crop_offset (bool): weather to crop the input from offest
         """
 
         super().__init__()
@@ -228,10 +228,22 @@ class TestDataset(torch.utils.data.Dataset):
             self.label, self.label_offset = from_h5(
                 path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
 
-        # true shape is what we finially crop to
-        self.true_shape = volume.shape
-        (z, y, x) = volume.shape
         (pz, py, px) = patch_size
+        
+        # true shape is what we finially crop to from 0:true_shape
+        self.true_shape = volume.shape
+
+        if crop_offset:
+            (shz, shy, shx) = self.label.shape
+            self.true_shape = self.label.shape
+            (oz, oy, ox) = self.label_offset
+            # also add patch size for better context on edges
+            volume = volume[oz:oz+shz+pz, oy:oy+shy+py, ox:ox+shx+px]
+            
+
+
+        (z, y, x) = volume.shape
+    
         (sz, sy, sx) = stride
 
         # add padding for overlap
@@ -243,9 +255,9 @@ class TestDataset(torch.utils.data.Dataset):
         self.stride = stride
         self.patch_size = patch_size
         self.volume = volume
-        self.z_len = z // sz
-        self.y_len = y // sy
-        self.x_len = x // sx
+        self.z_len = int(math.ceil(z / sz))
+        self.y_len = int(math.ceil(y / sy))
+        self.x_len = int(math.ceil(x / sx))
         self.length = (self.z_len * self.y_len * self.x_len)
 
         # pregenerate all sampling indices
