@@ -56,10 +56,10 @@ import shutil
 @click.option('--validation-interval', '-v',
               type=int, default=5000, help='validation interval in terms of examples seen to record validation data.'
               )
-@click.option('--test-interval', '-ts',
+@click.option('--test-interval', '-ti',
               type=int, default=50000, help='interval when to run full test.'
               )
-@click.option('--final-test', '-ts',
+@click.option('--final-test', '-ft',
               type=bool, default=True, help='weather to run a final test using best performing checkpoint.'
               )
 @click.option('--load',
@@ -133,15 +133,13 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
     
     output_dir = f'./{config.name}_run'
-    # if already exist make new name
-    if os.path.exists(output_dir):
-        output_dir = f'{output_dir}!'
 
     if rank == 0:
 
-        # make output folder if doesnt exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        # rm dir if exists then create
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir)
 
         # write config
         f = open(f"{output_dir}/config.txt", "w")
@@ -324,7 +322,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
 
                 for file in files:
-                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(40,400,400), threshold=agg_threshold,
+                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10,400,400), threshold=agg_threshold,
                                      border_width=config.dataset.border_width,)
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 

@@ -125,11 +125,12 @@ def test_model(model, patch_size, path, pre_crop=None,
         (sz, sy, sx) = (125, 1250, 1250)
         (oz, oy, ox) = (37, 911, 911)
 
+    print(volume.shape)
     if pre_crop is not None:
         (cpz, cpy, cpx) = pre_crop
         volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
         (oz, oy, ox) =  (oz-cpz, oy-cpy, ox-cpx)
-
+    
     volume_chunk = Chunk(volume)
 
     print('building affinity...')
@@ -148,7 +149,7 @@ def test_model(model, patch_size, path, pre_crop=None,
                             )
 
     affinity = inferencer(volume_chunk)
-
+    affinity = affinity.array
 
 
     res['affinity'] = affinity
