@@ -106,12 +106,10 @@ def test_model(model, patch_size, path, pre_crop=None,
     print('loading data...')
     volume = from_h5(path, dataset_path='volumes/raw')
     volume = volume.astype(np.float32) / 255.
+
     if not test_vol:
         label, label_offset = from_h5(
             path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
-
-    # numbers for cropping extra padding
-    if not test_vol:
         (sz, sy, sx) = label.shape
         (oz, oy, ox) = label_offset
     else:
