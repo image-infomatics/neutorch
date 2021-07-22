@@ -117,7 +117,6 @@ class Dataset(torch.utils.data.Dataset):
         self.training_volumes = training_volumes
         self.validation_volumes = validation_volumes
 
-
     def random_validation_batch(self, batch_size):
         patches = []
         for i in range(batch_size):
@@ -197,105 +196,6 @@ class Dataset(torch.utils.data.Dataset):
         X = patch.image
         y = patch.target
         return X, y
-
-    def __len__(self):
-        return self.length
-
-
-class TestDataset(torch.utils.data.Dataset):
-    def __init__(self,
-                 path: str,
-                 patch_size: tuple,
-                 stride: tuple,
-                 with_label: bool = False,
-                 crop_offset: bool = False,
-                 ):
-        """
-        Parameters:
-            path (str): file_path to the test  data.
-            patch_size (tuple): the patch size we are going to provide.
-            with_label (bool): get label also
-            stride (tuple): amount to over sampling area each example
-            crop_offset (bool): weather to crop the input from offest
-        """
-
-        super().__init__()
-
-        print(f'loading from {path}...')
-        volume = from_h5(path, dataset_path='volumes/raw')
-        volume = volume.astype(np.float32) / 255.
-        if with_label:
-            self.label, self.label_offset = from_h5(
-                path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
-
-        (pz, py, px) = patch_size
-        
-        # true shape is what we finially crop to from 0:true_shape
-        self.true_shape = volume.shape
-
-        if crop_offset:
-            (shz, shy, shx) = self.label.shape
-            self.true_shape = self.label.shape
-            (oz, oy, ox) = self.label_offset
-            # also add patch size for better context on edges
-            volume = volume[oz:oz+shz+pz, oy:oy+shy+py, ox:ox+shx+px]
-            
-
-
-        (z, y, x) = volume.shape
-    
-        (sz, sy, sx) = stride
-
-        # add padding for overlap
-        volume = np.pad(volume, ((0, pz), (0, py), (0, px)))
-
-        # full shape is with all the padding
-        self.full_shape = volume.shape
-
-        self.stride = stride
-        self.patch_size = patch_size
-        self.volume = volume
-        self.z_len = int(math.ceil(z / sz))
-        self.y_len = int(math.ceil(y / sy))
-        self.x_len = int(math.ceil(x / sx))
-        self.length = (self.z_len * self.y_len * self.x_len)
-
-        # pregenerate all sampling indices
-        self.all_indices = self._gen_indices()
-        self.length = len(self.all_indices)
-
-    def _gen_indices(self):
-        (pz, py, px) = self.stride
-        (iz, iy, ix) = (0, 0, 0)
-        all_indices = [(iz, iy, ix)]
-        for _ in range(self.length):
-            nx = ix + px
-            ny = iy
-            nz = iz
-            if(nx + px > self.x_len*px):
-                nx = 0
-                ny += py
-                if(ny + py > self.y_len*py):
-                    ny = 0
-                    nz += pz
-            all_indices.append((nz, ny, nx))
-            (iz, iy, ix) = (nz, ny, nx)
-        return all_indices
-
-    def get_indices(self, idx):
-        return self.all_indices[idx]
-
-    def __getitem__(self, idx):
-
-        (iz, iy, ix) = self.all_indices[idx]
-        (pz, py, px) = self.patch_size
-        patch = self.volume[iz:iz+pz, iy:iy+py, ix:ix+px]
-
-        # convert to torch and add dim for channel
-        patch = torch.Tensor(patch)
-        patch = torch.unsqueeze(patch, 0)
-
-        return patch
 
     def __len__(self):
         return self.length

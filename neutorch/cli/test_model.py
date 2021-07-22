@@ -6,12 +6,9 @@ import cc3d
 from tqdm import tqdm
 
 from neutorch.dataset.utils import from_h5
-from neutorch.dataset.affinity import TestDataset
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
-from neutorch.dataset.affinity import TestDataset
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
-from torch.utils.data.dataloader import DataLoader
 
 from chunkflow.chunk import Chunk
 from chunkflow.chunk.image.convnet.inferencer import Inferencer
