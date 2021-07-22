@@ -1,8 +1,7 @@
 import math
-
+from types import new_class
+from PIL.Image import new
 import numpy as np
-from numpy.core.numeric import indices
-
 import torch
 from skimage.segmentation import expand_labels
 from einops import rearrange
@@ -82,16 +81,36 @@ class ProofreadDataset(torch.utils.data.Dataset):
             classes = classes[sort_indices]
             counts = counts[sort_indices]
 
+        new_class = max(classes)
         self.min_volume = min_volume
         self.max_volume = max_volume
-        for i, c in enumerate(counts):
-            if c > self.min_volume:
-                self.classes.append(classes[i])
-            if c > self.max_volume:
-                print(c, c/self.max_volume, classes[i])
+        for i, count in enumerate(counts):
+            c = classes[i]
+            if count > self.min_volume and count <= self.max_volume:
+                self.classes.append(c)
+
+            # here if the volume of a segmentation is too large
+            # we split it into parts, by spliting the instances of the classes
+            # into parts in preds
+            if count > self.max_volume:
+                split_factor = math.ceil(count/self.max_volume)
+                original_shape = self.pred.shape
+                flat = self.pred.flatten()
+                new_flat = flat.copy()
+                step = math.ceil(count / split_factor)
+
+                for spl in range(split_factor):
+                    # pick a new_class and set label in section of patches to new_class
+                    new_class = new_class + 1
+                    self.classes.append(new_class)
+                    splt = np.s_[spl*step:(spl+1)*step]
+                    new_flat[np.where(flat == c)[0][splt]] = new_class
+
+                self.pred = np.reshape(new_flat, original_shape)
 
     # given some label, c, within the entire volume
     # returns indices of the patch array where c exists after the label is expanded
+
     def get_patch_array_indices(self, c):
         print(c)
         # get array indicies where there is label
