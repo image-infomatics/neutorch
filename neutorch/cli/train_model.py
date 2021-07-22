@@ -21,6 +21,7 @@ import os
 import random
 import shutil
 
+
 @click.command()
 @click.option('--config',
               type=str,
@@ -76,7 +77,6 @@ import shutil
               )
 @click.option('--fup', default=False, help='find unused parameters.'
               )
-
 def train_wrapper(*args, **kwargs):
     if kwargs['ddp']:
         world_size = torch.cuda.device_count()
@@ -131,7 +131,6 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     if rank != 0:
         verbose = False
 
-    
     output_dir = f'./{config.name}_run'
 
     if rank == 0:
@@ -322,7 +321,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                 files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
 
                 for file in files:
-                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10,400,400), threshold=agg_threshold,
+                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10, 400, 400), threshold=agg_threshold,
                                      border_width=config.dataset.border_width,)
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
@@ -363,13 +362,14 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
             time.sleep(15)
 
         if file is not None:
+            model = load_chkpt(
+                model, f'./{config.name}_run/chkpts/model_{best_example_ckpt}.chkpt')
             # run test
             res = test_model(model,
                              patch_size,
                              f'{path}/{file}.hdf',
                              pre_crop=None,
                              threshold=agg_threshold,
-                             load=f'{best_example_ckpt}',
                              border_width=config.dataset.border_width,
                              full_agglomerate=True)
 

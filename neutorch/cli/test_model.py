@@ -70,8 +70,6 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
     if parallel == 'dp':
         model = torch.nn.DataParallel(model)
 
-    output_dir = f'./{config.name}_run'
-
     example_number = 'unknown'
     # load chkpt
     if load != '':
@@ -91,9 +89,6 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
     file = path.replace('.', '').replace(
         '/', '').replace('hdf', '').replace('data', '')
@@ -116,7 +111,6 @@ def test_model(model, patch_size, path, pre_crop=None,
         label, label_offset = from_h5(
             path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
 
-
     # numbers for cropping extra padding
     if not test_vol:
         (sz, sy, sx) = label.shape
@@ -129,8 +123,8 @@ def test_model(model, patch_size, path, pre_crop=None,
     if pre_crop is not None:
         (cpz, cpy, cpx) = pre_crop
         volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
-        (oz, oy, ox) =  (oz-cpz, oy-cpy, ox-cpx)
-    
+        (oz, oy, ox) = (oz-cpz, oy-cpy, ox-cpx)
+
     volume_chunk = Chunk(volume)
 
     print('building affinity...')
@@ -150,7 +144,6 @@ def test_model(model, patch_size, path, pre_crop=None,
 
     affinity = inferencer(volume_chunk)
     affinity = affinity.array
-
 
     res['affinity'] = affinity
 
@@ -181,6 +174,8 @@ def test_model(model, patch_size, path, pre_crop=None,
     return res
 
 # used for chunkfow_api
+
+
 class MyPatchInferencer(PatchInferencerBase):
 
     def __init__(self, model,
@@ -197,7 +192,8 @@ class MyPatchInferencer(PatchInferencerBase):
         self.num_output_channels = num_output_channels
         self.model = model
         if torch.cuda.is_available():
-            self.output_patch_mask = torch.from_numpy(self.output_patch_mask).cuda()
+            self.output_patch_mask = torch.from_numpy(
+                self.output_patch_mask).cuda()
 
     @property
     def compute_device(self):
