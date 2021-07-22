@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import h5py
-
+from scipy.ndimage import distance_transform_edt
 
 def from_h5(file_name: str,
             dataset_path: str = '/main',

@@ -8,6 +8,7 @@ from .utils import from_h5
 from skimage.segmentation import expand_labels
 from einops import rearrange
 from time import time
+from scipy.ndimage import distance_transform_edt
 
 
 class ProofreadDataset(torch.utils.data.Dataset):
@@ -17,7 +18,8 @@ class ProofreadDataset(torch.utils.data.Dataset):
                  min_volume: int = 300,
                  max_volume: int = 26*256*256*2,
                  patch_size: Tuple = (1, 16, 16),
-                 expd_amt: Tuple = (4, 40, 40),
+                 expd_amt: int = 20,
+                 expand_sampling_resolution: Tuple = (1, 10, 10),
                  shuffle: bool = True,
                  name: str = '') -> None:
         """Image volume with ground truth annotations
@@ -36,7 +38,8 @@ class ProofreadDataset(torch.utils.data.Dataset):
             lsd_label Optional[np.ndarray]:
                 an auxiliary label such as LSD which is treated similarly to normal label
             name (str): name of volume
-            expd_amt (Tuple): how much to expand the label for context is x,y
+            expd_amt (int): how much to expand the label for context, modified by expand_sampling_resolution
+            expand_sampling_resolution (tuple) amount to account for the non-isotropic nature of images
         """
 
         self.name = name
@@ -50,6 +53,7 @@ class ProofreadDataset(torch.utils.data.Dataset):
         self.pred_label = pred_label
         self.patch_size = patch_size
         self.expd_amt = expd_amt
+        self.expand_sampling_resolution = expand_sampling_resolution
         self.shuffle = shuffle
 
         self.classes = []
@@ -83,8 +87,10 @@ class ProofreadDataset(torch.utils.data.Dataset):
         print(mins, maxs)
 
         for i in range(3):
-            mins[i] = max(mins[i] - self.expd_amt[i], 0)
-            maxs[i] = min(maxs[i] + self.expd_amt[i], self.shape[i]-1)
+            scaled_expd_amt = self.expd_amt * \
+                self.expand_sampling_resolution[i]
+            mins[i] = max(mins[i] - scaled_expd_amt, 0)
+            maxs[i] = min(maxs[i] + scaled_expd_amt, self.shape[i]-1)
 
         # crop
         crop_sl = np.s_[mins[0]:maxs[0]+1,
@@ -111,36 +117,23 @@ class ProofreadDataset(torch.utils.data.Dataset):
 
         # expand
         c = 1
-        expanded = np.zeros_like(label_sec)
-        ez, ey, ex = self.expd_amt
-        # we are assuming ey == ez, could be better way to expand labels here
-        # expand label in z,y
-        for i in range(label_sec_b.shape[2]):
-            expanded[:, :, i] = expand_labels(
-                label_sec_b[:, :, i], ez//2)
+        expanded = label_sec_b
+        # expanded = expand_labels_noniso(label_sec_b, distance=self.expd_amt, sampling=self.expand_sampling_resolution)
 
-        # expand label in z,x
-        for i in range(expanded.shape[1]):
-            expanded[:, i, :] = expand_labels(expanded[:, i, :], ez//2)
+        # print(f'expandtook {round(time() - ping, 3)}')
+        # ping = time()
 
-        # expand label in x,y
-        for i in range(expanded.shape[0]):
-            expanded[i, :, :] = expand_labels(
-                expanded[i, :, :], ex-(ez//2))
-        print(f'expandtook {round(time() - ping, 3)}')
-        ping = time()
+        # print(f'combined {round(time() - ping, 3)}')
+        # ping = time()
 
-        expanded = np.expand_dims(expanded, 0)
-        true = np.expand_dims(true_label_sec, 0)
-        combined = np.concatenate((image_sec, true, expanded), 0)
-        print(f'combined {round(time() - ping, 3)}')
-        ping = time()
+        # expanded = np.expand_dims(expanded, 0)
+        # true = np.expand_dims(true_label_sec, 0)
+        print(image_sec.shape, true_label_sec.shape, expanded.shape)
+        [image_sec, true_label_sec, expanded] = self._patchify(
+            [image_sec, true_label_sec, expanded],  (1, *self.patch_size))
 
-        combined_arr = self._patchify(combined,  (1, *self.patch_size))
+        print(image_sec.shape, true_label_sec.shape, expanded.shape)
 
-        image_arr = combined_arr[:, :-2, ...]
-        label_arr = combined_arr[:, -2:-1, ...]
-        exp_label_arr = combined_arr[:, -1:, ...]
         print(f'split {round(time() - ping, 3)}')
         ping = time()
 
@@ -171,9 +164,20 @@ class ProofreadDataset(torch.utils.data.Dataset):
 
         return (image_arr, label_arr)
 
-    def _patchify(self, vol, patch_size):
-
+    def _patchify(self, vols_arr, patch_size):
         ping = time()
+        indices = []
+        # add dim for vols with no channel, keep track of shapes for un-concat
+        for i, v in enumerate(vols_arr):
+            if len(v.shape) == 3:
+                v = np.expand_dims(v, 0)
+            indices.append(v.shape[0])
+            vols_arr[i] = v
+
+        # concat so that patches all stay the same
+        vol = np.concatenate(vols_arr, 0)
+        print(f'pre-concat took {round(time() - ping, 3)}')
+
         # pad, could do so we pad wth actual data is possible
         vol_shape = vol.shape
         pad_width = []
@@ -197,7 +201,16 @@ class ProofreadDataset(torch.utils.data.Dataset):
             padded, 'c (z pz) (y py) (x px) -> (z y x) c pz py px', pz=pz, py=py, px=px)
         print(f'rearrange took {round(time() - ping, 3)}')
         ping = time()
-        return arr
+
+        new_vols_arr = []
+        sum = 0
+        # un-concat
+        for idx in indices:
+            s, e = (sum, sum+idx)
+            new_vols_arr.append(arr[:, s:e, ...])
+            sum += e
+
+        return new_vols_arr
 
     # drop zero patches
     # assumes image_arr and label_arr are in corresponding order
@@ -218,3 +231,24 @@ class ProofreadDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.classes)
+
+
+def expand_labels_noniso(label_image, distance=1, sampling=None):
+
+    ping = time()
+    distances, nearest_label_coords = distance_transform_edt(
+        label_image == 0, return_indices=True, sampling=sampling
+    )
+    print(f'distance_transform_edt {round(time() - ping, 3)}')
+    labels_out = np.zeros_like(label_image)
+    dilate_mask = distances <= distance
+    # build the coordinates to find nearest labels,
+    # in contrast to [1] this implementation supports label arrays
+    # of any dimension
+    masked_nearest_label_coords = [
+        dimension_indices[dilate_mask]
+        for dimension_indices in nearest_label_coords
+    ]
+    nearest_labels = label_image[tuple(masked_nearest_label_coords)]
+    labels_out[dilate_mask] = nearest_labels
+    return labels_out
