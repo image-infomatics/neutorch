@@ -1,7 +1,8 @@
 import os
 import numpy as np
 import h5py
-from scipy.ndimage import distance_transform_edt
+import math
+
 
 def from_h5(file_name: str,
             dataset_path: str = '/main',
@@ -21,3 +22,32 @@ def from_h5(file_name: str,
             return arr, pixel_offset
 
     return arr
+
+
+def split_int(i, bias='left'):
+    f = i/2
+    big = math.ceil(f)
+    sm = math.floor(f)
+    if bias == 'left':
+        return (big, sm)
+    elif bias == 'right':
+        return (sm, big)
+
+# pad, could do so we pad wth actual data is possible
+
+
+def pad_2_divisible_by(vol, factor):
+    vol_shape = vol.shape
+    pad_width = []
+    for i in range(len(factor)):
+        left = vol_shape[i] % factor[i]
+        if left > 0:
+            add = factor[i] - left
+            pad_width.append(split_int(add))
+        else:
+            pad_width.append((0, 0))
+    padded = np.pad(vol, pad_width)
+    vol_shape = padded.shape
+    # check
+    assert vol_shape[-1] % factor[-1] == 0 and vol_shape[-2] % factor[-2] == 0 and vol_shape[-3] % factor[-3] == 0, 'Image dimensions must be divisible by the patch size.'
+    return padded

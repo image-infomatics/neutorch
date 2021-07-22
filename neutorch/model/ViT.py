@@ -1,17 +1,10 @@
 import torch
+import numpy as np
 from torch import nn, einsum
 import torch.nn.functional as F
 
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-
-# helpers
-
-
-def pair(t):
-    return t if isinstance(t, tuple) else (t, t)
-
-# classes
 
 
 class PreNorm(nn.Module):
@@ -89,40 +82,38 @@ class Transformer(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, *, patch_size, dim, depth, heads, mlp_dim, pos_embedding='none', channels=3, dim_head=64, dropout=0., emb_dropout=0.):
+    def __init__(self, *, patch_size, in_channels, out_channels, patch_emb_dim, depth, heads, mlp_dim, pos_embedding='none', channels=3, dim_head=64, dropout=0., emb_dropout=0.):
         super().__init__()
 
-        patch_height, patch_width = pair(patch_size)
-
-        # assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
-
-        # num_patches = (image_height // patch_height) * \
-        #     (image_width // patch_width)
-        patch_dim = channels * patch_height * patch_width
-        # assert pool in {
-        #     'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
         assert pos_embedding in {
             'none', 'global', 'sin', 'CPE', 'learned'}, "pos_embedding type must be of type  'none', 'global', 'sin', 'CPE', 'learned'"
 
-        self.to_patch_embedding = nn.Sequential(
-            Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)',
-                      p1=patch_height, p2=patch_width),
-            nn.Linear(patch_dim, dim),
+        pz, py, px = patch_size
+        patch_dim_in = np.product(patch_size) * in_channels
+        self.embed_patch = nn.Sequential(
+            Rearrange('b n pci pz py px -> b n (pci pz py px)'),
+            nn.Linear(patch_dim_in, patch_emb_dim),
         )
 
         self.pos_embedding = None
         if pos_embedding == '':
-            # self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
             pass
 
         self.dropout = nn.Dropout(emb_dropout)
 
         self.transformer = Transformer(
-            dim, depth, heads, dim_head, mlp_dim, dropout)
+            patch_emb_dim, depth, heads, dim_head, mlp_dim, dropout)
+
+        patch_dim_out = np.product(patch_size) * out_channels
+        pco = out_channels
+        self.unembed_patch = nn.Sequential(
+            nn.Linear(patch_emb_dim, patch_dim_out),
+            Rearrange('b n (pco pz py px) -> b n pco pz py px',
+                      pco=pco, pz=pz, py=py, px=px),
+        )
 
     def forward(self, img):
-        x = self.to_patch_embedding(img)
-        b, n, _ = x.shape
+        x = self.embed_patch(img)
         print('post patch emb ', x.shape)
 
         if self.pos_embedding is not None:
@@ -132,4 +123,6 @@ class ViT(nn.Module):
 
         x = self.transformer(x)
         print('post trans ', x.shape)
+        x = self.unembed_patch(x)
+
         return x

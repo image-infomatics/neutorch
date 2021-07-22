@@ -1,26 +1,26 @@
 import math
 
 import numpy as np
+from numpy.core.numeric import indices
 
 import torch
-from .tio_transforms import *
-from .utils import from_h5
 from skimage.segmentation import expand_labels
 from einops import rearrange
 from time import time
-from scipy.ndimage import distance_transform_edt
+from neutorch.dataset.utils import pad_2_divisible_by
 
 
 class ProofreadDataset(torch.utils.data.Dataset):
     def __init__(self, image: np.ndarray,
-                 pred_label: np.ndarray,
-                 true_label: np.ndarray,
+                 pred: np.ndarray,
+                 true: np.ndarray,
+                 aff: np.ndarray,
                  min_volume: int = 300,
                  max_volume: int = 26*256*256*2,
-                 patch_size: Tuple = (1, 16, 16),
-                 expd_amt: int = 20,
-                 expand_sampling_resolution: Tuple = (1, 10, 10),
+                 patch_size=(1, 16, 16),
+                 expd_amt: int = 4,
                  shuffle: bool = True,
+                 sort: bool = False,
                  name: str = '') -> None:
         """Image volume with ground truth annotations
 
@@ -38,217 +38,120 @@ class ProofreadDataset(torch.utils.data.Dataset):
             lsd_label Optional[np.ndarray]:
                 an auxiliary label such as LSD which is treated similarly to normal label
             name (str): name of volume
-            expd_amt (int): how much to expand the label for context, modified by expand_sampling_resolution
-            expand_sampling_resolution (tuple) amount to account for the non-isotropic nature of images
+            expd_amt (int): how much to expand the label for context, each unit expands by one patch_size
         """
 
         self.name = name
         assert image.ndim == 3
-        assert image.shape == true_label.shape[-3:]
-        assert image.shape == pred_label.shape[-3:]
+        assert image.shape == true.shape[-3:]
+        assert image.shape == pred.shape[-3:]
 
-        self.shape = image.shape
-        self.image = image
-        self.true_label = true_label
-        self.pred_label = pred_label
-        self.patch_size = patch_size
+        # add channel dim
+        self.patch_size = (1, *patch_size)
+
+        self.og_shape = image.shape
+        (sz, sy, sx) = self.og_shape
+
+        # volumes
+        image = image.astype(np.float32) / 255.
+        self.image, self.padded_shape = self._patchify(
+            np.expand_dims(image, 0), return_padded_shape=True)
+        self.pred = self._patchify(np.expand_dims(pred, 0))
+
+        # optional in test case
+        self.true = None
+        if true is not None:
+            self.true = self._patchify(np.expand_dims(true, 0))
+        # optional, may not want pred affs
+        self.aff = None
+        if aff is not None:
+            self.aff = self._patchify(aff)
+
+        # keep track of global cords
+        self.cords = self._patchify(np.mgrid[0:sz, 0:sy, 0:sx])
+
         self.expd_amt = expd_amt
-        self.expand_sampling_resolution = expand_sampling_resolution
         self.shuffle = shuffle
 
         self.classes = []
-        classes, counts = np.unique(pred_label, return_counts=True)
-        sort_indices = np.argsort(counts)
-        sort_indices = np.flip(sort_indices)
-        classes = classes[sort_indices]
-        counts = counts[sort_indices]
+        classes, counts = np.unique(pred, return_counts=True)
+
+        if sort:
+            sort_indices = np.argsort(counts)
+            sort_indices = np.flip(sort_indices)
+            classes = classes[sort_indices]
+            counts = counts[sort_indices]
+
         self.min_volume = min_volume
         self.max_volume = max_volume
         for i, c in enumerate(counts):
             if c > self.min_volume:
                 self.classes.append(classes[i])
             if c > self.max_volume:
-                print(c, classes[i])
+                print(c, c/self.max_volume, classes[i])
 
     # given some label, c, within the entire volume
-    # then splites the neurite defined by this label into patches
-    # then returns two arrays (images, labels) where each array contains the patches
-    # the image_patches contrains 4 channels, c0 = image, c1,c2,c3, contrain orignal z,y,x coords
-    def get_patch_array(self, c):
+    # returns indices of the patch array where c exists after the label is expanded
+    def get_patch_array_indices(self, c):
         print(c)
-        ping = time()
-        indices = np.argwhere(self.pred_label == c)  # get location of labels
-        print(f'indices took {round(time() - ping, 3)}')
-        ping = time()
-        # build ranges to crop neurite
-        mins = np.amin(indices, axis=0)
-        maxs = np.amax(indices, axis=0)
+        # get array indicies where there is label
+        arr_indc = np.any(self.pred == c, axis=(1, 2, 3, 4))
 
-        print(mins, maxs)
+        # reshape back into shape of padded volume
+        _, dz, dy, dx = [pad//p for p,
+                         pad in zip(self.patch_size, self.padded_shape)]
+        vol_shaped_indices = rearrange(
+            arr_indc, '(dz dy dx) -> dz dy dx', dz=dz, dy=dy, dx=dx)
 
-        for i in range(3):
-            scaled_expd_amt = self.expd_amt * \
-                self.expand_sampling_resolution[i]
-            mins[i] = max(mins[i] - scaled_expd_amt, 0)
-            maxs[i] = min(maxs[i] + scaled_expd_amt, self.shape[i]-1)
+        # convert to numbers to perform expand_labels
+        visible_indices = np.zeros_like(vol_shaped_indices)
+        visible_indices[vol_shaped_indices] = 1
 
-        # crop
-        crop_sl = np.s_[mins[0]:maxs[0]+1,
-                        mins[1]:maxs[1]+1, mins[2]:maxs[2]+1]
+        # expand labels
+        visible_indices_exp = expand_labels(
+            visible_indices, distance=self.expd_amt)
 
-        print(crop_sl)
+        # convert back to bool indexing
+        vol_shaped_indices_exp = visible_indices_exp == 1
 
-        true_label_sec = self.true_label[crop_sl]
-        label_sec = self.pred_label[crop_sl]
-        image_sec = self.image[crop_sl]
-        coord_sec = np.mgrid[crop_sl]
-        print(f'crop took {round(time() - ping, 3)}')
-        ping = time()
-        # add channel for coordinates
-        image_sec = np.expand_dims(image_sec, 0)
-        image_sec = np.concatenate((image_sec, coord_sec), axis=0)
-        print(f'add channel took {round(time() - ping, 3)}')
-        ping = time()
-        # zero other classes
-        label_sec_b = np.zeros_like(label_sec)
-        label_sec_b[label_sec == c] = 1
-        print(f'zero other classes took {round(time() - ping, 3)}')
-        ping = time()
+        # rearrange back to array indices
+        arr_indc_exp = rearrange(
+            vol_shaped_indices_exp, 'dz dy dx -> (dz dy dx)', dz=dz, dy=dy, dx=dx)
 
-        # expand
-        c = 1
-        expanded = label_sec_b
-        # expanded = expand_labels_noniso(label_sec_b, distance=self.expd_amt, sampling=self.expand_sampling_resolution)
+        # return indices of the array where label is or expanded into
+        return arr_indc_exp
 
-        # print(f'expandtook {round(time() - ping, 3)}')
-        # ping = time()
-
-        # print(f'combined {round(time() - ping, 3)}')
-        # ping = time()
-
-        # expanded = np.expand_dims(expanded, 0)
-        # true = np.expand_dims(true_label_sec, 0)
-        print(image_sec.shape, true_label_sec.shape, expanded.shape)
-        [image_sec, true_label_sec, expanded] = self._patchify(
-            [image_sec, true_label_sec, expanded],  (1, *self.patch_size))
-
-        print(image_sec.shape, true_label_sec.shape, expanded.shape)
-
-        print(f'split {round(time() - ping, 3)}')
-        ping = time()
-
-        image_arr, label_arr = self._drop_patches_without_expanded_label(
-            image_arr, label_arr, exp_label_arr, c)
-        print(f'drop {round(time() - ping, 3)}')
-        ping = time()
-
-        print('pre len:', image_arr.shape[0])
-        # shuffle
-        if self.shuffle:
-            shuffle_indices = np.random.rand(image_arr.shape[0]).argsort()
-            np.take(image_arr, shuffle_indices, axis=0, out=image_arr)
-            np.take(label_arr, shuffle_indices, axis=0, out=label_arr)
-
-        total_vol = np.product(image_arr.shape)
-        print('total vol:', total_vol)
-
-        if total_vol > self.max_volume:
-            max_patches = self.max_volume // np.product(self.patch_size)
-            print('max_patches', max_patches)
-            image_arr = image_arr[:max_patches]
-            label_arr = label_arr[:max_patches]
-        print('post len:', image_arr.shape[0])
-
-        print(f'drop again {round(time() - ping, 3)}')
-        ping = time()
-
-        return (image_arr, label_arr)
-
-    def _patchify(self, vols_arr, patch_size):
-        ping = time()
-        indices = []
-        # add dim for vols with no channel, keep track of shapes for un-concat
-        for i, v in enumerate(vols_arr):
-            if len(v.shape) == 3:
-                v = np.expand_dims(v, 0)
-            indices.append(v.shape[0])
-            vols_arr[i] = v
-
-        # concat so that patches all stay the same
-        vol = np.concatenate(vols_arr, 0)
-        print(f'pre-concat took {round(time() - ping, 3)}')
-
-        # pad, could do so we pad wth actual data is possible
-        vol_shape = vol.shape
-        pad_width = []
-        for i in range(len(patch_size)):
-            left = vol_shape[i] % patch_size[i]
-            if left > 0:
-                add = patch_size[i] - left
-                pad_width.append((math.floor(add/2), math.ceil(add/2)))
-            else:
-                pad_width.append((0, 0))
-        padded = np.pad(vol, pad_width)
-        vol_shape = padded.shape
-        print(f'pad took {round(time() - ping, 3)}')
-        ping = time()
-        # check
-        assert vol_shape[-1] % patch_size[-1] == 0 and vol_shape[-2] % patch_size[-2] == 0 and vol_shape[-3] % patch_size[-3] == 0, 'Image dimensions must be divisible by the patch size.'
+    # convert a volume into an array of patches of size patch size
+    # can return shape of padded volume needed
+    def _patchify(self, vol, return_padded_shape=False):
 
         # patch
-        pz, py, px = patch_size[-3:]
-        arr = rearrange(
-            padded, 'c (z pz) (y py) (x px) -> (z y x) c pz py px', pz=pz, py=py, px=px)
-        print(f'rearrange took {round(time() - ping, 3)}')
-        ping = time()
+        _, pz, py, px = self.patch_size
 
-        new_vols_arr = []
-        sum = 0
-        # un-concat
-        for idx in indices:
-            s, e = (sum, sum+idx)
-            new_vols_arr.append(arr[:, s:e, ...])
-            sum += e
+        vol = pad_2_divisible_by(vol, self.patch_size)
+        vol_arr = rearrange(
+            vol, 'c (z pz) (y py) (x px) -> (z y x) c pz py px', pz=pz, py=py, px=px)
 
-        return new_vols_arr
-
-    # drop zero patches
-    # assumes image_arr and label_arr are in corresponding order
-    def _drop_patches_without_expanded_label(self, image_arr, label_arr, exp_label_arr, c):
-        i_drop_arr = []
-        l_drop_arr = []
-        for i in range(label_arr.shape[0]):
-            if c in exp_label_arr[i]:
-                i_drop_arr.append(image_arr[i])
-                l_drop_arr.append(label_arr[i])
-        return np.array(i_drop_arr), np.array(l_drop_arr)
+        if return_padded_shape:
+            return vol_arr, vol.shape
+        return vol_arr
 
     def __getitem__(self, idx):
         c = self.classes[idx]
-        (X, y) = self.get_patch_array(c)
+        indices = self.get_patch_array_indices(c)
 
-        return X, y
+        image_select = self.image[indices]
+        cords_select = self.cords[indices]
+
+        ret = [image_select, cords_select]
+        if self.aff is not None:
+            aff_select = self.aff[indices]
+            ret.append(aff_select)
+        if self.true is not None:
+            true_select = self.true[indices]
+            ret.append(true_select)
+
+        return tuple(ret)
 
     def __len__(self):
         return len(self.classes)
-
-
-def expand_labels_noniso(label_image, distance=1, sampling=None):
-
-    ping = time()
-    distances, nearest_label_coords = distance_transform_edt(
-        label_image == 0, return_indices=True, sampling=sampling
-    )
-    print(f'distance_transform_edt {round(time() - ping, 3)}')
-    labels_out = np.zeros_like(label_image)
-    dilate_mask = distances <= distance
-    # build the coordinates to find nearest labels,
-    # in contrast to [1] this implementation supports label arrays
-    # of any dimension
-    masked_nearest_label_coords = [
-        dimension_indices[dilate_mask]
-        for dimension_indices in nearest_label_coords
-    ]
-    nearest_labels = label_image[tuple(masked_nearest_label_coords)]
-    labels_out[dilate_mask] = nearest_labels
-    return labels_out
