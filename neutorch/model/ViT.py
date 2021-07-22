@@ -1,9 +1,8 @@
 import torch
 import numpy as np
 from torch import nn, einsum
-import torch.nn.functional as F
 
-from einops import rearrange, repeat
+from einops import rearrange
 from einops.layers.torch import Rearrange
 
 
@@ -114,15 +113,12 @@ class ViT(nn.Module):
 
     def forward(self, img):
         x = self.embed_patch(img)
-        print('post patch emb ', x.shape)
 
         if self.pos_embedding is not None:
             x += self.pos_embedding(x)
 
         x = self.dropout(x)
-
         x = self.transformer(x)
-        print('post trans ', x.shape)
         x = self.unembed_patch(x)
 
         return x
