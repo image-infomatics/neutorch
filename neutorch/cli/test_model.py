@@ -93,7 +93,9 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
     file = path.replace('.', '').replace(
         '/', '').replace('hdf', '').replace('data', '')
 
-    print(metrics)
+    if metrics is not None:
+        print(metrics)
+
     write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
                       output_dir=f'/mnt/home/jberman/ceph')
 
@@ -119,7 +121,6 @@ def test_model(model, patch_size, path, pre_crop=None,
         (sz, sy, sx) = (125, 1250, 1250)
         (oz, oy, ox) = (37, 911, 911)
 
-    print(volume.shape)
     if pre_crop is not None:
         (cpz, cpy, cpx) = pre_crop
         volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
@@ -165,9 +166,13 @@ def test_model(model, patch_size, path, pre_crop=None,
 
         res['segmentation'] = segmentation
 
-        print('computing metrics...')
-        # get the CREMI metrics from true segmentation vs predicted segmentation
-        metrics = cremi_metrics(segmentation, label, border_width=border_width)
+        if not test_vol:
+            print('computing metrics...')
+            # get the CREMI metrics from true segmentation vs predicted segmentation
+            metrics = cremi_metrics(
+                segmentation, label, border_width=border_width)
+        else:
+            metrics = None
 
         res['metrics'] = metrics
 
