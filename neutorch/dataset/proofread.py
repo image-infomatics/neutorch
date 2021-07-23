@@ -1,12 +1,12 @@
 import math
-from types import new_class
-from PIL.Image import new
 import numpy as np
 import torch
 from skimage.segmentation import expand_labels
 from einops import rearrange
 from time import time
-from neutorch.dataset.utils import pad_2_divisible_by
+
+from neutorch.dataset.utils import pad_2_divisible_by, compute_affinty_from_offset
+from positional_encodings import PositionalEncoding3D
 
 
 class ProofreadDataset(torch.utils.data.Dataset):
@@ -20,7 +20,9 @@ class ProofreadDataset(torch.utils.data.Dataset):
                  expd_amt: int = 4,
                  shuffle: bool = True,
                  sort: bool = False,
-                 name: str = '') -> None:
+                 positional_encoding: str = 'euclid',
+                 name: str = '',
+                 border_width: int = 1) -> None:
         """Image volume with ground truth annotations
 
         Args:
@@ -60,20 +62,35 @@ class ProofreadDataset(torch.utils.data.Dataset):
         # optional in test case
         self.true = None
         if true is not None:
-            self.true = self._patchify(np.expand_dims(true, 0))
+            affinities = compute_affinty_from_offset(
+                true, (1, 1, 1), border_width)
+            self.true = self._patchify(affinities)
         # optional, may not want pred affs
         self.aff = None
         if aff is not None:
             self.aff = self._patchify(aff)
 
-        # keep track of global cords
-        self.cords = self._patchify(np.mgrid[0:sz, 0:sy, 0:sx])
+        # do positional encodings
+        if positional_encoding == 'euclid':
+            self.cords = self._patchify(np.mgrid[0:sz, 0:sy, 0:sx])
+        elif positional_encoding == 'sine':
+            # add channel and batch dims
+            dummy = np.zeros((1, 1, *self.og_shape))
+            p_enc_3d = PositionalEncoding3D(11)
+            z = torch.zeros((1, 5, 6, 4, 11))
+            # takes in form (batchsize, x, y, z, ch) so must permute
+            print(p_enc_3d(z).shape)  # (1, 5, 6, 4, 11)
 
         self.expd_amt = expd_amt
         self.shuffle = shuffle
 
         self.classes = []
         classes, counts = np.unique(pred, return_counts=True)
+
+        if shuffle:
+            shuffler = np.random.permutation(len(classes))
+            classes = classes[shuffler]
+            counts = counts[shuffler]
 
         if sort:
             sort_indices = np.argsort(counts)
@@ -112,7 +129,6 @@ class ProofreadDataset(torch.utils.data.Dataset):
     # returns indices of the patch array where c exists after the label is expanded
 
     def get_patch_array_indices(self, c):
-        print(c)
         # get array indicies where there is label
         arr_indc = np.any(self.pred == c, axis=(1, 2, 3, 4))
 

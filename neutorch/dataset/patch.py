@@ -3,6 +3,7 @@ import torchio as tio
 from typing import Optional
 
 from .border_mask import create_border_mask
+from .utils import compute_affinty_from_offset
 
 
 class Patch(object):
@@ -103,30 +104,8 @@ class AffinityPatch(object):
         self.border_width = border_width
         self.affinity_offsets = affinity_offsets
 
-    def _compute_affinty_from_offset(self, label, affinity_offset):
-
-        z0, y0, x0 = label.shape
-        (zo, yo, xo) = affinity_offset
-
-        # add background mask
-        masked_label = np.zeros(label.shape, dtype=np.uint64)
-        create_border_mask(label, masked_label, self.border_width, 0)
-
-        # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
-        affinity = np.zeros((3, z0, y0, x0))
-        affinity[2, zo:, :, :] = masked_label[..., zo:, :,
-                                              :] == masked_label[..., 0:-zo, :, :]  # z channel
-        affinity[1, :, yo:, :] = masked_label[..., :, yo:,
-                                              :] == masked_label[..., :, 0:-yo, :]  # y channel
-        affinity[0, :, :, xo:] = masked_label[..., :, :,
-                                              xo:] == masked_label[..., :, :, 0:-xo]  # x channel
-
-        # but back in background labels
-        affinity[:, masked_label == 0] = 0
-
-        return affinity
-
     # segmentation label into affinty map
+
     def compute_affinity(self):
 
         label = np.squeeze(self.subject.label.tensor.numpy())
@@ -134,7 +113,7 @@ class AffinityPatch(object):
         aff_channels = len(self.affinity_offsets) * 3
         full_affinity = np.zeros((aff_channels, z0, y0, x0))
         for i, off in enumerate(self.affinity_offsets):
-            aff = self._compute_affinty_from_offset(label, off)
+            aff = compute_affinty_from_offset(label, off, self.border_width)
             full_affinity[i*3:(i+1)*3, :, :, :] = aff
 
         tio_affinity = tio.LabelMap(tensor=full_affinity)

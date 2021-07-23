@@ -41,6 +41,7 @@ class TransformerConfig(object):
                  #### Loss ####
                  loss='BNCE',
                  #### Dataset ####
+                 dataset='cremi',
                  num_examples=1000000,
                  patch_size=(26, 256, 256),
                  affinity_offsets=[(1, 1, 1)],
@@ -73,6 +74,7 @@ class TransformerConfig(object):
             'weight_decay': weight_decay
         })
         self.dataset = dotdict({
+            'dataset': dataset,
             'num_examples': num_examples,
             'patch_size': patch_size,
             'lsd': lsd,
@@ -143,7 +145,8 @@ def get_config(name):
 
 c0 = TransformerConfig('swin', model='swin')
 c1 = TransformerConfig('swin_bigwin', model='swin', window_size=(7, 7, 7))
-c2 = TransformerConfig('swin_bigwin2', model='swin', window_size=(7, 7, 7), depths=[2,2,16,2], embed_dim=180)
+c2 = TransformerConfig('swin_bigwin2', model='swin', window_size=(
+    7, 7, 7), depths=[2, 2, 16, 2], embed_dim=180)
 c3 = TransformerConfig('RSUnet', model='RSUnet',
                        learning_rate=0.001)
 c4 = TransformerConfig('RSUnet_LR', model='RSUnet',
@@ -152,4 +155,6 @@ c5 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
 c6 = TransformerConfig('swin_LR', model='swin',
                        learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
+c6 = TransformerConfig('proofread', model='proofread',
+                       learning_rate=0.001, patch_size=(1, 16, 16), aug=False)
 CONFIGS = [c0, c1, c2, c3, c4, c5, c6]

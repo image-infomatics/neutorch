@@ -198,57 +198,19 @@ def label_data(vol, seg):
     labeled = np.reshape(labeled, (length, size, size, 3))
 
 
-# def log_2d_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-#                            iter_idx: int, batch_index: int = 0):
-#     """write a Affinity Output tensor in tensorboard log
+def reassemble_img_from_cords(cords, img_arr):
+    cords = cords.astype(int)
+    z_cords, y_cords, x_cords = cords[0, ...], cords[1, ...], cords[2, ...]
+    x_min, x_max = np.amin(x_cords), np.amax(x_cords)
+    y_min, y_max = np.amin(y_cords), np.amax(y_cords)
+    z_min, z_max = np.amin(z_cords), np.amax(z_cords)
+    (sz, sy, sx) = img_arr[0][0].shape
+    new_image = np.zeros(
+        (z_max-z_min+sz+1, y_max-y_min+sy+1, x_max-x_min+sx+1))
+    for j in range(img_arr.shape[0]):
+        patch = img_arr[j][0]
+        st = cords[j, :, 0, 0, 0].astype(int)
+        bz, by, bx = st[0]-z_min, st[1]-y_min, st[2]-x_min
+        new_image[bz:bz+sz, by:by+sy, bx:bx+sx] = patch
 
-#     Args:
-#         writer (SummaryWriter):
-#         tag (str): the name of the tensor in the log
-#         tensor (torch.Tensor):
-#         iter_idx (int): training iteration index
-#         slice_index (int): index of slice to select example to log
-#         batch_index (int): index of batch to select example to log
-#     """
-#     assert torch.is_tensor(tensor)
-#     assert tensor.ndim >= 3
-#     tensor = tensor.cpu()
-#     # normalize from 0 to 1
-#     tensor -= tensor.min()
-#     tensor /= tensor.max()
-#     h = tensor.shape[-1]
-#     w = tensor.shape[-2]
-
-#     # select slice from batch
-#     slice = tensor[batch_index, :, :, :]
-
-#     # def log_channels(channels, subtag):
-#     #     imgs = [torch.squeeze(tensor[..., slice(channels[0], channels[1]), z, :, :], axis=0)
-#     #             for z in range(depth_index)]
-#     #     img = make_grid(imgs, padding=0, nrow=nrow)
-#     #     writer.add_image(f'{tag}_{subtag}_{channels}', img, iter_idx)
-
-#     # log affinity map, channels [0,2)
-#     a_maps = torch.reshape(slice, (2, 1, w, h))
-#     grid = make_grid(a_maps, padding=0, nrow=1)
-#     writer.add_image(f'{tag}_2daffinity', grid, iter_idx)
-
-# def log_weights(writer: SummaryWriter, model, iter_idx):
-
-#     # get arrays of up and down
-#     down_convs = model.module.core.dconvs
-#     up_convs = model.module.core.uconvs
-
-#     for i, dc in enumerate(down_convs):
-#         pre = dc[1].pre.conv.weight
-#         post = dc[1].post.conv.weight
-
-#         writer.add_histogram(f'down_conv/pre_{i}', pre, iter_idx)
-#         writer.add_histogram(f'down_conv/post_{i}', post, iter_idx)
-
-#     for i, uc in enumerate(up_convs):
-#         pre = uc.conv.pre.conv.weight
-#         post = uc.conv.post.conv.weight
-
-#         writer.add_histogram(f'up_conv/pre_{i}', pre, iter_idx)
-#         writer.add_histogram(f'up_conv/post_{i}', post, iter_idx)
+    return new_image

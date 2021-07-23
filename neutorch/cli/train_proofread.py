@@ -2,14 +2,16 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
-
+from neutorch.dataset.utils import from_h5
 from neutorch.cremi.evaluate import write_output_data
-from neutorch.dataset.affinity import Dataset
+from neutorch.dataset.proofread import ProofreadDataset
 from neutorch.model.config import *
-from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
+from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, reassemble_img_from_cords
 from torch.utils.data.dataloader import DataLoader
 from neutorch.cli.test_model import test_model
 import torch.cuda.amp as amp
+from neutorch.model.ViT import ViT
+
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
 import torch
@@ -54,20 +56,8 @@ import shutil
 @click.option('--training-interval', '-t',
               type=int, default=2000, help='training interval in terms of examples seen to record data points.'
               )
-@click.option('--validation-interval', '-v',
-              type=int, default=5000, help='validation interval in terms of examples seen to record validation data.'
-              )
-@click.option('--test-interval', '-ti',
-              type=int, default=50000, help='interval when to run full test.'
-              )
-@click.option('--final-test', '-ft',
-              type=bool, default=True, help='weather to run a final test using best performing checkpoint.'
-              )
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
-              )
-@click.option('--verbose',
-              type=bool, default=False, help='whether to print messages.'
               )
 @click.option('--use-amp',
               type=bool, default=True, help='whether to use distrubited automatic mixed percision.'
@@ -100,20 +90,36 @@ def train_parallel(rank, world_size, kwargs):
 
 def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
-          training_interval: int, validation_interval: int, test_interval: int, final_test: bool,
-          load: str, verbose: bool,
+          training_interval: int,
+          load: str,
           use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
 
     # get config
     config = get_config(config)
 
     # unpack config
-    num_examples = config.dataset.num_examples
+    epochs = 100
     patch_size = config.dataset.patch_size
+
+    print('loading data...')
+
+    file = 'sample_A'
+    image = from_h5(
+        f'./data/{file}.hdf', dataset_path='volumes/raw')
+    true = from_h5(
+        f'./data/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
+    pred = from_h5(
+        f'./RSUnet_900000_run/seg_{file}_pad.hdf', dataset_path='volumes/labels/neuron_ids')
+    aff = None
+    dataset = ProofreadDataset(
+        image, pred, true, aff, patch_size=patch_size, sort=False, shuffle=True)
 
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
-    cpus = len(os.sched_getaffinity(0))  # gets machine cpus
+    if hasattr(os, 'sched_getaffinity'):
+        cpus = len(os.sched_getaffinity(0))  # gets machine cpus
+    else:
+        cpus = 1
 
     # auto set
     if num_workers == -1:
@@ -124,12 +130,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         else:
             num_workers = cpus
 
-    agg_threshold = 0.7
-    sync_every = sync_every // batch_size
-
-    # only print root process
-    if rank != 0:
-        verbose = False
+    sync_every = sync_every
 
     output_dir = f'./{config.name}_run'
 
@@ -144,30 +145,34 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         f = open(f"{output_dir}/config.txt", "w")
         f.write(config.toString())
         f.write(
-            f'TRAINING\nseed: {seed}, batch_size: {batch_size}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp: {ddp}, world_size: {world_size}, num_workers: {num_workers}\n')
+            f'TRAINING\nseed: {seed}, sync_every: {sync_every}, use_gpu: {use_gpu}, total_cpus: {cpus}, total_gpus: {gpus}, use_amp: {use_amp}, ddp: {ddp}, world_size: {world_size}, num_workers: {num_workers}\n')
         f.close()
 
         # clear in case was stopped before
         tqdm._instances.clear()
         t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
         v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
-        pbar = tqdm(total=num_examples)
+        pbar = tqdm(total=len(dataset))
 
     # set up
     random.seed(seed)
     accumulated_loss = 0.0
-    total_itrs = num_examples // batch_size
-    dataset = build_dataset_from_config(config.dataset, path)
-
-    patch_volume = np.product(patch_size)
+    patches_seen = 0
     steps_since_training_interval = 0
 
-    # metrics to keep track of
-    best_avg_cremi_score = 9999
-    best_example_ckpt = 0
-
     # init model
-    model = build_model_from_config(config.model)
+    model = ViT(
+        patch_size=patch_size,
+        in_channels=1,
+        out_channels=3,
+        patch_emb_dim=196,
+        depth=6,
+        heads=16,
+        mlp_dim=2048,
+        dropout=0.1,
+        emb_dropout=0.1
+    )
+
     loss_module = build_loss_from_config(config.loss)
     if load != '':
         model = load_chkpt(model, load)
@@ -197,186 +202,98 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     # init optimizer, lr_scheduler, loss, dataloader, scaler
     params = model.parameters()
     optimizer = build_optimizer_from_config(config.optimizer, params)
-    dataloader = DataLoader(
-        dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=True)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer, total_epochs, eta_min=0, last_epoch=-1, verbose=False)
+    # dataloader = DataLoader(
+    #     dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=False, shuffle=True)
+
     scaler = amp.GradScaler(enabled=use_amp)
-    if verbose:
-        print(
-            f'total_itrs: {total_itrs}')
-        print("starting...")
+    for epoch in range(epochs):
+        for step, sample in enumerate(dataset):
 
-    for step, batch in enumerate(dataloader):
+            # determien when to sync gradients in ddp
+            if ddp:
+                if step % sync_every == 0:
+                    model.require_backward_grad_sync = True
+                else:
+                    model.require_backward_grad_sync = False
 
-        # determien when to sync gradients in ddp
-        if ddp:
-            if step % sync_every == 0:
-                model.require_backward_grad_sync = True
-            else:
-                model.require_backward_grad_sync = False
+            (image, cords, true) = sample
 
-        # with sync_policy:
-        # get batch
-        image, target = batch
+            img_batch = np.expand_dims(image, axis=0)  # add batch dim
+            cords_batch = np.expand_dims(cords, axis=0)  # add batch dim
+            true_batch = np.expand_dims(true, axis=0)  # add batch dim
+            img_batch = torch.from_numpy(img_batch)
+            cords_batch = torch.from_numpy(cords_batch)
+            true_batch = torch.from_numpy(true_batch)
 
-        # Transfer Data to GPU if available
-        if use_gpu:
-            image = image.cuda(rank, non_blocking=True)
-            target = target.cuda(rank, non_blocking=True)
+            num_patches = image.shape[1]
+            patches_seen += num_patches
 
-        with torch.cuda.amp.autocast(enabled=use_amp):
-            # foward pass
-            logits = model(image)
-            # compute loss
-            loss = loss_module(logits, target)
+            # Transfer Data to GPU if available
+            if use_gpu:
+                image = image.cuda(rank, non_blocking=True)
+                target = target.cuda(rank, non_blocking=True)
 
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()  # set_to_none=True here can modestly improve performance
-
-        # record loss
-        cur_loss = loss.item()
-        accumulated_loss += cur_loss
-
-        # record progress
-        if rank == 0:
-            pbar.set_postfix(
-                {'cur_loss': round(cur_loss / patch_volume, 3)})
-            pbar.update(batch_size * world_size)
-
-        # the previous number of examples the network has seen
-        prev_example_number = ((step) * batch_size*world_size)+start_example
-
-        # the current number of examples the network has seen
-        example_number = ((step+1) * batch_size*world_size)+start_example
-
-        steps_since_training_interval += 1
-
-        # all io and validation done root process
-        if rank == 0:
-
-            # log for training
-            if example_number // training_interval > prev_example_number // training_interval:
-
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                # foward pass
+                logits = model(img_batch)
                 # compute loss
-                per_voxel_loss = accumulated_loss / patch_volume / \
-                    steps_since_training_interval / batch_size
+                loss = loss_module(logits, true_batch)
 
-                # compute predict
-                predict = torch.sigmoid(logits)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()  # set_to_none=True here can modestly improve performance
 
-                # log values
-                t_writer.add_scalar('Loss', per_voxel_loss, example_number)
-                log_affinity_output(t_writer, 'train/target',
-                                    target, example_number)
-                log_affinity_output(t_writer, 'train/predict',
-                                    predict, example_number)
-                log_image(t_writer, 'train/image', image, example_number)
+            # record loss
+            cur_loss = loss.item()
+            accumulated_loss += cur_loss
 
-                # reset acc loss
-                accumulated_loss = 0.0
-                steps_since_training_interval = 0
+            # record progress
+            if rank == 0:
+                pbar.update(world_size)
 
-            # log for validation
-            if example_number // validation_interval > prev_example_number // validation_interval:
+            # the previous number of examples the network has seen
+            prev_example_number = ((step) * world_size) + \
+                start_example+epoch*len(dataset)
 
-                # get validation_batch
-                batch = dataset.random_validation_batch(batch_size)
-                validation_image = torch.from_numpy(batch.images)
-                validation_target = torch.from_numpy(batch.targets)
+            # the current number of examples the network has seen
+            example_number = ((step+1) * world_size) + \
+                start_example+epoch*len(dataset)
 
-                # transfer Data to GPU if available
-                if torch.cuda.is_available():
-                    validation_image = validation_image.cuda()
-                    validation_target = validation_target.cuda()
+            steps_since_training_interval += 1
 
-                # pass with validation example
-                with torch.no_grad():
+            # all io and validation done root process
+            if rank == 0:
+
+                # log for training
+                if example_number // training_interval > prev_example_number // training_interval:
+
                     # compute loss
-                    validation_logits = model(validation_image)
-                    validation_predict = torch.sigmoid(validation_logits)
+                    adjusted_loss = accumulated_loss / patches_seen / \
+                        steps_since_training_interval
 
-                    validation_loss = loss_module(
-                        validation_logits, validation_target)
-
-                    per_voxel_loss = validation_loss.item() / patch_volume / batch_size
+                    # compute predict
+                    predict = torch.sigmoid(logits)
 
                     # log values
-                    v_writer.add_scalar(
-                        'Loss', per_voxel_loss, example_number)
-                    log_affinity_output(v_writer, 'validation/prediction',
-                                        validation_predict, example_number,)
-                    log_affinity_output(v_writer, 'validation/target',
-                                        validation_target, example_number)
-                    log_image(v_writer, 'validation/image',
-                              validation_image, example_number)
+                    t_writer.add_scalar('Loss', adjusted_loss, example_number)
 
-            # test checkpoint
-            if example_number // test_interval > prev_example_number // test_interval:
+                    cords = cords_batch[0]
+                    # reassemble rectangular image from array
+                    image_img = reassemble_img_from_cords(cords, img_batch[0])
+                    true_img = reassemble_img_from_cords(cords, true_batch[0])
+                    predict_img = reassemble_img_from_cords(cords, predict[0])
 
-                save_chkpt(model, output_dir, example_number, optimizer)
-                sum_cremi_score = 0
-                files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
+                    log_affinity_output(t_writer, 'train/target',
+                                        true_img, example_number)
+                    log_affinity_output(t_writer, 'train/predict',
+                                        predict_img, example_number)
+                    log_image(t_writer, 'train/image',
+                              image_img, example_number)
 
-                for file in files:
-                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10, 400, 400), threshold=agg_threshold,
-                                     border_width=config.dataset.border_width,)
-                    affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
-
-                    # convert to torch, add batch dim
-                    affinity = torch.unsqueeze(torch.tensor(affinity), 0)
-
-                    # log
-                    log_affinity_output(v_writer, f'test/full_affinity_{file}',
-                                        affinity, example_number)
-                    log_segmentation(v_writer, f'test/full_segmentation_{file}',
-                                     segmentation, example_number)
-                    cremi_score = metrics['cremi_score']
-                    sum_cremi_score += cremi_score
-                    v_writer.add_scalar(
-                        f'cremi_metrics/full_cremi_score_{file}', cremi_score, example_number)
-
-                avg_cremi_score = sum_cremi_score / len(files)
-
-                if avg_cremi_score < best_avg_cremi_score:
-                    best_avg_cremi_score = avg_cremi_score
-                    best_example_ckpt = example_number
-
-                v_writer.add_scalar(
-                    f'cremi_metrics/avg_cremi_score', avg_cremi_score, example_number)
-
-    if final_test:
-
-        file = None
-        # sleep to avoid race
-        if rank == 0:
-            file = 'sample_A_pad'
-            time.sleep(5)
-        elif rank == 1:
-            file = 'sample_B_pad'
-            time.sleep(10)
-        elif rank == 2:
-            file = 'sample_C_pad'
-            time.sleep(15)
-
-        if file is not None:
-            model = load_chkpt(
-                model, f'./{config.name}_run/chkpts/model_{best_example_ckpt}.chkpt')
-            # run test
-            res = test_model(model,
-                             patch_size,
-                             f'{path}/{file}.hdf',
-                             pre_crop=None,
-                             threshold=agg_threshold,
-                             border_width=config.dataset.border_width,
-                             full_agglomerate=True)
-
-            affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
-
-            write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
-                              output_dir=f'/mnt/home/jberman/ceph')
+                    # reset acc loss
+                    accumulated_loss = 0.0
+                    steps_since_training_interval = 0
 
     if rank == 0:
         t_writer.close()
