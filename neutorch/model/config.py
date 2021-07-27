@@ -156,5 +156,5 @@ c5 = TransformerConfig('RSUnet2', model='RSUnet',
 c6 = TransformerConfig('swin_LR', model='swin',
                        learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
 c6 = TransformerConfig('proofread', model='proofread',
-                       learning_rate=0.001, patch_size=(1, 16, 16), aug=False)
+                       learning_rate=0.001, patch_size=(2, 16, 16), aug=False)
 CONFIGS = [c0, c1, c2, c3, c4, c5, c6]

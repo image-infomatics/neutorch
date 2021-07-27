@@ -22,6 +22,7 @@ import time
 import os
 import random
 import shutil
+import gc
 
 
 @click.command()
@@ -109,10 +110,10 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     true = from_h5(
         f'./data/{file}.hdf', dataset_path='volumes/labels/neuron_ids')
     pred = from_h5(
-        f'./RSUnet_900000_run/seg_{file}_pad.hdf', dataset_path='volumes/labels/neuron_ids')
+        f'/mnt/home/jberman/ceph/RSUnet_900000/seg_{file}_pad.hdf', dataset_path='volumes/labels/neuron_ids')
     aff = None
     dataset = ProofreadDataset(
-        image, pred, true, aff, patch_size=patch_size, sort=False, shuffle=True)
+        image, pred, true, aff, patch_size=patch_size, sort=False, shuffle=True, max_volume=256*256*20)
 
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
@@ -165,9 +166,9 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         patch_size=patch_size,
         in_channels=1,
         out_channels=3,
-        patch_emb_dim=196,
+        patch_emb_dim=96,
         depth=6,
-        heads=16,
+        heads=8,
         mlp_dim=2048,
         dropout=0.1,
         emb_dropout=0.1
@@ -201,14 +202,18 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
     # init optimizer, lr_scheduler, loss, dataloader, scaler
     params = model.parameters()
+    # total_params = sum(p.numel() for p in params)
+    # # print(f'total params: {total_params}')
     optimizer = build_optimizer_from_config(config.optimizer, params)
     # dataloader = DataLoader(
     #     dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=False, shuffle=True)
 
     scaler = amp.GradScaler(enabled=use_amp)
     for epoch in range(epochs):
+        print(f'starting epoch {epoch}...')
         for step, sample in enumerate(dataset):
-
+           
+            # print(f'pre gpu mem { torch.cuda.memory_summary() }')
             # determien when to sync gradients in ddp
             if ddp:
                 if step % sync_every == 0:
@@ -217,23 +222,25 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
                     model.require_backward_grad_sync = False
 
             (image, cords, true) = sample
+            print(image.shape)
+            num_patches = image.shape[0]
 
             img_batch = np.expand_dims(image, axis=0)  # add batch dim
-            cords_batch = np.expand_dims(cords, axis=0)  # add batch dim
             true_batch = np.expand_dims(true, axis=0)  # add batch dim
-            img_batch = torch.from_numpy(img_batch)
-            cords_batch = torch.from_numpy(cords_batch)
+            img_batch = torch.from_numpy(img_batch)          
             true_batch = torch.from_numpy(true_batch)
 
-            num_patches = image.shape[1]
+              
             patches_seen += num_patches
 
             # Transfer Data to GPU if available
             if use_gpu:
-                image = image.cuda(rank, non_blocking=True)
-                target = target.cuda(rank, non_blocking=True)
+                img_batch = img_batch.cuda(rank, non_blocking=True)
+                true_batch = true_batch.cuda(rank, non_blocking=True)
 
+      
             with torch.cuda.amp.autocast(enabled=use_amp):
+
                 # foward pass
                 logits = model(img_batch)
                 # compute loss
@@ -246,7 +253,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
             # record loss
             cur_loss = loss.item()
-            accumulated_loss += cur_loss
+            accumulated_loss += cur_loss/num_patches
 
             # record progress
             if rank == 0:
@@ -277,12 +284,11 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
 
                     # log values
                     t_writer.add_scalar('Loss', adjusted_loss, example_number)
-
-                    cords = cords_batch[0]
+                 
                     # reassemble rectangular image from array
-                    image_img = reassemble_img_from_cords(cords, img_batch[0])
-                    true_img = reassemble_img_from_cords(cords, true_batch[0])
-                    predict_img = reassemble_img_from_cords(cords, predict[0])
+                    image_img = torch.unsqueeze(reassemble_img_from_cords(cords, img_batch[0]),0)
+                    true_img = torch.unsqueeze(reassemble_img_from_cords(cords, true_batch[0]),0)
+                    predict_img = torch.unsqueeze(reassemble_img_from_cords(cords, predict[0]),0)
 
                     log_affinity_output(t_writer, 'train/target',
                                         true_img, example_number)
@@ -300,6 +306,32 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         v_writer.close()
         pbar.close()
 
+
+
+
+def count_parameters(model):
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad: continue
+        param = parameter.numel()
+        total_params+=param
+    print(f"\n\n Total Trainable Params: {total_params}")
+    return total_params
+
+def print_tensors():
+    t = torch.cuda.get_device_properties(0).total_memory
+    r = torch.cuda.memory_reserved(0)
+    a = torch.cuda.memory_allocated(0)
+    f = r-a 
+
+    print(f'free: {f}')
+
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                print(type(obj), obj.size())
+        except:
+            pass
 
 if __name__ == '__main__':
     train_wrapper()

@@ -136,7 +136,6 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     h = tensor.shape[-1]
     w = tensor.shape[-2]
     d = tensor.shape[-3]
-    c = tensor.shape[-4]
 
     # look halfway in
     if slice_index == 0:
@@ -199,18 +198,20 @@ def label_data(vol, seg):
 
 
 def reassemble_img_from_cords(cords, img_arr):
+    img_arr = img_arr.cpu().detach().numpy()
+    channels = img_arr.shape[1]
     cords = cords.astype(int)
-    z_cords, y_cords, x_cords = cords[0, ...], cords[1, ...], cords[2, ...]
+    z_cords, y_cords, x_cords = cords[:, 0, ...], cords[:, 1, ...], cords[:, 2, ...]
     x_min, x_max = np.amin(x_cords), np.amax(x_cords)
     y_min, y_max = np.amin(y_cords), np.amax(y_cords)
     z_min, z_max = np.amin(z_cords), np.amax(z_cords)
     (sz, sy, sx) = img_arr[0][0].shape
-    new_image = np.zeros(
-        (z_max-z_min+sz+1, y_max-y_min+sy+1, x_max-x_min+sx+1))
+
+    new_image = np.zeros((channels, z_max-z_min+(sz*2)+1, y_max-y_min+(sy*2)+1, x_max-x_min+(sx*2)+1))
     for j in range(img_arr.shape[0]):
-        patch = img_arr[j][0]
+        patch = img_arr[j]
         st = cords[j, :, 0, 0, 0].astype(int)
         bz, by, bx = st[0]-z_min, st[1]-y_min, st[2]-x_min
-        new_image[bz:bz+sz, by:by+sy, bx:bx+sx] = patch
+        new_image[:, bz:bz+sz, by:by+sy, bx:bx+sx] = patch
 
-    return new_image
+    return torch.from_numpy(new_image)
