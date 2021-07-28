@@ -3,7 +3,7 @@ from neutorch.model.swin_transformer3D import SwinUNet3D
 from neutorch.model.RSUNet import UNetModel
 from neutorch.model.FunUnet import FunUnet
 from neutorch.dataset.affinity import Dataset
-
+from neutorch.model.mlp_mixer import MLPMixer
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 import pprint
 
@@ -25,6 +25,10 @@ class TransformerConfig(object):
                  model='swin',
                  # RSUnet
                  io_kernel=(1, 5, 5),
+                 # mlp 
+                 mlp_patch_size=(2, 4, 4),
+                 depth = 16,
+                 expansion_factor = 4,
                  # swin
                  swin_patch_size=(2, 4, 4),
                  embed_dim=96,
@@ -62,7 +66,11 @@ class TransformerConfig(object):
             'res_conns': res_conns,
             'num_heads': num_heads,
             'window_size':  window_size,
-            'upsampler': upsampler
+            'upsampler': upsampler,
+            'patch_size': patch_size,
+            'mlp_patch_size': mlp_patch_size,
+            'depth': depth,
+            'expansion_factor': expansion_factor, 
         })
         self.loss = dotdict({
             'loss': loss,
@@ -107,6 +115,16 @@ def build_model_from_config(config):
         return UNetModel(config.in_channels, config.out_channels, io_kernel=config.io_kernel)
     elif model == 'FunUnet':
         return FunUnet(config.in_channels, config.out_channels)
+    elif model == 'mlp':
+        return  MLPMixer(
+                    image_size = config.patch_size,
+                    patch_size = config.mlp_patch_size,
+                    in_channels = config.in_channels,
+                    out_channels = config.out_channels,
+                    dim = config.embed_dim,
+                    depth = config.depth,
+                    expansion_factor = config.expansion_factor,
+                  )    
     else:
         print(f'model {model} not supported. aborting.')
         return
@@ -155,6 +173,5 @@ c5 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
 c6 = TransformerConfig('swin_LR', model='swin',
                        learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
-c6 = TransformerConfig('proofread', model='proofread',
-                       learning_rate=0.001, patch_size=(2, 16, 16), aug=False)
-CONFIGS = [c0, c1, c2, c3, c4, c5, c6]
+c7 = TransformerConfig('mlp', model='mlp', embed_dim=1024, depth=24, mlp_patch_size=(3,30,30),  patch_size=(30, 300, 300),)
+CONFIGS = [c0, c1, c2, c3, c4, c5, c7]

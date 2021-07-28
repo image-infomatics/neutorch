@@ -35,6 +35,10 @@ import shutil
               type=int, default=7,
               help='for reproducibility'
               )
+@click.option('--output-dir', '-o',
+              type=str, default='/mnt/home/jberman/ceph/runs',
+              help='for output'
+              )
 @click.option('--batch-size', '-b',
               type=int, default=1,
               help='size of mini-batch.'
@@ -98,7 +102,7 @@ def train_parallel(rank, world_size, kwargs):
     train(**kwargs)
 
 
-def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
+def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, test_interval: int, final_test: bool,
           load: str, verbose: bool,
@@ -131,7 +135,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     if rank != 0:
         verbose = False
 
-    output_dir = f'./{config.name}_run'
+    output_dir = f'{output_dir}/{config.name}_run'
 
     if rank == 0:
 
@@ -228,6 +232,7 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
         with torch.cuda.amp.autocast(enabled=use_amp):
             # foward pass
             logits = model(image)
+
             # compute loss
             loss = loss_module(logits, target)
 

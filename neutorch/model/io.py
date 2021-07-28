@@ -109,6 +109,11 @@ def log_image(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     # normalize from 0 to 1
     tensor -= tensor.min()
     tensor /= tensor.max()
+    d = tensor.shape[-3]
+
+    # look halfway in
+    if slice_index == 0:
+        slice_index = d // 2
 
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]

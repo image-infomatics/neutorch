@@ -93,7 +93,7 @@ class ViT(nn.Module):
             Rearrange('b n pci pz py px -> b n (pci pz py px)'),
             nn.Linear(patch_dim_in, patch_emb_dim),
         )
-
+  
         self.pos_embedding = None
         if pos_embedding == '':
             pass
