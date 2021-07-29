@@ -32,11 +32,9 @@ def MLPMixer(*, image_size, patch_size, in_channels, out_channels,  dim, depth, 
     assert (image_size[1] % patch_size[1]) == 0, 'image must be divisible by patch size in y'
     assert (image_size[2] % patch_size[2]) == 0, 'image must be divisible by patch size in x'
 
-
     num_patches = (image_vol // patch_vol)
     chan_first, chan_last = partial(nn.Conv1d, kernel_size = 1), nn.Linear
     
-
     return nn.Sequential(
         Rearrange('b ci (z pz) (y py) (x px) -> b (z y x) (ci pz py px)', ci=in_channels, pz=pz, py=py, px=px),
         nn.Linear(patch_vol * in_channels, dim),
@@ -49,11 +47,3 @@ def MLPMixer(*, image_size, patch_size, in_channels, out_channels,  dim, depth, 
         Rearrange('b (z y x) (co pz py px) -> b co (z pz) (y py) (x px)', co=out_channels, pz=pz, py=py, px=px, z=iz//pz, y=iy//py, x=ix//px),
     )
 
-class PrintLayer(nn.Module):
-    def __init__(self):
-        super(PrintLayer, self).__init__()
-    
-    def forward(self, x):
-        # Do your print / debug stuff here
-        print(x.shape)
-        return x

@@ -84,28 +84,28 @@ class Dataset(torch.utils.data.Dataset):
                 # due to quirk of lsd algo, in future, should just fix data
                 lsd_label = lsd_label[:, :-1, :, :]
 
-            # here we take some slices of a volume to build a valiation volume
-            # for now we only take from the first training volume
-            if i == 0:
-                vs = self.validation_slices
+            # # here we take some slices of a volume to build a valiation volume
+            # # for now we only take from the first training volume
+            # if i == 0:
+            #     vs = self.validation_slices
 
-                val_image = image[..., :vs, :, :]
-                val_label = label[..., :vs, :, :]
+            #     val_image = image[..., :vs, :, :]
+            #     val_label = label[..., :vs, :, :]
 
-                image = image[..., vs:, :, :]
-                label = label[..., vs:, :, :]
+            #     image = image[..., vs:, :, :]
+            #     label = label[..., vs:, :, :]
 
-                val_lsd_label = None
-                if lsd:
-                    val_lsd_label = lsd_label[..., :vs, :, :]
-                    lsd_label = lsd_label[..., vs:, :, :]
+            #     val_lsd_label = None
+            #     if lsd:
+            #         val_lsd_label = lsd_label[..., :vs, :, :]
+            #         lsd_label = lsd_label[..., vs:, :, :]
 
-                val_ground_truth_volume = GroundTruthVolume(
-                    val_image, val_label, patch_size=patch_size_oversized,
-                    affinity_offsets=affinity_offsets,
-                    lsd_label=val_lsd_label,
-                    border_width=border_width, name=f'{file}_val')
-                validation_volumes.append(val_ground_truth_volume)
+            #     val_ground_truth_volume = GroundTruthVolume(
+            #         val_image, val_label, patch_size=patch_size_oversized,
+            #         affinity_offsets=affinity_offsets,
+            #         lsd_label=val_lsd_label,
+            #         border_width=border_width, name=f'{file}_val')
+            #     validation_volumes.append(val_ground_truth_volume)
 
             train_ground_truth_volume = GroundTruthVolume(
                 image, label, patch_size=patch_size_oversized,
@@ -113,9 +113,10 @@ class Dataset(torch.utils.data.Dataset):
                 lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
 
             training_volumes.append(train_ground_truth_volume)
+       
 
         self.training_volumes = training_volumes
-        self.validation_volumes = validation_volumes
+        self.validation_volumes = training_volumes
 
     def random_validation_batch(self, batch_size):
         patches = []

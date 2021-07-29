@@ -70,6 +70,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
 
+
         self.border_width = border_width
         self.image = image
         self.label = label
@@ -77,8 +78,10 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         self.lsd_label = lsd_label
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
+
         self.center_stop = tuple(
             s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
+
 
     @property
     def random_patch(self):
