@@ -191,6 +191,9 @@ c5 = TransformerConfig('RSUnet2', model='RSUnet',
 c6 = TransformerConfig('swin_LR', model='swin',
                        learning_rate=0.001, affinity_offsets=[(1, 1, 1), (3, 9, 9), (4, 27, 27)], out_channels=9)
 c7 = TransformerConfig('mlp', model='mlp', embed_dim=1024, mlp_patch_size=(3,30,30),  patch_size=(30, 300, 300), num_examples=2000000,)
-c8 = TransformerConfig('mlp2', model='mlp2', embed_dim=1024, mlp_patch_size=(3,30,30),  patch_size=(30, 300, 300), num_examples=2000000,)
-c8 = TransformerConfig('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(4,40,40),  patch_size=(80, 800, 800), num_examples=2000000,)
-CONFIGS = [c0, c1, c2, c3, c4, c5, c7, c8]
+c7 = TransformerConfig('mlp2smooth', model='mlp', embed_dim=1024, mlp_patch_size=(3,30,30),  patch_size=(30, 300, 300),  num_examples=2000000,)
+c8 = TransformerConfig('mlp2unet', model='mlp2', embed_dim=1024, mlp_patch_size=(4,64,64), patch_size=(52, 512, 512), num_examples=2000000,)
+c9 = TransformerConfig('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(5,50,50),  patch_size=(100, 1000, 1000), num_examples=2000000,)
+c10 = TransformerConfig('RSUnetBIG', model='RSUnet', learning_rate=0.001, patch_size=(52, 512, 512),)
+
+CONFIGS = [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10]

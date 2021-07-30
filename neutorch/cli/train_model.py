@@ -368,7 +368,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
 
         if file is not None:
             model = load_chkpt(
-                model, f'./{config.name}_run/chkpts/model_{best_example_ckpt}.chkpt')
+                model, f'{output_dir}/chkpts/model_{best_example_ckpt}.chkpt')
             # run test
             res = test_model(model,
                              patch_size,

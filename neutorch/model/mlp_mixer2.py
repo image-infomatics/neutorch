@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 from einops.layers.torch import Rearrange
-
+from neutorch.model.RSUNet import UNetModel
 
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout = 0.):
@@ -72,10 +72,16 @@ class MLPMixer2(nn.Module):
         self.layer_norm = nn.LayerNorm(dim)
 
 
+        double_patch = (pz*2+1, py*2+1, px*2+1)
         self.patch_unembed = nn.Sequential(
-            nn.Linear(dim, patch_vol * out_channels),
-            Rearrange('b (z y x) (co pz py px) -> b co (z pz) (y py) (x px)', co=out_channels, pz=pz, py=py, px=px, z=iz//pz, y=iy//py, x=ix//px),
+            nn.Linear(dim, patch_vol * out_channels*4),
+            Rearrange('b (z y x) (co pz py px) -> b co (z pz) (y py) (x px)', co=out_channels*4, pz=pz, py=py, px=px, z=iz//pz, y=iy//py, x=ix//px),
+            nn.Conv3d(out_channels*4, out_channels*3, double_patch, 1, padding=patch_size),
+            nn.Conv3d(out_channels*3, out_channels*2, double_patch, 1, padding=patch_size),
+            nn.Conv3d(out_channels*2, out_channels*1, double_patch, 1, padding=patch_size),
         )
+
+
 
     def forward(self, x):
 
@@ -86,5 +92,17 @@ class MLPMixer2(nn.Module):
             x = mixer_block(x)
         x = self.layer_norm(x)
         x = self.patch_unembed(x)
-
+        # x = self.smooth(x)
         return x
+
+
+
+if __name__ == "__main__":
+    img = torch.ones([1, 1, 30, 300, 300])
+
+    model = MLPMixer2(1, 3, 1024, (3, 30, 30), (30, 300, 300), 24, 512, 4096)
+
+
+    out_img = model(img)
+
+    print("Shape of out :", out_img.shape) 
