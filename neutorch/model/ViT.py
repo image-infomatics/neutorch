@@ -81,7 +81,7 @@ class Transformer(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, *, patch_size, in_channels, out_channels, patch_emb_dim, depth, heads, mlp_dim, pos_embedding='none',dim_head=64, dropout=0., emb_dropout=0.):
+    def __init__(self, *, patch_size, in_channels, out_channels, patch_emb_dim, depth, heads, mlp_dim, pos_embedding='none', dim_head=64, dropout=0., emb_dropout=0.):
         super().__init__()
 
         assert pos_embedding in {
@@ -93,7 +93,7 @@ class ViT(nn.Module):
             Rearrange('b n pci pz py px -> b n (pci pz py px)'),
             nn.Linear(patch_dim_in, patch_emb_dim),
         )
-  
+
         self.pos_embedding = None
         if pos_embedding == '':
             pass

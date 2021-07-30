@@ -113,7 +113,6 @@ class Dataset(torch.utils.data.Dataset):
                 lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
 
             training_volumes.append(train_ground_truth_volume)
-       
 
         self.training_volumes = training_volumes
         self.validation_volumes = training_volumes

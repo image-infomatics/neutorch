@@ -6,6 +6,7 @@ import cc3d
 from tqdm import tqdm
 
 from neutorch.dataset.utils import from_h5
+
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
@@ -18,7 +19,7 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
 @click.command()
 @click.option('--config',
               type=str,
-              help='name of the configuration defined in the config list.'
+              help='name of the configuration   defined in the config list.'
               )
 @click.option('--path',
               type=str, help='path to the test data file'
