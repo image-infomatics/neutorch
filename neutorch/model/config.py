@@ -23,6 +23,7 @@ class TransformerConfig(object):
                  in_channels=1,
                  out_channels=3,
                  model='swin',
+                 split_gpus=False,
                  # RSUnet
                  io_kernel=(1, 5, 5),
                  # mlp
@@ -75,6 +76,7 @@ class TransformerConfig(object):
             'expansion_factor': expansion_factor,
             'token_dim': token_dim,
             'channel_dim': channel_dim,
+            'split_gpus': split_gpus,
         })
         self.loss = dotdict({
             'loss': loss,
@@ -116,7 +118,7 @@ def build_model_from_config(config):
                           window_size=config.window_size,
                           upsampler=config.upsampler)
     elif model == 'RSUnet':
-        return UNetModel(config.in_channels, config.out_channels, io_kernel=config.io_kernel)
+        return UNetModel(config.in_channels, config.out_channels, io_kernel=config.io_kernel, split_gpus=config.split_gpus)
     elif model == 'mlp':
         return MLPMixer(
             image_size=config.patch_size,
@@ -160,12 +162,13 @@ def build_loss_from_config(config):
     raise ValueError(f'loss {config.loss} not implemented yet.')
 
 
-def build_dataset_from_config(config, path):
+def build_dataset_from_config(config, path, use_amp):
     return Dataset(path, patch_size=config.patch_size, length=config.num_examples,
                    affinity_offsets=config.affinity_offsets,
                    lsd=config.lsd,
                    aug=config.aug,
-                   border_width=config.border_width)
+                   border_width=config.border_width,
+                   float16=use_amp)
 
 
 def get_config(name):
@@ -177,8 +180,8 @@ def get_config(name):
 
 c0 = TransformerConfig('swin', model='swin')
 
-c3 = TransformerConfig('RSUnet', model='RSUnet',
-                       learning_rate=0.001)
+c3 = TransformerConfig('RSUnetHUGE', model='RSUnet',
+                       patch_size=(72, 928, 928), split_gpus=True, num_examples=200000, learning_rate=0.01,)
 
 c5 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)

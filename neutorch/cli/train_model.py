@@ -6,6 +6,7 @@ from torch.utils.data.distributed import DistributedSampler
 from neutorch.cremi.evaluate import write_output_data
 from neutorch.dataset.affinity import Dataset
 from neutorch.model.config import *
+from neutorch.model.utils import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, log_segmentation
 from torch.utils.data.dataloader import DataLoader
 from neutorch.cli.test_model import test_model
@@ -20,6 +21,8 @@ import time
 import os
 import random
 import shutil
+import gc
+import GPUtil
 
 
 @click.command()
@@ -70,9 +73,6 @@ import shutil
 @click.option('--load',
               type=str, default='', help='load from checkpoint, pass path to ckpt file'
               )
-@click.option('--verbose',
-              type=bool, default=False, help='whether to print messages.'
-              )
 @click.option('--use-amp',
               type=bool, default=True, help='whether to use distrubited automatic mixed percision.'
               )
@@ -105,8 +105,9 @@ def train_parallel(rank, world_size, kwargs):
 def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, sync_every: int,
           start_example: int,  num_workers: int,
           training_interval: int, validation_interval: int, test_interval: int, final_test: bool,
-          load: str, verbose: bool,
-          use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
+          load: str, use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
+
+    split_gpu = True
 
     # get config
     config = get_config(config)
@@ -155,13 +156,12 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
         tqdm._instances.clear()
         t_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/train'))
         v_writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log/valid'))
-        pbar = tqdm(total=num_examples)
 
     # set up
     random.seed(seed)
     accumulated_loss = 0.0
     total_itrs = num_examples // batch_size
-    dataset = build_dataset_from_config(config.dataset, path)
+    dataset = build_dataset_from_config(config.dataset, path, use_amp)
 
     patch_volume = np.product(patch_size)
     steps_since_training_interval = 0
@@ -179,6 +179,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
     # handle GPU and parallelism
     pin_memory = False
     sampler = None
+
     if use_gpu:
         # gpu with DistributedDataParallel
         if ddp:
@@ -188,6 +189,8 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
             sampler = DistributedSampler(
                 dataset, world_size, rank, seed=seed)
             loss_module.cuda(rank)
+        elif split_gpu:
+            loss_module.cuda(0)
         # gpu with DataParallel
         else:
             model = model.cuda()
@@ -206,10 +209,10 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     #     optimizer, total_epochs, eta_min=0, last_epoch=-1, verbose=False)
     scaler = amp.GradScaler(enabled=use_amp)
-    if verbose:
-        print(
-            f'total_itrs: {total_itrs}')
+
+    if rank == 0:
         print("starting...")
+        pbar = tqdm(total=num_examples)
 
     for step, batch in enumerate(dataloader):
 
@@ -227,19 +230,26 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
         # Transfer Data to GPU if available
         if use_gpu:
             image = image.cuda(rank, non_blocking=True)
-            target = target.cuda(rank, non_blocking=True)
 
         with torch.cuda.amp.autocast(enabled=use_amp):
             # foward pass
             logits = model(image)
+            del image
+
+            if split_gpu:
+                target = target.cuda(1, non_blocking=True)
+            else:
+                target = target.cuda(rank, non_blocking=True)
 
             # compute loss
             loss = loss_module(logits, target)
+            del logits, target
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
-        optimizer.zero_grad()  # set_to_none=True here can modestly improve performance
+        # set_to_none=True here can modestly improve performance
+        optimizer.zero_grad(set_to_none=True)
 
         # record loss
         cur_loss = loss.item()
@@ -248,7 +258,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
         # record progress
         if rank == 0:
             pbar.set_postfix(
-                {'cur_loss': round(cur_loss / patch_volume, 3)})
+                {'cur_loss': round(cur_loss / patch_volume / batch_size, 3)})
             pbar.update(batch_size * world_size)
 
         # the previous number of examples the network has seen
@@ -264,20 +274,32 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
 
             # log for training
             if example_number // training_interval > prev_example_number // training_interval:
-
                 # compute loss
                 per_voxel_loss = accumulated_loss / patch_volume / \
                     steps_since_training_interval / batch_size
 
+                # get validation_batch
+                batch_t = dataset.random_training_batch(batch_size)
+                image_t = torch.from_numpy(batch_t.images)
+                target_t = torch.from_numpy(batch_t.targets)
+
+                # transfer Data to GPU if available
+                if torch.cuda.is_available():
+                    image_t = image_t.cuda()
+                    target_t = target_t.cuda()
+
+                with torch.no_grad():
+                    logits_t = model(image_t)
+
                 # compute predict
-                predict = torch.sigmoid(logits)
+                predict_t = torch.sigmoid(logits_t)
 
                 # log values
                 t_writer.add_scalar('Loss', per_voxel_loss, example_number)
                 log_affinity_output(t_writer, 'train/target',
-                                    target, example_number)
+                                    target_t, example_number)
                 log_affinity_output(t_writer, 'train/predict',
-                                    predict, example_number)
+                                    predict_t, example_number)
                 log_image(t_writer, 'train/image', image, example_number)
 
                 # reset acc loss

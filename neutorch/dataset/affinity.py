@@ -21,7 +21,8 @@ class Dataset(torch.utils.data.Dataset):
                  patch_size: Union[int, tuple] = (26, 256, 256),
                  aug: bool = True,
                  border_width=1,
-                 affinity_offsets=[(1, 1, 1)]
+                 affinity_offsets=[(1, 1, 1)],
+                 float16: bool = False
                  ):
         """
         Parameters:
@@ -42,6 +43,8 @@ class Dataset(torch.utils.data.Dataset):
         self.length = length
         self.aug = aug
         self.patch_size = patch_size
+        self.float16 = float16
+
         # we oversample the patch to create buffer for any transformation
         mz, my, mx = (2, 2, 2)
         for os in affinity_offsets:
@@ -78,7 +81,6 @@ class Dataset(torch.utils.data.Dataset):
             lsd_label = None
             if lsd:
                 lsd_label = np.load(f'{path}/{file}_lsd.npy')
-                image = image.astype(np.float32) / 255.
 
                 # we just trim the last slice because it is duplicate in the data
                 # due to quirk of lsd algo, in future, should just fix data
@@ -118,6 +120,12 @@ class Dataset(torch.utils.data.Dataset):
         self.validation_volumes = training_volumes
 
     def random_validation_batch(self, batch_size):
+        patches = []
+        for i in range(batch_size):
+            patches.append(self.random_validation_patch)
+        return AffinityBatch(patches)
+
+    def random_training_batch(self, batch_size):
         patches = []
         for i in range(batch_size):
             patches.append(self.random_training_patch)
@@ -195,6 +203,9 @@ class Dataset(torch.utils.data.Dataset):
         patch = self.random_training_patch
         X = patch.image
         y = patch.target
+        if self.float16:
+            X = X.astype(np.float16)
+            y = y.astype(np.float16)
         return X, y
 
     def __len__(self):

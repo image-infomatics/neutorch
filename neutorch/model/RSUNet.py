@@ -6,12 +6,13 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
+import GPUtil
 
 __all__ = ['Model']
 
 
 WIDTH = [16, 32, 64, 128, 256, 512]
+GPUS = [0, 1, 2, 2, 3]
 
 
 def _ntuple(n):
@@ -147,37 +148,58 @@ class UpConvBlock(nn.Module):
 
 
 class RSUNet(nn.Module):
-    def __init__(self, width=WIDTH):
+    def __init__(self, width=WIDTH, split_gpus=False):
         super(RSUNet, self).__init__()
         assert len(width) > 1
         depth = len(width) - 1
-
+        self.depth = depth
         self.in_channels = width[0]
+        self.split_gpus = split_gpus
 
         self.iconv = ConvBlock(width[0], width[0])
+        if self.split_gpus:
+            self.iconv.cuda(0)
 
         self.dconvs = nn.ModuleList()
         for d in range(depth):
-            self.dconvs.append(nn.Sequential(nn.MaxPool3d((1, 2, 2)),
-                                             ConvBlock(width[d], width[d+1])))
+            module = nn.Sequential(nn.MaxPool3d((1, 2, 2)),
+                                   ConvBlock(width[d], width[d+1]))
+            if self.split_gpus:
+                module = module.cuda(GPUS[d])
+
+            self.dconvs.append(module)
+
         self.uconvs = nn.ModuleList()
         for d in reversed(range(depth)):
-            self.uconvs.append(UpConvBlock(width[d+1], width[d]))
+
+            module = UpConvBlock(width[d+1], width[d])
+
+            if self.split_gpus:
+                module.cuda(GPUS[depth - d - 1])
+
+            self.uconvs.append(module)
 
         self.out_channels = width[0]
 
         self.init_weights()
 
     def forward(self, x):
+        x.cuda(0)
         x = self.iconv(x)
 
         skip = list()
-        for dconv in self.dconvs:
+        for d, dconv in enumerate(self.dconvs):
+            if self.split_gpus:
+                x = x.cuda(GPUS[d])
             skip.append(x)
             x = dconv(x)
 
-        for uconv in self.uconvs:
-            x = uconv(x, skip.pop())
+        for d, uconv in enumerate(self.uconvs):
+            res = skip.pop()
+            if self.split_gpus:
+                x = x.cuda(GPUS[d])
+                res = res.cuda(GPUS[d])
+            x = uconv(x, res)
 
         return x
 
@@ -204,6 +226,7 @@ class OutputBlock(nn.Module):
         x = self.norm(x)
         x = self.relu(x)
         x = self.conv(x)
+        x = x.cuda(1)
         return x
 
 
@@ -212,9 +235,13 @@ class UNetModel(nn.Sequential):
     Residual Symmetric U-Net with down/upsampling in/output.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, width=WIDTH, io_kernel=(1, 5, 5)):
+    def __init__(self, in_channels: int, out_channels: int, width=WIDTH, io_kernel=(1, 5, 5), split_gpus=False):
         super().__init__()
 
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
-        self.add_module('core', RSUNet(width=width))
+        self.add_module('core', RSUNet(width=width, split_gpus=split_gpus))
         self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))
+
+        if split_gpus:
+            self.get_submodule('in').cuda(0)
+            self.get_submodule('out').cuda(3)
