@@ -3,7 +3,6 @@ from neutorch.model.swin_transformer3D import SwinUNet3D
 from neutorch.model.RSUNet import UNetModel
 from neutorch.dataset.affinity import Dataset
 from neutorch.model.mlp_mixer import MLPMixer
-from neutorch.model.mlp_mixer2 import MLPMixer2
 from neutorch.model.loss import BinomialCrossEntropyWithLogits
 import pprint
 
@@ -15,7 +14,7 @@ class dotdict(dict):
     __delattr__ = dict.__delitem__
 
 
-class TransformerConfig(object):
+class Config(object):
     def __init__(self,
                  #### Global ####
                  name,
@@ -123,17 +122,6 @@ def build_model_from_config(config):
         return UNetModel(config.in_channels, config.out_channels, io_kernel=config.io_kernel, split_gpus=config.split_gpus)
     elif model == 'mlp':
         return MLPMixer(
-            image_size=config.patch_size,
-            patch_size=config.mlp_patch_size,
-            in_channels=config.in_channels,
-            out_channels=config.out_channels,
-            dim=config.embed_dim,
-            depth=config.depth,
-            expansion_factor=config.expansion_factor,
-        )
-    elif model == 'mlp2':
-
-        return MLPMixer2(
             in_channels=config.in_channels,
             out_channels=config.out_channels,
             image_size=config.patch_size,
@@ -181,29 +169,22 @@ def get_config(name):
     raise ValueError(f'config {name} not found.')
 
 
-c0 = TransformerConfig('swin', model='swin')
-
-c3 = TransformerConfig('RSUnetHUGE', model='RSUnet',
-                       patch_size=(72, 928, 928), split_gpus=True, num_examples=200000, learning_rate=0.01,)  # WIDTH = [16, 32, 64, 128, 256]
-
-
-c5 = TransformerConfig('RSUnet2', model='RSUnet',
-                       learning_rate=0.001)
-
-c7 = TransformerConfig('mlp', model='mlp', embed_dim=1024, mlp_patch_size=(
-    3, 30, 30),  patch_size=(30, 300, 300), num_examples=2000000,)
-c8 = TransformerConfig('mlp2unet', model='mlp2', embed_dim=1024, mlp_patch_size=(
-    4, 64, 64), patch_size=(52, 512, 512), num_examples=2000000,)
-c9 = TransformerConfig('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(
-    5, 50, 50),  patch_size=(90, 900, 900), num_examples=2000000,)
-c10 = TransformerConfig('RSUnetBIG', model='RSUnet',
-                        learning_rate=0.001, patch_size=(52, 512, 512),)
-c11 = TransformerConfig('swinBIG', model='swin',
-                        learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000,)
-
-c12 = TransformerConfig('RSUnetBIG_ds2', model='RSUnet',
-                        learning_rate=0.001, patch_size=(52, 512, 512), downsample=0.5)
-c14 = TransformerConfig('swinBIG_ds2', model='swin',
-                        learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000, downsample=0.5)
-
-CONFIGS = [c0, c3, c5, c7, c8, c9, c10, c11, c12, c14]
+CONFIGS = [
+    Config('swin', model='swin'),
+    Config('RSUnet2', model='RSUnet',
+           learning_rate=0.001),
+    Config('mlp', model='mlp', embed_dim=1024, mlp_patch_size=(
+        3, 30, 30),  patch_size=(30, 300, 300), num_examples=2000000,),
+    Config('mlp2unet', model='mlp2', embed_dim=1024, mlp_patch_size=(
+        4, 64, 64), patch_size=(52, 512, 512), num_examples=2000000,),
+    Config('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(
+        5, 50, 50),  patch_size=(90, 900, 900), num_examples=2000000,),
+    Config('RSUnetBIG', model='RSUnet',
+           learning_rate=0.001, patch_size=(52, 512, 512),),
+    Config('swinBIG', model='swin',
+           learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000,),
+    Config('RSUnetBIG_ds2', model='RSUnet',
+           learning_rate=0.001, patch_size=(52, 512, 512), downsample=0.5, border_width=1),
+    Config('swinBIG_ds2', model='swin',
+           learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000, downsample=0.5, border_width=1)
+]

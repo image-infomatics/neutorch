@@ -1,58 +1,102 @@
-from torch import nn
-from functools import partial
-from einops.layers.torch import Rearrange, Reduce
+import torch
 import numpy as np
+from torch import nn
+from einops.layers.torch import Rearrange
 
 
-class PreNormResidual(nn.Module):
-    def __init__(self, dim, fn):
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
-        self.fn = fn
-        self.norm = nn.LayerNorm(dim)
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
 
     def forward(self, x):
-        return self.fn(self.norm(x)) + x
+        return self.net(x)
 
 
-def FeedForward(dim, expansion_factor=4, dropout=0., dense=nn.Linear):
-    return nn.Sequential(
-        dense(dim, dim * expansion_factor),
-        nn.GELU(),
-        nn.Dropout(dropout),
-        dense(dim * expansion_factor, dim),
-        nn.Dropout(dropout)
-    )
+class MixerBlock(nn.Module):
+
+    def __init__(self, dim, num_patch, token_dim, channel_dim, dropout=0.):
+        super().__init__()
+
+        self.token_mix = nn.Sequential(
+            nn.LayerNorm(dim),
+            Rearrange('b n d -> b d n'),
+            FeedForward(num_patch, token_dim, dropout),
+            Rearrange('b d n -> b n d')
+        )
+
+        self.channel_mix = nn.Sequential(
+            nn.LayerNorm(dim),
+            FeedForward(dim, channel_dim, dropout),
+        )
+
+    def forward(self, x):
+
+        x = x + self.token_mix(x)
+
+        x = x + self.channel_mix(x)
+
+        return x
 
 
-def MLPMixer(*, image_size, patch_size, in_channels, out_channels,  dim, depth, expansion_factor=4, dropout=0.):
+class MLPMixer(nn.Module):
 
-    patch_vol = np.product(patch_size)
-    image_vol = np.product(image_size)
-    (iz, iy, ix) = image_size
-    (pz, py, px) = patch_size
+    def __init__(self, in_channels, out_channels, dim, patch_size, image_size, depth, token_dim, channel_dim):
+        super().__init__()
 
-    assert (image_size[0] % patch_size[0]
-            ) == 0, 'image must be divisible by patch size in z'
-    assert (image_size[1] % patch_size[1]
-            ) == 0, 'image must be divisible by patch size in y'
-    assert (image_size[2] % patch_size[2]
-            ) == 0, 'image must be divisible by patch size in x'
+        patch_vol = np.product(patch_size)
+        image_vol = np.product(image_size)
+        (iz, iy, ix) = image_size
+        (pz, py, px) = patch_size
 
-    num_patches = (image_vol // patch_vol)
-    chan_first, chan_last = partial(nn.Conv1d, kernel_size=1), nn.Linear
+        assert (image_size[0] % patch_size[0]
+                ) == 0, 'image must be divisible by patch size in z'
+        assert (image_size[1] % patch_size[1]
+                ) == 0, 'image must be divisible by patch size in y'
+        assert (image_size[2] % patch_size[2]
+                ) == 0, 'image must be divisible by patch size in x'
 
-    return nn.Sequential(
-        Rearrange('b ci (z pz) (y py) (x px) -> b (z y x) (ci pz py px)',
-                  ci=in_channels, pz=pz, py=py, px=px),
-        nn.Linear(patch_vol * in_channels, dim),
-        *[nn.Sequential(
-            PreNormResidual(dim, FeedForward(
-                num_patches, expansion_factor, dropout, chan_first)),
-            PreNormResidual(dim, FeedForward(
-                dim, expansion_factor, dropout, chan_last))
-        ) for _ in range(depth)],
-        nn.LayerNorm(dim),
-        nn.Linear(dim, patch_vol * out_channels),
-        Rearrange('b (z y x) (co pz py px) -> b co (z pz) (y py) (x px)',
-                  co=out_channels, pz=pz, py=py, px=px, z=iz//pz, y=iy//py, x=ix//px),
-    )
+        self.num_patches = (image_vol // patch_vol)
+
+        self.patch_embed = nn.Sequential(
+            nn.Conv3d(in_channels, dim, patch_size, patch_size),
+            Rearrange('b c z y x -> b (z y x) c'),
+        )
+
+        self.mixer_blocks = nn.ModuleList([])
+
+        for _ in range(depth):
+            self.mixer_blocks.append(MixerBlock(
+                dim, self.num_patches, token_dim, channel_dim))
+
+        self.layer_norm = nn.LayerNorm(dim)
+
+        double_patch = (pz*2+1, py*2+1, px*2+1)
+        self.patch_unembed = nn.Sequential(
+            nn.Linear(dim, patch_vol * out_channels*4),
+            Rearrange('b (z y x) (co pz py px) -> b co (z pz) (y py) (x px)',
+                      co=out_channels*4, pz=pz, py=py, px=px, z=iz//pz, y=iy//py, x=ix//px),
+            nn.Conv3d(out_channels*4, out_channels*3,
+                      double_patch, 1, padding=patch_size),
+            nn.Conv3d(out_channels*3, out_channels*2,
+                      double_patch, 1, padding=patch_size),
+            nn.Conv3d(out_channels*2, out_channels*1,
+                      double_patch, 1, padding=patch_size),
+        )
+
+    def forward(self, x):
+
+        x = self.patch_embed(x)
+
+        for mixer_block in self.mixer_blocks:
+            x = mixer_block(x)
+        x = self.layer_norm(x)
+        x = self.patch_unembed(x)
+        # x = self.smooth(x)
+        return x
