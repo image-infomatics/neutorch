@@ -205,4 +205,5 @@ c12 = TransformerConfig('RSUnetBIG_ds2', model='RSUnet',
                         learning_rate=0.001, patch_size=(52, 512, 512), downsample=0.5)
 c14 = TransformerConfig('swinBIG_ds2', model='swin',
                         learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000, downsample=0.5)
+
 CONFIGS = [c0, c3, c5, c7, c8, c9, c10, c11, c12, c14]

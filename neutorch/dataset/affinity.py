@@ -7,7 +7,7 @@ import numpy as np
 
 import torch
 from .tio_transforms import *
-from .utils import from_h5
+from .utils import from_h5, resize_along_z
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
 import torchio as tio
@@ -48,6 +48,7 @@ class Dataset(torch.utils.data.Dataset):
         self.aug = aug
         self.patch_size = patch_size
         self.float16 = float16
+        self.downsample = downsample
 
         # we oversample the patch to create buffer for any transformation
         mz, my, mx = (2, 2, 2)
@@ -114,11 +115,16 @@ class Dataset(torch.utils.data.Dataset):
             #     validation_volumes.append(val_ground_truth_volume)
 
             if downsample != 1.0:
-                image = rescale(image, downsample, anti_aliasing=False)
-                label = rescale(label, downsample, anti_aliasing=False)
+                (_, sy, sx) = image.shape
+                ny, nx = math.ceil(
+                    sy*self.downsample), math.ceil(sx*self.downsample)
+                image = resize_along_z(
+                    image, ny, nx, interpolation=cv2.INTER_NEAREST)
+                label = resize_along_z(
+                    label, ny, nx, interpolation=cv2.INTER_NEAREST)
                 if lsd:
-                    lsd_label = rescale(
-                        lsd_label, downsample, anti_aliasing=False)
+                    lsd_label = resize_along_z(
+                        lsd_label, ny, nx, interpolation=cv2.INTER_NEAREST)
 
             train_ground_truth_volume = GroundTruthVolume(
                 image, label, patch_size=patch_size_oversized,

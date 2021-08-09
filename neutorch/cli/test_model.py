@@ -1,11 +1,12 @@
 import numpy as np
 import torch
 import click
-import os
+import math
 import cc3d
 from tqdm import tqdm
+import cv2
 
-from neutorch.dataset.utils import from_h5
+from neutorch.dataset.utils import from_h5, resize_along_z
 
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
@@ -14,7 +15,6 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_outpu
 from chunkflow.chunk import Chunk
 from chunkflow.chunk.image.convnet.inferencer import Inferencer
 from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
-from skimage.transform import rescale, resize
 
 
 @click.command()
@@ -126,7 +126,11 @@ def test_model(model, patch_size, path, pre_crop=None,
 
     if downsample != 1.0:
         pre_downsample_shape = volume.shape
-        volume = rescale(volume, downsample, anti_aliasing=False)
+        (_, prey, prex) = pre_downsample_shape
+        newy, newx = math.ceil(
+            prey*downsample), math.ceil(prex*downsample)
+        volume = resize_along_z(
+            volume, newy, newx, interpolation=cv2.INTER_NEAREST)
 
     volume_chunk = Chunk(volume)
 
@@ -149,7 +153,8 @@ def test_model(model, patch_size, path, pre_crop=None,
     affinity = affinity.array
 
     if downsample != 1.0:
-        affinity = resize(affinity, pre_downsample_shape, anti_aliasing=False)
+        affinity = resize_along_z(
+            affinity, prey, prex, interpolation=cv2.INTER_NEAREST)
 
     res['affinity'] = affinity
 

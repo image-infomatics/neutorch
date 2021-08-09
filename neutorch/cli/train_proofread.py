@@ -4,7 +4,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 from neutorch.dataset.utils import from_h5
 from neutorch.cremi.evaluate import write_output_data
-from neutorch.dataset.proofread import ProofreadDataset
+from neutorch.dataset.proofread import ProofreadDataset, collate_proofreads
 from neutorch.model.config import *
 from neutorch.model.io import save_chkpt, log_image, log_affinity_output, load_chkpt, reassemble_img_from_cords
 from torch.utils.data.dataloader import DataLoader
@@ -205,8 +205,9 @@ def train(config: str, path: str, seed: int, batch_size: int, sync_every: int,
     # total_params = sum(p.numel() for p in params)
     # # print(f'total params: {total_params}')
     optimizer = build_optimizer_from_config(config.optimizer, params)
-    # dataloader = DataLoader(
-    #     dataset=dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, sampler=sampler, drop_last=False, shuffle=True)
+    dataloader = DataLoader(
+        dataset=dataset, batch_size=4, num_workers=num_workers, pin_memory=pin_memory,
+        sampler=sampler, drop_last=False, shuffle=True, collate_fn=collate_proofreads)
 
     scaler = amp.GradScaler(enabled=use_amp)
     for epoch in range(epochs):

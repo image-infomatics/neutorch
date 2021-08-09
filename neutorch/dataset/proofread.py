@@ -190,3 +190,9 @@ class ProofreadDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.classes)
+
+
+# a simple custom collate function, just to show the idea
+def collate_proofreads(batch):
+    print(batch)
+    return []

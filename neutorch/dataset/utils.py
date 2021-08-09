@@ -3,6 +3,7 @@ import numpy as np
 import h5py
 import math
 from .border_mask import create_border_mask
+import cv2
 
 
 def from_h5(file_name: str,
@@ -76,3 +77,13 @@ def compute_affinty_from_offset(label, affinity_offset, border_width):
     affinity[:, masked_label == 0] = 0
 
     return affinity
+
+
+def resize_along_z(img, nx, ny, interpolation=cv2.INTER_NEAREST):
+    assert len(img.shape) == 3
+    (sz, sy, sx) = img.shape
+    img = img.astype('float32')
+    new_img = np.zeros((sz, ny, nx))
+    for z in range(img.shape[0]):
+        new_img[z] = cv2.resize(img[z], (ny, nx), interpolation=interpolation)
+    return new_img
