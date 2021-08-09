@@ -14,6 +14,7 @@ from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_outpu
 from chunkflow.chunk import Chunk
 from chunkflow.chunk.image.convnet.inferencer import Inferencer
 from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
+from skimage.transform import rescale, resize
 
 
 @click.command()
@@ -83,7 +84,8 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
         torch.backends.cudnn.benchmark = True
 
     res = test_model(model, patch_size, path, pre_crop=pre_crop, agglomerate=agglomerate,
-                     full_agglomerate=full_agglomerate, test_vol=test_vol, threshold=threshold, border_width=config.dataset.border_width)
+                     full_agglomerate=full_agglomerate, test_vol=test_vol, threshold=threshold, border_width=config.dataset.border_width,
+                     downsample=config.dataset.downsample)
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
@@ -100,7 +102,7 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
 
 def test_model(model, patch_size, path, pre_crop=None,
                agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1,
-               full_agglomerate=False, test_vol=False):
+               full_agglomerate=False, test_vol=False, downsample: float = 1.0):
 
     res = {}  # results
 
@@ -122,11 +124,15 @@ def test_model(model, patch_size, path, pre_crop=None,
         volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
         (oz, oy, ox) = (oz-cpz, oy-cpy, ox-cpx)
 
+    if downsample != 1.0:
+        pre_downsample_shape = volume.shape
+        volume = rescale(volume, downsample, anti_aliasing=False)
+
     volume_chunk = Chunk(volume)
 
     print('building affinity...')
     # params
-    output_patch_overlap = (14, 128, 128)
+    output_patch_overlap = tuple([x // 2 for x in patch_size])
     num_output_channels = 3
 
     # set up chunkflow objects
@@ -141,6 +147,9 @@ def test_model(model, patch_size, path, pre_crop=None,
 
     affinity = inferencer(volume_chunk)
     affinity = affinity.array
+
+    if downsample != 1.0:
+        affinity = resize(affinity, pre_downsample_shape, anti_aliasing=False)
 
     res['affinity'] = affinity
 
@@ -204,7 +213,8 @@ class MyPatchInferencer(PatchInferencerBase):
         with torch.no_grad():
             input_patch = torch.from_numpy(input_patch).cuda()
             logits = self.model(input_patch)
-            predict = torch.sigmoid(logits) * self.output_patch_mask
+            predict = torch.sigmoid(
+                logits) * self.output_patch_mask.to(logits.device)
             pred_affs = predict[0:3, ...]
             pred_affs = pred_affs.cpu().numpy()
         return pred_affs

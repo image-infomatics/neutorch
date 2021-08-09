@@ -107,10 +107,9 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
           training_interval: int, validation_interval: int, test_interval: int, final_test: bool,
           load: str, use_amp: bool, ddp: bool, fup: bool, rank: int = 0, world_size: int = 1):
 
-    split_gpu = True
-
     # get config
     config = get_config(config)
+    split_gpu = config.model.split_gpus
 
     # unpack config
     num_examples = config.dataset.num_examples
@@ -131,10 +130,6 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
 
     agg_threshold = 0.7
     sync_every = sync_every // batch_size
-
-    # only print root process
-    if rank != 0:
-        verbose = False
 
     output_dir = f'{output_dir}/{config.name}_run'
 
@@ -189,8 +184,6 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
             sampler = DistributedSampler(
                 dataset, world_size, rank, seed=seed)
             loss_module.cuda(rank)
-        elif split_gpu:
-            loss_module.cuda(0)
         # gpu with DataParallel
         else:
             model = model.cuda()
@@ -236,10 +229,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
             logits = model(image)
             del image
 
-            if split_gpu:
-                target = target.cuda(1, non_blocking=True)
-            else:
-                target = target.cuda(rank, non_blocking=True)
+            target = target.cuda(rank, non_blocking=True)
 
             # compute loss
             loss = loss_module(logits, target)
@@ -300,7 +290,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
                                     target_t, example_number)
                 log_affinity_output(t_writer, 'train/predict',
                                     predict_t, example_number)
-                log_image(t_writer, 'train/image', image, example_number)
+                log_image(t_writer, 'train/image', image_t, example_number)
 
                 # reset acc loss
                 accumulated_loss = 0.0

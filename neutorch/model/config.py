@@ -50,6 +50,7 @@ class TransformerConfig(object):
                  #### Dataset ####
                  dataset='cremi',
                  num_examples=1000000,
+                 downsample=1.0,
                  patch_size=(26, 256, 256),
                  affinity_offsets=[(1, 1, 1)],
                  lsd=False,
@@ -89,6 +90,7 @@ class TransformerConfig(object):
         })
         self.dataset = dotdict({
             'dataset': dataset,
+            'downsample': downsample,
             'num_examples': num_examples,
             'patch_size': patch_size,
             'lsd': lsd,
@@ -168,7 +170,8 @@ def build_dataset_from_config(config, path, use_amp):
                    lsd=config.lsd,
                    aug=config.aug,
                    border_width=config.border_width,
-                   float16=use_amp)
+                   float16=use_amp,
+                   downsample=config.downsample)
 
 
 def get_config(name):
@@ -181,7 +184,8 @@ def get_config(name):
 c0 = TransformerConfig('swin', model='swin')
 
 c3 = TransformerConfig('RSUnetHUGE', model='RSUnet',
-                       patch_size=(72, 928, 928), split_gpus=True, num_examples=200000, learning_rate=0.01,)
+                       patch_size=(72, 928, 928), split_gpus=True, num_examples=200000, learning_rate=0.01,)  # WIDTH = [16, 32, 64, 128, 256]
+
 
 c5 = TransformerConfig('RSUnet2', model='RSUnet',
                        learning_rate=0.001)
@@ -191,8 +195,14 @@ c7 = TransformerConfig('mlp', model='mlp', embed_dim=1024, mlp_patch_size=(
 c8 = TransformerConfig('mlp2unet', model='mlp2', embed_dim=1024, mlp_patch_size=(
     4, 64, 64), patch_size=(52, 512, 512), num_examples=2000000,)
 c9 = TransformerConfig('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(
-    5, 50, 50),  patch_size=(100, 1000, 1000), num_examples=2000000,)
+    5, 50, 50),  patch_size=(90, 900, 900), num_examples=2000000,)
 c10 = TransformerConfig('RSUnetBIG', model='RSUnet',
                         learning_rate=0.001, patch_size=(52, 512, 512),)
+c11 = TransformerConfig('swinBIG', model='swin',
+                        learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000,)
 
-CONFIGS = [c0, c3, c5, c7, c8, c9, c10]
+c12 = TransformerConfig('RSUnetBIG_ds2', model='RSUnet',
+                        learning_rate=0.001, patch_size=(52, 512, 512), downsample=0.5)
+c14 = TransformerConfig('swinBIG_ds2', model='swin',
+                        learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000, downsample=0.5)
+CONFIGS = [c0, c3, c5, c7, c8, c9, c10, c11, c12, c14]

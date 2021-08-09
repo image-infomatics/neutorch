@@ -11,6 +11,7 @@ from .utils import from_h5
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
 import torchio as tio
+from skimage.transform import rescale
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -22,7 +23,8 @@ class Dataset(torch.utils.data.Dataset):
                  aug: bool = True,
                  border_width=1,
                  affinity_offsets=[(1, 1, 1)],
-                 float16: bool = False
+                 float16: bool = False,
+                 downsample: float = 1.0,
                  ):
         """
         Parameters:
@@ -31,7 +33,9 @@ class Dataset(torch.utils.data.Dataset):
             lsd (bool): whether to use multiask lsd target
             patch_size (int or tuple): the patch size we are going to provide.
             aug (bool): whether to use data augmentation
+            affinity_offsets (List of tuple), amount of offset in (x, y, z) for each affinity map, used for Long range affinity
             border_width (int): border width for affinty map
+            downsample (int): factor to downsample volumes by
         """
 
         super().__init__()
@@ -108,6 +112,13 @@ class Dataset(torch.utils.data.Dataset):
             #         lsd_label=val_lsd_label,
             #         border_width=border_width, name=f'{file}_val')
             #     validation_volumes.append(val_ground_truth_volume)
+
+            if downsample != 1.0:
+                image = rescale(image, downsample, anti_aliasing=False)
+                label = rescale(label, downsample, anti_aliasing=False)
+                if lsd:
+                    lsd_label = rescale(
+                        lsd_label, downsample, anti_aliasing=False)
 
             train_ground_truth_volume = GroundTruthVolume(
                 image, label, patch_size=patch_size_oversized,

@@ -154,18 +154,13 @@ class RSUNet(nn.Module):
         depth = len(width) - 1
         self.depth = depth
         self.in_channels = width[0]
-        self.split_gpus = split_gpus
 
         self.iconv = ConvBlock(width[0], width[0])
-        if self.split_gpus:
-            self.iconv.cuda(0)
 
         self.dconvs = nn.ModuleList()
         for d in range(depth):
             module = nn.Sequential(nn.MaxPool3d((1, 2, 2)),
                                    ConvBlock(width[d], width[d+1]))
-            if self.split_gpus:
-                module = module.cuda(GPUS[d])
 
             self.dconvs.append(module)
 
@@ -174,9 +169,6 @@ class RSUNet(nn.Module):
 
             module = UpConvBlock(width[d+1], width[d])
 
-            if self.split_gpus:
-                module.cuda(GPUS[depth - d - 1])
-
             self.uconvs.append(module)
 
         self.out_channels = width[0]
@@ -184,21 +176,16 @@ class RSUNet(nn.Module):
         self.init_weights()
 
     def forward(self, x):
-        x.cuda(0)
+
         x = self.iconv(x)
 
         skip = list()
         for d, dconv in enumerate(self.dconvs):
-            if self.split_gpus:
-                x = x.cuda(GPUS[d])
             skip.append(x)
             x = dconv(x)
 
         for d, uconv in enumerate(self.uconvs):
             res = skip.pop()
-            if self.split_gpus:
-                x = x.cuda(GPUS[d])
-                res = res.cuda(GPUS[d])
             x = uconv(x, res)
 
         return x
@@ -226,7 +213,6 @@ class OutputBlock(nn.Module):
         x = self.norm(x)
         x = self.relu(x)
         x = self.conv(x)
-        x = x.cuda(1)
         return x
 
 
@@ -241,7 +227,3 @@ class UNetModel(nn.Sequential):
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
         self.add_module('core', RSUNet(width=width, split_gpus=split_gpus))
         self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))
-
-        if split_gpus:
-            self.get_submodule('in').cuda(0)
-            self.get_submodule('out').cuda(3)
