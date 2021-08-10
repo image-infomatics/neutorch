@@ -109,6 +109,11 @@ def log_image(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     # normalize from 0 to 1
     tensor -= tensor.min()
     tensor /= tensor.max()
+    d = tensor.shape[-3]
+
+    # look halfway in
+    if slice_index == 0:
+        slice_index = d // 2
 
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]
@@ -116,7 +121,7 @@ def log_image(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
 
 
 def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-                        iter_idx: int, batch_index: int = 0,  slice_index: int = 0):
+                        iter_idx: int, batch_index: int = 0,  slice_index: int = 0, lsd=False):
     """write a Affinity Output tensor in tensorboard log
 
     Args:
@@ -135,21 +140,14 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     tensor /= tensor.max()
     h = tensor.shape[-1]
     w = tensor.shape[-2]
-    c = tensor.shape[-4]
+    d = tensor.shape[-3]
 
-    # figure out whether these is lsd target
-    lsd = False
-    if c > 3:
-        lsd = True
+    # look halfway in
+    if slice_index == 0:
+        slice_index = d // 2
 
     # select slice from batch
     slice = tensor[batch_index, :, slice_index, :, :]
-
-    # def log_channels(channels, subtag):
-    #     imgs = [torch.squeeze(tensor[..., slice(channels[0], channels[1]), z, :, :], axis=0)
-    #             for z in range(depth_index)]
-    #     img = make_grid(imgs, padding=0, nrow=nrow)
-    #     writer.add_image(f'{tag}_{subtag}_{channels}', img, iter_idx)
 
     # log affinity map, channels [0,3)
     a_maps = torch.reshape(slice[0:3, :, :], (3, 1, w, h))
@@ -165,27 +163,6 @@ def log_affinity_output(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         writer.add_image(f'{tag}_lsd', grid, iter_idx)
 
 
-def log_weights(writer: SummaryWriter, model, iter_idx):
-
-    # get arrays of up and down
-    down_convs = model.module.core.dconvs
-    up_convs = model.module.core.uconvs
-
-    for i, dc in enumerate(down_convs):
-        pre = dc[1].pre.conv.weight
-        post = dc[1].post.conv.weight
-
-        writer.add_histogram(f'down_conv/pre_{i}', pre, iter_idx)
-        writer.add_histogram(f'down_conv/post_{i}', post, iter_idx)
-
-    for i, uc in enumerate(up_convs):
-        pre = uc.conv.pre.conv.weight
-        post = uc.conv.post.conv.weight
-
-        writer.add_histogram(f'up_conv/pre_{i}', pre, iter_idx)
-        writer.add_histogram(f'up_conv/post_{i}', post, iter_idx)
-
-
 def log_segmentation(writer: SummaryWriter, tag: str, seg: np.ndarray,
                      iter_idx: int,  slice_index: int = 0):
     """write a input iimage tensor in tensorboard log
@@ -197,6 +174,11 @@ def log_segmentation(writer: SummaryWriter, tag: str, seg: np.ndarray,
         iter_idx (int): training iteration index
         slice_index (int): index of slice to select example to log
     """
+
+    d = seg.shape[-3]
+    # look halfway in
+    if slice_index == 0:
+        slice_index = d // 2
 
     # pick slice from volume
     slice = seg[slice_index, :, :]
@@ -218,3 +200,23 @@ def label_data(vol, seg):
     labeled = color.label2rgb(seg, vol, alpha=0.1, bg_label=-1)
     # shape back
     labeled = np.reshape(labeled, (length, size, size, 3))
+
+
+def reassemble_img_from_cords(cords, img_arr):
+    img_arr = img_arr.cpu().detach().numpy()
+    channels = img_arr.shape[1]
+    cords = cords.astype(int)
+    z_cords, y_cords, x_cords = cords[:, 0, ...], cords[:, 1, ...], cords[:, 2, ...]
+    x_min, x_max = np.amin(x_cords), np.amax(x_cords)
+    y_min, y_max = np.amin(y_cords), np.amax(y_cords)
+    z_min, z_max = np.amin(z_cords), np.amax(z_cords)
+    (sz, sy, sx) = img_arr[0][0].shape
+
+    new_image = np.zeros((channels, z_max-z_min+(sz*2)+1, y_max-y_min+(sy*2)+1, x_max-x_min+(sx*2)+1))
+    for j in range(img_arr.shape[0]):
+        patch = img_arr[j]
+        st = cords[j, :, 0, 0, 0].astype(int)
+        bz, by, bx = st[0]-z_min, st[1]-y_min, st[2]-x_min
+        new_image[:, bz:bz+sz, by:by+sy, bx:bx+sx] = patch
+
+    return torch.from_numpy(new_image)

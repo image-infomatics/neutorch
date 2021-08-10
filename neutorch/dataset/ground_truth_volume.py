@@ -3,8 +3,6 @@ import random
 from typing import Union, Optional
 
 import numpy as np
-from scipy.ndimage.measurements import label
-from .patch import Patch
 from .patch import AffinityPatch
 
 
@@ -26,8 +24,10 @@ class AbstractGroundTruthVolume(ABC):
 class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
                  patch_size: Union[tuple, int],
+                 affinity_offsets,
                  forbbiden_distance_to_boundary: tuple = None,
                  lsd_label: Optional[np.ndarray] = None,
+                 border_width: int = 1,
                  name: str = '') -> None:
         """Image volume with ground truth annotations
 
@@ -41,7 +41,9 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 if this is an integer, then all dimension is the same.
                 if this is a tuple of three integers, the positive and negative is the same
                 if this is a tuple of six integers, the positive and negative 
-                direction is defined separately. 
+                direction is defined separately.
+            affinity_offsets (tuple of 3uples): the amount of offsets to compute the long range affinity maps.
+                each tuple will create 3 channels in the target affinity map.
             lsd_label Optional[np.ndarray]:
                 an auxiliary label such as LSD which is treated similarly to normal label 
             name (str): name of volume
@@ -68,13 +70,18 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
 
+
+        self.border_width = border_width
         self.image = image
         self.label = label
+        self.affinity_offsets = affinity_offsets
         self.lsd_label = lsd_label
         self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
+
         self.center_stop = tuple(
             s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
+
 
     @property
     def random_patch(self):
@@ -111,7 +118,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                                        bx: bx + self.patch_size[-1]
                                        ]
 
-        return AffinityPatch(image_patch, label_patch, lsd_label=lsd_label)
+        return AffinityPatch(image_patch, label_patch, affinity_offsets=self.affinity_offsets, lsd_label=lsd_label, border_width=self.border_width)
 
     @property
     def volume_sampling_weight(self):
@@ -140,34 +147,6 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             image, label, patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
-
-    # it turns out that this sampling is biased to patches containing T-bar
-    # the net will always try to find at least one T-bar in the input patch.
-    # the result will have a low precision containing a lot of false positive prediction.
-    # @property
-    # def random_patch(self):
-    #     point_num = self.annotation_points.shape[0]
-    #     idx = random.randint(0, point_num-1)
-    #     point = self.annotation_points[idx, :]
-    #     center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
-    #     center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-    #     center_start = tuple(
-    #         max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
-    #     )
-    #     center_stop = tuple(
-    #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
-    #     )
-    #     for ct, cp in zip(center_start, center_stop):
-    #         if ct >= cp:
-    #             breakpoint()
-
-    #     return self.random_patch_from_center_range(center_start, center_stop)
-
-    # @property
-    # def volume_sampling_weight(self):
-    #     # use number of annotated points as weight
-    #     # to sample volume
-    #     return self.annotation_points.shape[0]
 
     def _points_to_label(self, image: np.ndarray,
                          expand_distance: int = 2) -> tuple:

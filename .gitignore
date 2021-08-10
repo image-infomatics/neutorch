@@ -2,8 +2,12 @@
 *.DS_Store
 
 data
-*output
-preds
+
+*output*
+*preds*
+*_run
+Pip*
+
 
 Pipfile*
 

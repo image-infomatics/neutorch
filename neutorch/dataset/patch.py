@@ -3,9 +3,7 @@ import torchio as tio
 from typing import Optional
 
 from .border_mask import create_border_mask
-
-# (int): the amount of border added to the affinity maps (for thicker lines)
-AFF_BORDER_WIDTH = 1
+from .utils import compute_affinty_from_offset
 
 
 class Patch(object):
@@ -71,7 +69,9 @@ class Patch(object):
 
 class AffinityPatch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
-                 lsd_label: Optional[np.ndarray] = None):
+                 affinity_offsets,
+                 lsd_label: Optional[np.ndarray] = None,
+                 border_width: int = 1):
         """A patch of volume containing both image and label
 
         Args:
@@ -94,37 +94,29 @@ class AffinityPatch(object):
             self.is_lsd = True
             # add background mask
             mask = np.zeros(label.shape)
-            create_border_mask(label, mask, AFF_BORDER_WIDTH, 0)
+            create_border_mask(label, mask, border_width, 0)
             lsd_label[:, mask == 0] = 0
 
             tio_lsd = tio.LabelMap(tensor=lsd_label)
             subject.add_image(tio_lsd, 'lsd')
 
         self.subject = subject
+        self.border_width = border_width
+        self.affinity_offsets = affinity_offsets
 
     # segmentation label into affinty map
+
     def compute_affinity(self):
 
         label = np.squeeze(self.subject.label.tensor.numpy())
         z0, y0, x0 = label.shape
+        aff_channels = len(self.affinity_offsets) * 3
+        full_affinity = np.zeros((aff_channels, z0, y0, x0))
+        for i, off in enumerate(self.affinity_offsets):
+            aff = compute_affinty_from_offset(label, off, self.border_width)
+            full_affinity[i*3:(i+1)*3, :, :, :] = aff
 
-        # add background mask
-        masked_label = np.zeros(label.shape, dtype=np.uint64)
-        create_border_mask(label, masked_label, AFF_BORDER_WIDTH, 0)
-
-        # along some axis X, affinity is 1 or 0 based on if voxel x === x-1
-        affinity = np.zeros((3, z0, y0, x0))
-        affinity[2, 1:, :, :] = masked_label[..., 1:, :,
-                                             :] == masked_label[..., 0:-1, :, :]  # z channel
-        affinity[1, :, 1:, :] = masked_label[..., :, 1:,
-                                             :] == masked_label[..., :, 0:-1, :]  # y channel
-        affinity[0, :, :, 1:] = masked_label[..., :, :,
-                                             1:] == masked_label[..., :, :, 0:-1]  # x channel
-
-        # but back in background labels
-        affinity[:, masked_label == 0] = 0
-
-        tio_affinity = tio.LabelMap(tensor=affinity)
+        tio_affinity = tio.LabelMap(tensor=full_affinity)
         self.subject.add_image(tio_affinity, 'affinity')
 
     @property

@@ -2,17 +2,17 @@ from __future__ import print_function
 from itertools import repeat
 import collections
 import math
-from matplotlib.pyplot import axes
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
+import GPUtil
 
 __all__ = ['Model']
 
 
 WIDTH = [16, 32, 64, 128, 256, 512]
+GPUS = [0, 1, 2, 2, 3]
 
 
 def _ntuple(n):
@@ -143,41 +143,50 @@ class UpConvBlock(nn.Module):
 
     def forward(self, x, skip):
         x = self.up(x, skip)
-        return self.conv(x)
+        x = self.conv(x)
+        return x
 
 
 class RSUNet(nn.Module):
-    def __init__(self, width=WIDTH):
+    def __init__(self, width=WIDTH, split_gpus=False):
         super(RSUNet, self).__init__()
         assert len(width) > 1
         depth = len(width) - 1
-
+        self.depth = depth
         self.in_channels = width[0]
 
         self.iconv = ConvBlock(width[0], width[0])
 
         self.dconvs = nn.ModuleList()
         for d in range(depth):
-            self.dconvs.append(nn.Sequential(nn.MaxPool3d((1, 2, 2)),
-                                             ConvBlock(width[d], width[d+1])))
+            module = nn.Sequential(nn.MaxPool3d((1, 2, 2)),
+                                   ConvBlock(width[d], width[d+1]))
+
+            self.dconvs.append(module)
+
         self.uconvs = nn.ModuleList()
         for d in reversed(range(depth)):
-            self.uconvs.append(UpConvBlock(width[d+1], width[d]))
+
+            module = UpConvBlock(width[d+1], width[d])
+
+            self.uconvs.append(module)
 
         self.out_channels = width[0]
 
         self.init_weights()
 
     def forward(self, x):
+
         x = self.iconv(x)
 
         skip = list()
-        for dconv in self.dconvs:
+        for d, dconv in enumerate(self.dconvs):
             skip.append(x)
             x = dconv(x)
 
-        for uconv in self.uconvs:
-            x = uconv(x, skip.pop())
+        for d, uconv in enumerate(self.uconvs):
+            res = skip.pop()
+            x = uconv(x, res)
 
         return x
 
@@ -207,44 +216,14 @@ class OutputBlock(nn.Module):
         return x
 
 
-class AffLSDSplit(nn.Module):
-    def __init__(self, in_channels, aff_lsd_channels, kernel_size=3, stride=1,
-                 bias=False):
-        super(AffLSDSplit, self).__init__()
-        padding = pad_size(kernel_size, 'same')
-
-        aff_channels = aff_lsd_channels[0]
-        lsd_channels = aff_lsd_channels[1]
-
-        self.aff_conv = nn.Conv3d(in_channels, aff_channels,
-                                  kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-
-        self.lsd_conv = nn.Conv3d(in_channels, lsd_channels,
-                                  kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-
-        nn.init.kaiming_normal_(self.aff_conv.weight, nonlinearity='relu')
-        nn.init.kaiming_normal_(self.lsd_conv.weight, nonlinearity='relu')
-        if bias:
-            nn.init.constant_(self.aff_conv.bias, 0)
-            nn.init.constant_(self.lsd_conv.bias, 0)
-
-    def forward(self, x):
-        aff = self.aff_conv(x)
-        lsd = self.lsd_conv(x)
-        res = torch.cat([aff, lsd], dim=1)
-        return res
-
-
 class UNetModel(nn.Sequential):
     """
     Residual Symmetric U-Net with down/upsampling in/output.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, width=WIDTH):
+    def __init__(self, in_channels: int, out_channels: int, width=WIDTH, io_kernel=(1, 5, 5), split_gpus=False):
         super().__init__()
 
-        io_kernel = (1, 5, 5)
-
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
-        self.add_module('core', RSUNet(width=width))
+        self.add_module('core', RSUNet(width=width, split_gpus=split_gpus))
         self.add_module('out', OutputBlock(width[0], out_channels, io_kernel))

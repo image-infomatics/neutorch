@@ -55,7 +55,7 @@ class BinomialCrossEntropyWithLogits(nn.Module):
             loss *= rebalance_weight
 
         cost = self._reduce_loss(loss, mask=mask)
-        return cost
+        return cost + 0.001
 
 
 class FocalLoss(BinomialCrossEntropyWithLogits):

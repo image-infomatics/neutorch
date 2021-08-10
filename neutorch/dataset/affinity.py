@@ -1,28 +1,30 @@
-from sys import prefix
 from .utils import from_h5
 import random
 from typing import Union
 from time import time
-
+import math
 import numpy as np
 
 import torch
 from .tio_transforms import *
-from .utils import from_h5
+from .utils import from_h5, resize_along_z
 from .ground_truth_volume import GroundTruthVolume
 from .patch import AffinityBatch
 import torchio as tio
-from multiprocessing.pool import ThreadPool
+from skimage.transform import rescale
 
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  path: str,
                  length: int,
-                 lsd: bool,
-                 patch_size: Union[int, tuple] = (64, 64, 64),
-                 batch_size=1,
-
+                 lsd: bool = True,
+                 patch_size: Union[int, tuple] = (26, 256, 256),
+                 aug: bool = True,
+                 border_width=1,
+                 affinity_offsets=[(1, 1, 1)],
+                 float16: bool = False,
+                 downsample: float = 1.0,
                  ):
         """
         Parameters:
@@ -30,7 +32,10 @@ class Dataset(torch.utils.data.Dataset):
             length (int): number of examples
             lsd (bool): whether to use multiask lsd target
             patch_size (int or tuple): the patch size we are going to provide.
-            batch_size (int): the number of batches in each batch
+            aug (bool): whether to use data augmentation
+            affinity_offsets (List of tuple), amount of offset in (x, y, z) for each affinity map, used for Long range affinity
+            border_width (int): border width for affinty map
+            downsample (int): factor to downsample volumes by
         """
 
         super().__init__()
@@ -40,12 +45,19 @@ class Dataset(torch.utils.data.Dataset):
 
         # keep track of total length and current index
         self.length = length
-
-        self.batch_size = batch_size
+        self.aug = aug
         self.patch_size = patch_size
+        self.float16 = float16
+        self.downsample = downsample
+
         # we oversample the patch to create buffer for any transformation
-        self.over_sample = 4
-        patch_size_oversized = tuple(x+self.over_sample for x in patch_size)
+        mz, my, mx = (2, 2, 2)
+        for os in affinity_offsets:
+            mz, my, mx = max(os[0], mz), max(os[1], my), max(os[2], mx)
+        self.over_sample = (mz*2, my*2, mx*2)
+        patch_size_oversized = tuple(
+            p+o for p, o in zip(patch_size, self.over_sample))
+
         # number of slices used to make validation volume
         # use the z dim of the patch size plus how ever much we oversample plus a little extra
         val_slices_bonus = 10
@@ -74,14 +86,13 @@ class Dataset(torch.utils.data.Dataset):
             lsd_label = None
             if lsd:
                 lsd_label = np.load(f'{path}/{file}_lsd.npy')
-                image = image.astype(np.float32) / 255.
 
                 # we just trim the last slice because it is duplicate in the data
                 # due to quirk of lsd algo, in future, should just fix data
                 lsd_label = lsd_label[:, :-1, :, :]
 
-            # here we take some slices of a volume to build a valiation volume
-            # for now we only take from the first training volume
+            # # here we take some slices of a volume to build a valiation volume
+            # # for now we only take from the first training volume
             if i == 0:
                 vs = self.validation_slices
 
@@ -97,36 +108,51 @@ class Dataset(torch.utils.data.Dataset):
                     lsd_label = lsd_label[..., vs:, :, :]
 
                 val_ground_truth_volume = GroundTruthVolume(
-                    val_image, val_label, patch_size=patch_size_oversized, lsd_label=val_lsd_label, name=f'{file}_val')
+                    val_image, val_label, patch_size=patch_size_oversized,
+                    affinity_offsets=affinity_offsets,
+                    lsd_label=val_lsd_label,
+                    border_width=border_width, name=f'{file}_val')
                 validation_volumes.append(val_ground_truth_volume)
 
+            if downsample != 1.0:
+                (_, sy, sx) = image.shape
+                ny, nx = math.ceil(
+                    sy*self.downsample), math.ceil(sx*self.downsample)
+                image = resize_along_z(
+                    image, ny, nx, interpolation=cv2.INTER_NEAREST)
+                label = resize_along_z(
+                    label, ny, nx, interpolation=cv2.INTER_NEAREST)
+                if lsd:
+                    lsd_label = resize_along_z(
+                        lsd_label, ny, nx, interpolation=cv2.INTER_NEAREST)
+
             train_ground_truth_volume = GroundTruthVolume(
-                image, label, patch_size=patch_size_oversized, lsd_label=lsd_label, name=f'{file}_train')
+                image, label, patch_size=patch_size_oversized,
+                affinity_offsets=affinity_offsets,
+                lsd_label=lsd_label, border_width=border_width, name=f'{file}_train')
+
             training_volumes.append(train_ground_truth_volume)
 
         self.training_volumes = training_volumes
         self.validation_volumes = validation_volumes
 
-    @property
-    def random_training_batch(self):
-        return self.get_batch_threaded(validation=False)
+        semi_validation = False  # can be necessary for large patch sizes
+        # if we validate from the same volumes as training, we depend on the stochastic of data augmentation
+        # to measure overfitting. In practicen overfitting has not been a concern likely due to data augmentation
 
-    @property
-    def random_validation_batch(self):
-        return self.get_batch_threaded(validation=True)
+        if semi_validation:
+            self.validation_volumes = training_volumes
 
-    def get_batch_threaded(self, validation: bool = False):
-        # probably could be done without map...
-        num_threads = min(self.batch_size, 16)
+    def random_validation_batch(self, batch_size):
+        patches = []
+        for i in range(batch_size):
+            patches.append(self.random_validation_patch)
+        return AffinityBatch(patches)
 
-        def get_patch(_):
-            if validation:
-                return self.random_validation_patch
-            return self.random_training_patch
-
-        with ThreadPool(processes=num_threads) as pool:
-            patches = pool.map(get_patch, range(self.batch_size))
-
+    def random_training_batch(self, batch_size):
+        patches = []
+        for i in range(batch_size):
+            patches.append(self.random_training_patch)
         return AffinityBatch(patches)
 
     @property
@@ -145,7 +171,8 @@ class Dataset(torch.utils.data.Dataset):
         # print(f'transform takes {round(time()-ping, 3)} seconds.')
         patch.compute_affinity()
         # crop down from over sample to true patch size, crop after compute affinity
-        crop = tio.Crop(bounds_parameters=self.over_sample//2)
+        crop_bds = tuple([x//2 for x in self.over_sample])
+        crop = tio.Crop(bounds_parameters=crop_bds)
         patch.subject = crop(patch.subject)
 
         return patch
@@ -185,98 +212,25 @@ class Dataset(torch.utils.data.Dataset):
         intensity = tio.Compose([bias, gamma, brightness, noise, blur, loss])
 
         # clip
-        clip = Clip(min_max=(0.2, 0.98))
+        clip = Clip(min_max=(0.0, 1.0))
 
         # compose transforms
         transforms = [rescale, transposeXY,
                       spacial, intensity, transposeXY, clip]
+
         self.transform = tio.Compose(transforms)
+
+        if not self.aug:
+            self.transform = tio.Compose([rescale, clip])
 
     def __getitem__(self, idx):
         patch = self.random_training_patch
         X = patch.image
         y = patch.target
+        if self.float16:
+            X = X.astype(np.float16)
+            y = y.astype(np.float16)
         return X, y
-
-    def __len__(self):
-        return self.length
-
-
-class TestDataset(torch.utils.data.Dataset):
-    def __init__(self,
-                 path: str,
-                 patch_size: tuple,
-                 with_label: bool = False,
-                 overlap: tuple = (0, 0, 0)
-                 ):
-        """
-        Parameters:
-            path (str): file_path to the test  data.
-            patch_size (tuple): the patch size we are going to provide.
-            with_label (bool): get label also
-            overlap (tuple): amount each batch should overlap in each dim
-        """
-
-        super().__init__()
-
-        print(f'loading from {path}...')
-        volume = from_h5(path, dataset_path='volumes/raw')
-        volume = volume.astype(np.float32) / 255.
-        if with_label:
-            self.label, self.label_offset = from_h5(
-                path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
-
-        (z, y, x) = volume.shape
-        (pz, py, px) = patch_size
-
-        self.overlap = overlap
-        self.patch_size = patch_size
-        self.volume = volume
-        self.indices = (0, 0, 0)  # cur indices to sample from z, y, x
-        self.z_len = (z) // pz
-        self.y_len = (y) // py
-        self.x_len = (x) // px
-        self.length = (self.z_len * self.y_len * self.x_len)-1
-
-        # pregenerate all sampling indices
-        self.all_indices = self._gen_indices()
-
-    def _gen_indices(self):
-        (pz, py, px) = self.patch_size
-        (iz, iy, ix) = (0, 0, 0)
-        all_indices = [(iz, iy, ix)]
-        for _ in range(self.length):
-            nx = ix + px
-            ny = iy
-            nz = iz
-            if(nx + px > self.x_len*px):
-                nx = 0
-                ny += py
-                if(ny + py > self.y_len*py):
-                    ny = 0
-                    nz += pz
-            all_indices.append((nz, ny, nx))
-            (iz, iy, ix) = (nz, ny, nx)
-        return all_indices
-
-    def get_indices(self, idx):
-        return self.all_indices[idx]
-
-    def get_range(self):
-        (pz, py, px) = self.patch_size
-        return (self.z_len*pz, self.y_len*py, self.x_len*px)
-
-    def __getitem__(self, idx):
-
-        (iz, iy, ix) = self.all_indices[idx]
-        (pz, py, px) = self.patch_size
-        patch = self.volume[iz:iz+pz, iy:iy+py, ix:ix+px]
-
-        # convert to torch and add dim for channel
-        patch = torch.Tensor(patch)
-        patch = torch.unsqueeze(patch, 0)
-
-        return patch
 
     def __len__(self):
         return self.length
