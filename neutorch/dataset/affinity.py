@@ -133,10 +133,13 @@ class Dataset(torch.utils.data.Dataset):
 
             training_volumes.append(train_ground_truth_volume)
 
-        semi_validation = False  # can be necessary for large patch sizes
-
         self.training_volumes = training_volumes
         self.validation_volumes = validation_volumes
+
+        semi_validation = False  # can be necessary for large patch sizes
+        # if we validate from the same volumes as training, we depend on the stochastic of data augmentation
+        # to measure overfitting. In practicen overfitting has not been a concern likely due to data augmentation
+
         if semi_validation:
             self.validation_volumes = training_volumes
 

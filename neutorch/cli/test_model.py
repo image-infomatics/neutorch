@@ -75,7 +75,7 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
         # if load is a number infer path
         if load.isnumeric():
             example_number = load
-            load = f'./{config.name}_run/chkpts/model_{load}.chkpt'
+            load = f'/mnt/home/jberman/ceph/runs/{config.name}_run/chkpts/model_{load}.chkpt'
         model = load_chkpt(model, load)
 
     # # gpu settings
