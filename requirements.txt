@@ -1,9 +1,0 @@
-torch 
-torchvision
-toml
-h5py
-tensorboard
-opencv-python
-scikit-image
-tqdm
-click

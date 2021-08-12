@@ -25,10 +25,6 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
 @click.option('--path',
               type=str, help='path to the test data file'
               )
-@click.option('--patch-size', '-p',
-              type=str, default='(26, 256, 256)',
-              help='patch size from volume.'
-              )
 @click.option('--pre-crop',
               type=str, default='None',
               help='the amount the crop the volume before inference. Each value is applied even on either end.'
@@ -55,16 +51,16 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
 @click.option('--threshold',
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
-def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, parallel: str,
+def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
          agglomerate: bool, test_vol: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float):
 
     # convert
-    patch_size = eval(patch_size)
     pre_crop = eval(pre_crop)
 
     # get config
     config = get_config(config)
     model = build_model_from_config(config.model)
+    patch_size = config.dataset.patch_size
 
     if parallel == 'dp':
         model = torch.nn.DataParallel(model)
@@ -95,6 +91,11 @@ def test(path: str, config: str, patch_size: str, pre_crop: str, load: str, para
 
     if metrics is not None:
         print(metrics)
+
+    if not save_aff:
+        affinity = None
+    if not save_seg:
+        segmentation = None
 
     write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
                       output_dir=f'/mnt/home/jberman/ceph')
@@ -136,7 +137,7 @@ def test_model(model, patch_size, path, pre_crop=None,
 
     print('building affinity...')
     # params
-    output_patch_overlap = tuple([x // 2 for x in patch_size])
+    output_patch_overlap = (12, 124, 124)
     num_output_channels = 3
 
     # set up chunkflow objects
