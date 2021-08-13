@@ -19,6 +19,7 @@ class Patch(object):
         assert image.shape == label.shape
         self.image = image
         self.label = label
+        self.target = None
         self.delayed_shrink_size = delayed_shrink_size
 
     def accumulate_delayed_shrink_size(self, shrink_size: tuple):
@@ -62,3 +63,16 @@ class Patch(object):
     @lru_cache
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
+
+    @property
+    def target(self):
+        if self.target is None:
+            assert np.issubdtype(self.label.dtype, np.floating)
+            return self.label
+        else:
+            return self.target
+
+    @property
+    @lru_cache
+    def affinity_map(self):
+        

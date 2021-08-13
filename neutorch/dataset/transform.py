@@ -536,4 +536,7 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
->>>>>>> main
+
+class LabelAsTarget()
+
+class Label2Affinity
