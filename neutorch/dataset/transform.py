@@ -430,26 +430,9 @@ class Perspective2D(SpatialTransform):
         super().__init__(probability=probability)
         self.corner_ratio = corner_ratio
 
-    def transform(self, patch: Patch):
-        # matrix = np.eye(3)
-        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
-        for batch in range(patch.shape[0]):
-            for channel in range(patch.shape[1]):
-                for z in range(patch.shape[2]):
-                    patch.image[batch,channel,z,...] = self._transform2d(
-                        patch.image[batch, channel, z, ...], cv2.INTER_LINEAR
-                    )
-                    patch.image[batch,channel,z,...] = self._transform2d(
-                        patch.image[batch, channel, z, ...], cv2.INTER_NEAREST
-                    )
-                
-        patch.shrink(self.shrink_size)
-
-    def _transform2d(self, arr: np.ndarray, interpolation: int):
-        assert arr.ndim == 2
+    def transformation_matrix(self, sy: int, sx: int):
         corner_ratio = random.uniform(0.02, self.corner_ratio)
         # corner_ratio = self.corner_ratio
-        sy, sx = arr.shape
         upper_left_point = [
             random.randint(0, round(sy*corner_ratio/2)), 
             random.randint(0, round(sx*corner_ratio/2))
@@ -485,6 +468,26 @@ class Perspective2D(SpatialTransform):
         
         pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
         M = cv2.getPerspectiveTransform(pts1, pts2)
+        return M
+
+    def transform(self, patch: Patch):
+        # matrix = np.eye(3)
+        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
+        sy, sx = patch.shape[-2:]
+        M = self.transformation_matrix(sy, sx)
+        for batch in range(patch.shape[0]):
+            for channel in range(patch.shape[1]):
+                for z in range(patch.shape[2]):
+                    patch.image[batch,channel,z,...] = self._transform2d(
+                        patch.image[batch, channel, z, ...], cv2.INTER_LINEAR, M, sy, sx
+                    )
+                    patch.label[batch,channel,z,...] = self._transform2d(
+                        patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
+                    )
+                
+        patch.shrink(self.shrink_size)
+
+    def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
         return dst
 
