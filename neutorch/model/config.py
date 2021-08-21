@@ -55,6 +55,7 @@ class Config(object):
                  lsd=False,
                  aug=True,
                  border_width=2,
+                 agg_threshold=0.65
                  ):
 
         self.name = name
@@ -96,6 +97,7 @@ class Config(object):
             'aug': aug,
             'border_width': border_width,
             'affinity_offsets': affinity_offsets,
+            'agg_threshold': agg_threshold
         })
 
     def toString(self):
@@ -179,7 +181,9 @@ CONFIGS = [
         4, 64, 64), patch_size=(52, 512, 512), num_examples=2000000,),
     Config('mlp2big', model='mlp2', embed_dim=1024, mlp_patch_size=(
         5, 50, 50),  patch_size=(90, 900, 900), num_examples=2000000,),
-    Config('RSUnetBIG', model='RSUnet',
+    Config('RSUnetBigger', model='RSUnet',
+           learning_rate=0.001, patch_size=(52, 512, 512),),
+    Config('RSUnetBIG2', model='RSUnet',
            learning_rate=0.001, patch_size=(52, 512, 512),),
     Config('swinBIG', model='swin',
            learning_rate=0.001, patch_size=(32, 512, 512), depths=[2, 2, 8, ], num_examples=2000000,),

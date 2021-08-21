@@ -198,7 +198,7 @@ class DropZSlices(RandomTransform, IntensityTransform):
         for image in self.get_images(sample):
             data = image.numpy()
             for z in z_s:
-                data[..., z, :, :] = np.random.rand(1, shape[-2], shape[-1])
+                data[..., z, :, :] = np.zeros((1, shape[-2], shape[-1]))
             image[DATA] = torch.from_numpy(data)
 
         return sample

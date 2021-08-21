@@ -114,6 +114,7 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
     # unpack config
     num_examples = config.dataset.num_examples
     patch_size = config.dataset.patch_size
+    agg_threshold = config.dataset.agg_threshold
 
     use_gpu = torch.cuda.is_available()
     gpus = torch.cuda.device_count()
@@ -128,7 +129,6 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
         else:
             num_workers = cpus
 
-    agg_threshold = 0.7
     sync_every = sync_every // batch_size
 
     output_dir = f'{output_dir}/{config.name}_run'
@@ -335,11 +335,14 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
 
                 save_chkpt(model, output_dir, example_number, optimizer)
                 sum_cremi_score = 0
-                files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad']
+                val_vols = 0
+                files = ['sample_A_pad', 'sample_B_pad', 'sample_C_pad',
+                         'sample_A+_pad', 'sample_B+_pad', 'sample_C+_pad']
 
                 for file in files:
-                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10, 400, 400), threshold=agg_threshold,
-                                     border_width=config.dataset.border_width,)
+                    isTestVol = '+' in file
+                    res = test_model(model, patch_size, f'./data/{file}.hdf', pre_crop=(10, 100, 100), threshold=agg_threshold,
+                                     border_width=config.dataset.border_width, test_vol=isTestVol)
                     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
 
                     # convert to torch, add batch dim
@@ -350,12 +353,14 @@ def train(config: str, path: str, seed: int, output_dir: str, batch_size: int, s
                                         affinity, example_number)
                     log_segmentation(v_writer, f'test/full_segmentation_{file}',
                                      segmentation, example_number)
-                    cremi_score = metrics['cremi_score']
-                    sum_cremi_score += cremi_score
-                    v_writer.add_scalar(
-                        f'cremi_metrics/full_cremi_score_{file}', cremi_score, example_number)
+                    if metrics is not None:
+                        cremi_score = metrics['cremi_score']
+                        sum_cremi_score += cremi_score
+                        v_writer.add_scalar(
+                            f'cremi_metrics/full_cremi_score_{file}', cremi_score, example_number)
+                        val_vols += 1
 
-                avg_cremi_score = sum_cremi_score / len(files)
+                avg_cremi_score = sum_cremi_score / val_vols
 
                 if avg_cremi_score < best_avg_cremi_score:
                     best_avg_cremi_score = avg_cremi_score

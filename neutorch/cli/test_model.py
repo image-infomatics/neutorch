@@ -97,8 +97,22 @@ def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
     if not save_seg:
         segmentation = None
 
-    write_output_data(affinity, segmentation, metrics, config_name=config.name, example_number=example_number, file=file,
+    write_output_data(affinity, segmentation, metrics, config_name=f'{config.name}_manfix', example_number=example_number, file=file,
                       output_dir=f'/mnt/home/jberman/ceph')
+
+
+def fix_A(vol, offset=37):
+    # 0 33 51 79 80 108 109 111
+    o = offset
+    vol[..., o+0, :, :] = vol[..., o+1, :, :]
+    vol[..., o+33, :, :] = vol[..., o+34, :, :]
+    vol[..., o+51, :, :] = vol[..., o+52, :, :]
+    vol[..., o+79, :, :] = vol[..., o+78, :, :]
+    vol[..., o+80, :, :] = vol[..., o+81, :, :]
+    vol[..., o+108, :, :] = vol[..., o+107, :, :]
+    vol[..., o+109, :, :] = vol[..., o+110, :, :]
+    vol[..., o+111, :, :] = vol[..., o+112, :, :]
+    return vol
 
 
 def test_model(model, patch_size, path, pre_crop=None,
@@ -110,7 +124,7 @@ def test_model(model, patch_size, path, pre_crop=None,
     print('loading data...')
     volume = from_h5(path, dataset_path='volumes/raw')
     volume = volume.astype(np.float32) / 255.
-
+    volume = fix_A(volume)
     if not test_vol:
         label, label_offset = from_h5(
             path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
@@ -124,6 +138,8 @@ def test_model(model, patch_size, path, pre_crop=None,
         (cpz, cpy, cpx) = pre_crop
         volume = volume[cpz:-cpz, cpy:-cpy, cpx:-cpx]
         (oz, oy, ox) = (oz-cpz, oy-cpy, ox-cpx)
+        (vz, vy, vx) = volume.shape
+        assert vz > oz+sz and vy > oy+sy and vx > ox+sx
 
     if downsample != 1.0:
         pre_downsample_shape = volume.shape

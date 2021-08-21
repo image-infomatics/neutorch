@@ -9,7 +9,7 @@ from neutorch.dataset.utils import from_h5
 
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
-from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics
+from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
 from multiprocessing.pool import Pool
 
 
@@ -25,6 +25,9 @@ from multiprocessing.pool import Pool
               )
 @click.option('--full-affinity',
               type=bool, help='whether the affinity is of the full padded volume or not'
+              )
+@click.option('--save-seg',
+              type=bool, default=False, help='whether to save the segmentation'
               )
 @click.option('--threshold-min',
               type=float, default=0.4, help='threshold to use for agglomeration step.'
@@ -45,7 +48,7 @@ from multiprocessing.pool import Pool
               type=str, default='./',
               help='for output'
               )
-def find_threshold(name: str, label_path: str, aff_path: str, full_affinity: bool,
+def find_threshold(name: str, label_path: str, aff_path: str, full_affinity: bool, save_seg: bool,
                    threshold_min: float, threshold_max: float, threshold_step: float,
                    border_width: int, num_workers: int, output_dir: str):
 
@@ -99,6 +102,9 @@ def find_threshold(name: str, label_path: str, aff_path: str, full_affinity: boo
         print(f'metrics for threshold {threshold}')
         print(metrics)
         metrics['threshold'] = threshold
+        if save_seg:
+            write_output_data(None, segmentation, None, config_name=thres_name, example_number=threshold, file='',
+                              output_dir=f'/mnt/home/jberman/ceph')
         return metrics
 
     # do aggo threaded

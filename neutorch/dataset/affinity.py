@@ -196,7 +196,7 @@ class Dataset(torch.utils.data.Dataset):
         drop_axis = ZeroAlongAxis()
         dropZ = DropZSlices()
         # one data loss transform
-        loss = tio.OneOf({drop_section: 0.4, drop_axis: 0.3, dropZ: 0.2})
+        loss = tio.OneOf({drop_section: 0.4, drop_axis: 0.3, dropZ: 0.3})
 
         # light
         bias = ApplyIntensityAlongZ(tio.RandomBiasField(coefficients=0.24))
