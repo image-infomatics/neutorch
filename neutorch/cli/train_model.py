@@ -21,8 +21,6 @@ import time
 import os
 import random
 import shutil
-import gc
-import GPUtil
 
 
 @click.command()

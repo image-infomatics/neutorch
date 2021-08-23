@@ -11,6 +11,7 @@ from neutorch.dataset.utils import from_h5, resize_along_z
 from neutorch.model.config import *
 from neutorch.model.io import load_chkpt
 from neutorch.cremi.evaluate import do_agglomeration, cremi_metrics, write_output_data
+from neutorch.dataset.manual_fix import fix_volume
 
 from chunkflow.chunk import Chunk
 from chunkflow.chunk.image.convnet.inferencer import Inferencer
@@ -101,30 +102,18 @@ def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
-def fix_A(vol, offset=37):
-    # 0 33 51 79 80 108 109 111
-    o = offset
-    vol[..., o+0, :, :] = vol[..., o+1, :, :]
-    vol[..., o+33, :, :] = vol[..., o+34, :, :]
-    vol[..., o+51, :, :] = vol[..., o+52, :, :]
-    vol[..., o+79, :, :] = vol[..., o+78, :, :]
-    vol[..., o+80, :, :] = vol[..., o+81, :, :]
-    vol[..., o+108, :, :] = vol[..., o+107, :, :]
-    vol[..., o+109, :, :] = vol[..., o+110, :, :]
-    vol[..., o+111, :, :] = vol[..., o+112, :, :]
-    return vol
-
-
 def test_model(model, patch_size, path, pre_crop=None,
                agglomerate: bool = True, threshold: float = 0.7, border_width: int = 1,
-               full_agglomerate=False, test_vol=False, downsample: float = 1.0):
+               full_agglomerate=False, test_vol=False, downsample: float = 1.0, manual_fix: bool = False):
 
     res = {}  # results
 
     print('loading data...')
     volume = from_h5(path, dataset_path='volumes/raw')
     volume = volume.astype(np.float32) / 255.
-    volume = fix_A(volume)
+    if manual_fix:
+        volume = fix_volume(volume, path)
+
     if not test_vol:
         label, label_offset = from_h5(
             path, dataset_path='volumes/labels/neuron_ids', get_offset=True)
