@@ -52,8 +52,11 @@ from chunkflow.chunk.image.convnet.patch.base import PatchInferencerBase
 @click.option('--threshold',
               type=float, default=0.7, help='threshold to use for agglomeration step.'
               )
+@click.option('--manual_fix',
+              type=bool, default=False, help='weather to apply manual slice fixed to CREMI test vols.'
+              )
 def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
-         agglomerate: bool, test_vol: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float):
+         agglomerate: bool, test_vol: bool, save_aff: bool, save_seg: bool, full_agglomerate: bool, threshold: float, manual_fix: bool):
 
     # convert
     pre_crop = eval(pre_crop)
@@ -82,7 +85,7 @@ def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
 
     res = test_model(model, patch_size, path, pre_crop=pre_crop, agglomerate=agglomerate,
                      full_agglomerate=full_agglomerate, test_vol=test_vol, threshold=threshold, border_width=config.dataset.border_width,
-                     downsample=config.dataset.downsample)
+                     downsample=config.dataset.downsample, manual_fix=manual_fix)
 
     # save data
     affinity, segmentation, metrics = res['affinity'], res['segmentation'], res['metrics']
@@ -98,7 +101,11 @@ def test(path: str, config: str, pre_crop: str, load: str, parallel: str,
     if not save_seg:
         segmentation = None
 
-    write_output_data(affinity, segmentation, metrics, config_name=f'{config.name}_manfix', example_number=example_number, file=file,
+    manfix = ''
+    if manual_fix:
+        manfix = '_manfix'
+
+    write_output_data(affinity, segmentation, metrics, config_name=f'{config.name}{manfix}', example_number=example_number, file=file,
                       output_dir=f'/mnt/home/jberman/ceph')
 
 
