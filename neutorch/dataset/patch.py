@@ -1,6 +1,10 @@
 from functools import lru_cache
 import numpy as np
 
+# from torch import tensor, device
+import torch
+
+
 
 class Patch(object):
     def __init__(self, image: np.ndarray, label: np.ndarray,
@@ -17,9 +21,24 @@ class Patch(object):
                 make boundary some black region.
         """
         assert image.shape == label.shape
+
+        image = self._expand_to_5d(image)
+        label = self._expand_to_5d(label)
+
         self.image = image
         self.label = label
         self.delayed_shrink_size = delayed_shrink_size
+
+    def _expand_to_5d(self, arr: np.ndarray):
+        if arr.ndim == 4:
+            arr = np.expand_dims(arr, axis=0)
+        elif arr.ndim == 3:
+            arr = np.expand_dims(arr, axis=(0,1))
+        elif arr.ndim == 5:
+            pass
+        else:
+            raise ValueError(f'only support array dimension of 3,4,5, but get {arr.ndim}')
+        return arr
 
     def accumulate_delayed_shrink_size(self, shrink_size: tuple):
         self.delayed_shrink_size = tuple(
@@ -54,6 +73,7 @@ class Patch(object):
             size[2]:x-size[5],
         ]
 
+
     @property
     def shape(self):
         return self.image.shape
@@ -62,3 +82,35 @@ class Patch(object):
     @lru_cache
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
+
+    def to_tensor(self):
+        def _to_tensor(arr):
+            if isinstance(arr, np.ndarray):
+                arr = torch.tensor(arr)
+            if torch.cuda.is_available():
+                arr = arr.cuda()
+            return arr
+
+        self.image = _to_tensor(self.image)
+        self.label = _to_tensor(self.label)
+
+    def normalize(self):
+        def _normalize(arr):
+            if arr.dtype == np.uint8:
+                arr = arr.astype(np.float32)
+                arr /= 255.
+            elif arr.dtype == torch.uint8:
+                arr = arr.type(torch.float32)
+                arr /= 255.
+            return arr
+        self.image = _normalize(self.image)
+        self.label = _normalize(self.label)
+
+def collate_batch(batch):
+   
+    patch_list = []
+   
+    for patch in batch:
+        patch_list.append(patch)
+    
+    return patch

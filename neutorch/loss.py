@@ -95,6 +95,8 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
         cost = self._reduce_loss(loss, mask=mask)
         return cost
 
+
+
 # TO-DO
 # tversky loss
 # https://gitlab.mpcdf.mpg.de/connectomics/codat/-/blob/master/codat/training/losses.py

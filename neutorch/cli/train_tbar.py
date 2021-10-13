@@ -26,7 +26,7 @@ from neutorch.dataset.tbar import Dataset
     help='use 80% of samples for training, 20% of samples for validation.'
 )
 @click.option('--patch-size', '-p',
-    type=tuple, default=(64, 64, 64),
+    type=int, nargs=3, default=(64, 64, 64),
     help='input and output patch size.'
 )
 @click.option('--iter-start', '-b',
