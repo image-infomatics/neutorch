@@ -109,7 +109,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
     
     @property
     def volume_sampling_weight(self):
-        return np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop)))
+        return int(np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop))))
     
 
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):

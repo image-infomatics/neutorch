@@ -66,8 +66,11 @@ class Dataset(torch.utils.data.Dataset):
         volumes = []
         for gt in meta.values():
             image_path = gt['image']
-            synapse_path = gt['ground_truth']
-            assert image_path.endswith('.h5')
+            synapse_path = gt['synapses']
+            image_path = os.path.expanduser(image_path)
+            synapse_path = os.path.expanduser(synapse_path)
+            print(f'image path: {image_path}')
+            assert h5py.is_hdf5(image_path)
             assert synapse_path.endswith('.json')
             image_path = os.path.join(config_dir, image_path)
             synapse_path = os.path.join(config_dir, synapse_path)
@@ -79,18 +82,17 @@ class Dataset(torch.utils.data.Dataset):
             # subject_weights.append(len(img))
             with open(synapse_path, 'r') as file:
                 synapses = json.load(file)
-                assert synapses['order'] == ['x', 'y', 'z']
+                assert synapses['order'] == ['z', 'y', 'x']
             # use the number of T-bars as subject sampling weights
             # subject_weights.append(len(synapses['presynapses']))
-            presynapses = synapses['presynapses']
-            assert len(presynapses) > 0
-            tbar_points = np.zeros((len(presynapses), 3), dtype=np.int64)
-            for idx, point in  enumerate(presynapses.values()):
+            del synapses['order']
+            del synapses['resolution']
+
+            assert len(synapses) > 0
+            tbar_points = np.zeros((len(synapses), 3), dtype=np.int64)
+            for idx, synapse in enumerate(synapses.values()):
                 # transform xyz to zyx
-                tbar_points[idx, :] = point[::-1] 
-                # tbar_points[idx, 0] = point[2]
-                # tbar_points[idx, 1] = point[1]
-                # tbar_points[idx, 2] = point[0]
+                tbar_points[idx, :] = synapse['coord'] 
             tbar_points -= voxel_offset
             print(f'min offset: {np.min(tbar_points, axis=0)}')
             print(f'max offset: {np.max(tbar_points, axis=0)}')
@@ -110,14 +112,14 @@ class Dataset(torch.utils.data.Dataset):
         # use the number of candidate patches as volume sampling weight
         volume_weights = []
         for volume in volumes:
-            volume_weights.append(volume.volume_sampling_weight)
+            volume_weights.append(int(volume.volume_sampling_weight))
 
-        self.training_volume_num = math.floor(len(volumes) * training_split_ratio)
-        self.validation_volume_num = len(volumes) - self.training_volume_num
+        self.training_volume_num = int( math.floor(len(volumes) * training_split_ratio) )
+        self.validation_volume_num = int(len(volumes) - self.training_volume_num)
         self.training_volumes = volumes[:self.training_volume_num]
         self.validation_volumes = volumes[-self.validation_volume_num:]
         self.training_volume_weights = volume_weights[:self.training_volume_num]
-        self.validation_volume_weights = volume_weights[-self.validation_volume_num]
+        self.validation_volume_weights = volume_weights[-self.validation_volume_num:]
         
     @property
     def random_training_patch(self):
