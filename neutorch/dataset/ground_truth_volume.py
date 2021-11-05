@@ -3,13 +3,20 @@ import random
 from typing import Union
 
 import numpy as np
-from scipy.ndimage.measurements import label
 from .patch import Patch
+
+from chunkflow.chunk import Chunk
+from chunkflow.lib.synapses import Synapses
 
 
 class AbstractGroundTruthVolume(ABC):
-    def __init__(self):
-        pass
+    def __init__(self, patch_size: Union[tuple, int] = (256, 256, 256)):
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * 3
+        else:
+            assert len(patch_size) == 3
+        self.patch_size = patch_size
 
     @property
     @abstractmethod
@@ -24,7 +31,7 @@ class AbstractGroundTruthVolume(ABC):
 
 class GroundTruthVolume(AbstractGroundTruthVolume):
     def __init__(self, image: np.ndarray, label: np.ndarray,
-            patch_size: Union[tuple, int], 
+            patch_size: Union[tuple, int] = (256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
@@ -40,13 +47,12 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
         """
+        super().__init__(patch_size=patch_size)
+
         assert image.ndim == 3
         assert label.ndim >= 3
         assert image.shape == label.shape[-3:]
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * 3
-        else:
-            assert len(patch_size) == 3
+
         
         if forbbiden_distance_to_boundary is None:
             forbbiden_distance_to_boundary = tuple(ps // 2 for ps in patch_size)
@@ -60,7 +66,6 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
         
         self.image = image
         self.label = label
-        self.patch_size = patch_size
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
     
@@ -115,7 +120,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
 class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
     def __init__(self, image: np.ndarray, 
             annotation_points: np.ndarray,
-            patch_size: Union[tuple, int], 
+            patch_size: Union[tuple, int] = (256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image volume with ground truth annotations
 
@@ -131,7 +136,8 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
         self.annotation_points = annotation_points 
         label = self._points_to_label(image)
         super().__init__(
-            image, label, patch_size,
+            image, label, 
+            patch_size = patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
@@ -190,3 +196,36 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
             ] = 0.95
         return label
 
+
+class PostSynapseGroundTruth(AbstractGroundTruthVolume):
+    def __init__(self, 
+            image: Chunk, 
+            synapses: Synapses,
+            patch_size: Union[tuple, int] = (129, 129, 129), 
+            point_expand: int = 2,
+        ):
+        """Ground Truth for post synapses
+
+        Args:
+            image (Chunk): image chunk covering the whole synapses
+            synapses (Synapses): including both presynapses and postsynapses
+            patch_size (Union[tuple, int]): image patch size covering the whole synapse
+            point_expand (int): expand the point. range from 1 to half of patch size.
+        """
+        super().__init__(patch_size=patch_size)
+
+        self.image = image
+        self.synapses = synapses
+        self.pre_index2post_indices = synapses.pre_index2post_indices
+        self.point_expand = point_expand
+
+    @property
+    def random_patch(self):
+        pre_index = random.randint(0, self.synapses.pre_num - 1)
+        post_indices = self.pre_index2post_indices[pre_index]
+        pre = self.synapses.pre[pre_index, :]
+
+
+
+        return 
+        
