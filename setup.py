@@ -13,7 +13,7 @@ setup(
     entry_points='''
         [console_scripts]
         neutrain-tbar=neutorch.cli.train_tbar:train
-        neutrain-superresolution=neutorch.cli.train_superresolution:train
+        neutrain-denoise=neutorch.cli.train_denoise:train
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

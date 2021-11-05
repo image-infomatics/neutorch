@@ -1,6 +1,6 @@
 import os
 from typing import Union
-from time import sleep
+from time import sleep, time
 from copy import deepcopy
 from multiprocessing import cpu_count
 
@@ -97,10 +97,10 @@ class Dataset(torch.utils.data.Dataset):
         self.transform(patch)
         patch.to_tensor()
         patch.normalize()
-        return patch
+        return patch.image, patch.label
 
     @property
-    def random_patch(self):
+    def random_sample(self):
         idx = random.randrange(0, len(self.bboxes))
         return self.__getitem__(idx)
 
@@ -115,9 +115,11 @@ if __name__ == '__main__':
     data_loader = DataLoader(
         dataset,
         shuffle=True,
-        # num_workers=2,
-        drop_last=True,
+        num_workers=8,
+        prefetch_factor=4,
         # pin_memory=True,
+        drop_last=True,
+        multiprocessing_context='spawn',
         collate_fn=collate_batch,
     )
 
@@ -126,11 +128,18 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir=os.path.expanduser('./log'))
 
     model = torch.nn.Identity()
+    if torch.cuda.is_available():
+        model.share_memory()
+        model.cuda()
+    
     print('start generating random patches...')
     idx = 0
-    for patch in data_loader:
+    ping = time()
+    for image, label in data_loader:
         idx += 1
-        print('iteration index: ', idx)
-        log_tensor(writer, 'train/image', patch.image, iter_idx = idx, nrow=1, zstride=64)
-        log_tensor(writer, 'train/label', patch.label, iter_idx = idx, nrow=1, zstride=64)
+        print(f'iteration index: {idx} with time: {time()-ping}')
+        log_tensor(writer, 'train/image', image, iter_idx = idx, nrow=1, zstride=64)
+        log_tensor(writer, 'train/label', label, iter_idx = idx, nrow=1, zstride=64)
         sleep(1)
+        ping = time()
+
