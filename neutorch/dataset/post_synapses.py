@@ -7,18 +7,19 @@ from time import time, sleep
 
 import numpy as np
 from scipy.stats import describe
+from tqdm import tqdm
 
 from chunkflow.chunk import Chunk
+from chunkflow.lib.bounding_boxes import BoundingBox
+from chunkflow.lib.synapses import Synapses
 
 from cloudvolume import CloudVolume
 
 import torch
 import toml
-from chunkflow.lib.synapses import Synapses
 
 from neutorch.dataset.ground_truth_volume import GroundTruthVolumeWithPointAnnotation
 from neutorch.dataset.transform import *
-
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -39,6 +40,25 @@ class Dataset(torch.utils.data.Dataset):
             meta = toml.load(file)
 
         self._load_synapses(meta['synapses']['path'])
+
+        vol1 = CloudVolume("file://" + meta['sample1']["image"])
+        vol2 = CloudVolume("file://" + meta['sample2']["image"])
+
+        self.volumes = dict()
+
+        for key in tqdm(self.synapses.keys(), desc="reading image chunks..."):
+            sample, bbox_filename = key.split(",")
+            bbox = BoundingBox.from_filename(bbox_filename)
+            if "1" in sample:
+                vol = vol1
+            elif "2" in sample:
+                vol = vol2
+            else:
+                raise ValueError("we can only read data from sample 1 or 2")
+
+            chunk = vol[bbox.to_slices()]
+            chunk = Chunk(np.asarray(chunk), voxel_offset=bbox.minpt)
+            self.volumes[key] = chunk
 
         breakpoint()
         self._prepare_transform()
@@ -111,13 +131,22 @@ class Dataset(torch.utils.data.Dataset):
         self.validation_volume_weights = volume_weights[-self.validation_volume_num]
 
     def _load_synapses(self, path: str):
+        self.synapses = dict()
+        path = os.path.expanduser(path)
         assert os.path.isdir(path)
         for fname in os.listdir(path):
-            fname = os.path.join(path, fname)
-            synapses = Synapses.from_h5(fname)
+            if not fname.endswith(".h5"):
+                # ignore all other files or directories 
+                continue
+            full_fname = os.path.join(path, fname)
+            synapses = Synapses.from_h5(full_fname)
+
+            key = fname[:-3]
+            self.synapses[key] = synapses
 
             distances = synapses.distances_from_pre_to_post
-            print('distances from pre to post synapses (voxel unit): ', describe(distances))
+            print(f'\n{fname}: distances from pre to post synapses (voxel unit): ', 
+                    describe(distances))
 
     @property
     def random_training_patch(self):
@@ -176,7 +205,7 @@ class Dataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     dataset = Dataset(
-        "~/Dropbox (Simons Foundation)/40_gt/post_synapses.toml",
+        "~/dropbox/40_gt/21_wasp_synapses/post.toml",
         training_split_ratio=0.9,
     )
 
