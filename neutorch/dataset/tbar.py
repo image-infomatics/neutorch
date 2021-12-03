@@ -13,7 +13,7 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_volume import GroundTruthVolumeWithPointAnnotation
+from neutorch.dataset.ground_truth_sample import GroundTruthVolumeWithPointAnnotation
 from neutorch.dataset.transform import *
 
 
@@ -99,40 +99,40 @@ class Dataset(torch.utils.data.Dataset):
             # all the points should be inside the image
             # np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
 
-            ground_truth_volume = GroundTruthVolumeWithPointAnnotation(
+            ground_truth_sample = GroundTruthVolumeWithPointAnnotation(
                 image,
                 annotation_points=tbar_points,
                 patch_size=patch_size_before_transform,
             )
-            volumes.append(ground_truth_volume)
+            volumes.append(ground_truth_sample)
         
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
 
         # use the number of candidate patches as volume sampling weight
-        volume_weights = []
+        sample_weights = []
         for volume in volumes:
-            volume_weights.append(int(volume.volume_sampling_weight))
+            sample_weights.append(int(volume.volume_sampling_weight))
 
-        self.training_volume_num = int( math.floor(len(volumes) * training_split_ratio) )
-        self.validation_volume_num = int(len(volumes) - self.training_volume_num)
-        self.training_volumes = volumes[:self.training_volume_num]
-        self.validation_volumes = volumes[-self.validation_volume_num:]
-        self.training_volume_weights = volume_weights[:self.training_volume_num]
-        self.validation_volume_weights = volume_weights[-self.validation_volume_num:]
+        self.training_sample_num = int( math.floor(len(volumes) * training_split_ratio) )
+        self.validation_sample_num = int(len(volumes) - self.training_sample_num)
+        self.training_samples = volumes[:self.training_sample_num]
+        self.validation_samples = volumes[-self.validation_sample_num:]
+        self.training_sample_weights = sample_weights[:self.training_sample_num]
+        self.validation_sample_weights = sample_weights[-self.validation_sample_num:]
         
     @property
     def random_training_patch(self):
         # only sample one subject, so replacement option could be ignored
-        if self.training_volume_num == 1:
-            volume_index = 0
+        if self.training_sample_num == 1:
+            sample_index = 0
         else:
-            volume_index = random.choices(
-                range(self.training_volume_num),
-                weights=self.training_volume_weights,
+            sample_index = random.choices(
+                range(self.training_sample_num),
+                weights=self.training_sample_weights,
                 k=1,
             )[0]
-        volume = self.training_volumes[volume_index]
+        volume = self.training_samples[sample_index]
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
@@ -142,15 +142,15 @@ class Dataset(torch.utils.data.Dataset):
 
     @property
     def random_validation_patch(self):
-        if self.validation_volume_num == 1:
-            volume_index = 0
+        if self.validation_sample_num == 1:
+            sample_index = 0
         else:
-            volume_index = random.choices(
-                range(self.validation_volume_num),
-                weights=self.validation_volume_weights,
+            sample_index = random.choices(
+                range(self.validation_sample_num),
+                weights=self.validation_sample_weights,
                 k=1,
             )[0]
-        volume = self.validation_volumes[volume_index]
+        volume = self.validation_samples[sample_index]
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()

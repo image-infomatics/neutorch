@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
 import random
 from functools import lru_cache
-from copy import deepcopy
+
+
+from chunkflow.lib.bounding_boxes import Cartesian
+# from copy import deepcopy
 
 import numpy as np
 
 from scipy.ndimage.filters import gaussian_filter
-from scipy.ndimage import affine_transform
+# from scipy.ndimage import affine_transform
 
 import cv2
 
@@ -190,7 +193,8 @@ class BlackBox(IntensityTransform):
         box_num = random.randint(1, self.max_box_num)
         for _ in range(box_num):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
-            start = tuple(random.randint(1, t-b) for t, b in zip(patch.shape[-3:], box_size))
+            # randint is inclusive
+            start = tuple(random.randint(1, t-b-1) for t, b in zip(patch.shape[-3:], box_size))
             patch.image[
                 ...,
                 start[0] : start[0] + box_size[0],
