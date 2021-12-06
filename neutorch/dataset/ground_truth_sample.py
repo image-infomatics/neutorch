@@ -37,14 +37,14 @@ class AbstractGroundTruthSample(ABC):
 
 
 class GroundTruthSample(AbstractGroundTruthSample):
-    def __init__(self, image: np.ndarray, label: np.ndarray,
+    def __init__(self, image: np.ndarray, target: np.ndarray,
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            label (np.ndarray): training label
+            target (np.ndarray): training target
             patch_size (Cartesian): output patch size
             forbbiden_distance_to_boundary (Union[tuple, int]): 
                 the distance from patch center to sample boundary that is not allowed to sample 
@@ -57,8 +57,8 @@ class GroundTruthSample(AbstractGroundTruthSample):
         super().__init__(patch_size=patch_size)
 
         assert image.ndim == 3
-        assert label.ndim >= 3
-        assert image.shape == label.shape[-3:]
+        assert target.ndim >= 3
+        assert image.shape == target.shape[-3:]
 
         
         if forbbiden_distance_to_boundary is None:
@@ -72,7 +72,7 @@ class GroundTruthSample(AbstractGroundTruthSample):
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
         self.image = image
-        self.label = label
+        self.target = target
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
     
@@ -108,16 +108,16 @@ class GroundTruthSample(AbstractGroundTruthSample):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        label_patch = self.label[...,
+        target_patch = self.target[...,
             bz : bz + self.patch_size[-3],
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
         # if we do not copy here, the augmentation will change our 
-        # image and label sample!
+        # image and target sample!
         image_patch = self._expand_to_5d(image_patch).copy()
-        label_patch = self._expand_to_5d(label_patch).copy()
-        return Patch(image_patch, label_patch)
+        target_patch = self._expand_to_5d(target_patch).copy()
+        return Patch(image_patch, target_patch)
     
     @property
     def sampling_weight(self):
@@ -141,9 +141,9 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
 
         assert annotation_points.shape[1] == 3
         self.annotation_points = annotation_points 
-        label = self._points_to_label(image)
+        target = self._points_to_target(image)
         super().__init__(
-            image, label, 
+            image, target, 
             patch_size = patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
@@ -177,7 +177,7 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
         # to sample volume
         return self.annotation_points.shape[0]
 
-    def _points_to_label(self, image: np.ndarray,
+    def _points_to_target(self, image: np.ndarray,
             expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
@@ -187,21 +187,21 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
                 The expansion should be small enough to ensure that all the voxels are inside T-bar.
 
         Returns:
-            bin_presyn: binary label of annotated position.
+            bin_presyn: binary target of annotated position.
         """
         # assert synapses['resolution'] == [8, 8, 8]
-        label = np.zeros_like(image, dtype=np.float32)
+        target = np.zeros_like(image, dtype=np.float32)
         # adjust target to 0.05-0.95 for better regularization
         # the effect might be similar with Focal loss!
-        label += 0.05
+        target += 0.05
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
-            label[...,
+            target[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 0.95
-        return label
+        return target
 
 
 class PostSynapseGroundTruth(AbstractGroundTruthSample):
@@ -247,8 +247,8 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
         assert image.dtype == np.uint8
         image = image.astype(np.float32)
         image /= 255.
-        # pre_label = np.zeros_like(image)
-        # pre_label[
+        # pre_target = np.zeros_like(image)
+        # pre_target[
             
         #     pre[0] - self.point_expand : pre[0] + self.point_expand,
         #     pre[1] - self.point_expand : pre[1] + self.point_expand,
@@ -257,19 +257,23 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
 
         # stack them together in the channel dimension
         # image = np.expand_dims(image, axis=0)
-        # pre_label = np.expand_dims(pre_label, axis=0)
-        # image = np.concatenate((image, pre_label), axis=0)
+        # pre_target = np.expand_dims(pre_target, axis=0)
+        # image = np.concatenate((image, pre_target), axis=0)
 
-        label = np.zeros(image.shape, dtype=np.float32)
-        label = Chunk(label, voxel_offset=image.voxel_offset)
-        label += 0.05
+        target = np.zeros(image.shape, dtype=np.float32)
+        target = Chunk(target, voxel_offset=image.voxel_offset)
+        target += 0.05
+        if len(post_indices) == 0:
+            breakpoint()
         for post_index in post_indices:
+            if post_index >= self.synapses.post_num:
+                breakpoint()
             coord = self.synapses.post_coordinates[post_index, :]
-            coord = coord - label.voxel_offset
-            label[...,
+            coord = coord - target.voxel_offset
+            target[...,
                 coord[0] - self.point_expand : coord[0] + self.point_expand,
                 coord[1] - self.point_expand : coord[1] + self.point_expand,
                 coord[2] - self.point_expand : coord[2] + self.point_expand,
             ] = 0.95
-        assert np.any(label > 0.5)
-        return Patch(image, label)
+        assert np.any(target > 0.5)
+        return Patch(image, target)

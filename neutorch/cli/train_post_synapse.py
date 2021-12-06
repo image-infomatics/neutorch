@@ -7,24 +7,20 @@ import numpy as np
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-
+from torch.utils.data import DataLoader
+from neutorch.dataset.patch import collate_batch
 
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.post_synapses import Dataset
 
-from chunkflow.lib.bounding_boxes import Cartesian
 
 
 @click.command()
 @click.option('--seed', 
     type=int, default=1,
     help='for reproducibility'
-)
-@click.option('--training-split-ratio', '-s',
-    type=float, default=0.8,
-    help='use 80% of samples for training, 20% of samples for validation.'
 )
 @click.option('--patch-size', '-p',
     type=int, nargs=3, default=(256, 256, 256),
@@ -57,12 +53,12 @@ from chunkflow.lib.bounding_boxes import Cartesian
     type=float, default=0.001, help='learning rate'
 )
 @click.option('--training-interval', '-t',
-    type=int, default=100, help='training interval to record stuffs.'
+    type=int, default=500, help='training interval to record stuffs.'
 )
 @click.option('--validation-interval', '-v',
-    type=int, default=1000, help='validation and saving interval iterations.'
+    type=int, default=10000, help='validation and saving interval iterations.'
 )
-def train(seed: int, training_split_ratio: float, patch_size: tuple,
+def train(seed: int,  patch_size: tuple,
         iter_start: int, iter_stop: int, dataset_config_file: str, 
         output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
@@ -79,25 +75,46 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
     loss_module = BinomialCrossEntropyWithLogits()
-    dataset = Dataset(
+    training_dataset = Dataset(
         dataset_config_file,
+        section_name='training',
         patch_size=patch_size,
-        training_split_ratio=training_split_ratio,
+    )
+    validation_dataset = Dataset(
+        config_file=dataset_config_file,
+        section_name="validation",
+        patch_size=patch_size,
+    )
+
+    training_data_loader = DataLoader(
+        training_dataset,
+        num_workers=4,
+        prefetch_factor=4,
+        drop_last=False,
+        multiprocessing_context='spawn',
+        collate_fn=collate_batch,
+    )
+    
+    validation_data_loader = DataLoader(
+        validation_dataset,
+        num_workers=1,
+        prefetch_factor=1,
+        drop_last=False,
+        multiprocessing_context='spawn',
+        collate_fn=collate_batch,
     )
 
     patch_voxel_num = np.product(patch_size)
     accumulated_loss = 0.
-    for iter_idx in range(iter_start, iter_stop):
+    iter_idx = iter_start
+    for image, target in training_data_loader:
+        iter_idx += 1
+        if iter_idx> iter_stop:
+            print('exceeds the maximum iteration: ', iter_stop)
+            return
+
         ping = time()
-        patch = dataset.random_training_patch
-        print('training patch shape: ', patch.shape)
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-        image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.label)
-        # Transfer Data to GPU if available
-        if torch.cuda.is_available():
-            image = image.cuda()
-            target = target.cuda()
         logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()
@@ -122,14 +139,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            patch = dataset.random_validation_patch
-            print('evaluation patch shape: ', patch.shape)
-            validation_image = torch.from_numpy(patch.image)
-            validation_target = torch.from_numpy(patch.label)
-            # Transfer Data to GPU if available
-            if torch.cuda.is_available():
-                validation_image = validation_image.cuda()
-                validation_target = validation_target.cuda()
+            validation_image, validation_target = next(validation_data_loader)
 
             with torch.no_grad():
                 validation_logits = model(validation_image)

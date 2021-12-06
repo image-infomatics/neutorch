@@ -93,7 +93,7 @@ def train(seed: int, volume_path : str,
         ping = time()
         # print('training patch shape: ', patch.shape)
         # image = torch.from_numpy(patch.image)
-        # target = torch.from_numpy(patch.label)
+        # target = torch.from_numpy(patch.target)
         
         logits = model(image)
         loss = loss_module(logits, target)

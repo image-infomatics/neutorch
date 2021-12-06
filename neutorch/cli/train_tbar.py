@@ -92,7 +92,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         print('training patch shape: ', patch.shape)
         print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.label)
+        target = torch.from_numpy(patch.target)
         # Transfer Data to GPU if available
         if torch.cuda.is_available():
             image = image.cuda()
@@ -124,7 +124,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             patch = dataset.random_validation_patch
             print('evaluation patch shape: ', patch.shape)
             validation_image = torch.from_numpy(patch.image)
-            validation_target = torch.from_numpy(patch.label)
+            validation_target = torch.from_numpy(patch.target)
             # Transfer Data to GPU if available
             if torch.cuda.is_available():
                 validation_image = validation_image.cuda()

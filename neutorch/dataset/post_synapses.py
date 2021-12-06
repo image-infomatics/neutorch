@@ -21,14 +21,36 @@ from neutorch.dataset.ground_truth_sample import PostSynapseGroundTruth
 from neutorch.dataset.transform import *
 
 
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, config_file: str, 
-            training_split_ratio: float = 0.9,
+def worker_init_fn(worker_id: int):
+    worker_info = torch.utils.data.get_worker_info()
+    # the dataset copy in this worker process
+    dataset = worker_info.dataset
+    overall_start = dataset.start
+    overall_end = dataset.end
+
+    # configure the dataset to only process the split workload
+    per_worker = int(math.ceil((overall_end - overall_start) / float(worker_info.num_workers)))
+    worker_id = worker_info.id
+    dataset.start = overall_start + worker_id * per_worker
+    dataset.end = min(dataset.start + per_worker, overall_end)
+
+
+class Dataset(torch.utils.data.IterableDataset):
+    def __init__(self, config_file: str,
+            section_name: str, 
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             ):
+        """postsynapse dataset
+
+        Args:
+            config_file (str): the toml file path
+            section_name (str): the section name to be used in the toml file. [training, validation, testing]
+            patch_size (Cartesian, optional): [description]. Defaults to Cartesian(256, 256, 256).
+
+        Raises:
+            ValueError: [description]
+        """
         super().__init__()
-        assert training_split_ratio > 0.5
-        assert training_split_ratio < 1.
 
         if isinstance(patch_size, int):
             patch_size = Cartesian(*((patch_size,) * 3))
@@ -40,7 +62,7 @@ class Dataset(torch.utils.data.Dataset):
         with open(config_file, 'r') as file:
             meta = toml.load(file)
 
-        self._load_synapses(meta['synapses']['path'])
+        self._load_synapses(meta[section_name]['path'])
 
         vol1 = CloudVolume("file://" + meta['sample1']["image"])
         vol2 = CloudVolume("file://" + meta['sample2']["image"])
@@ -83,14 +105,11 @@ class Dataset(torch.utils.data.Dataset):
         sample_weights = []
         for sample in self.sample_list:
             sample_weights.append(sample.sampling_weight) 
+        self.sample_weights = sample_weights
 
-        sample_num = len(self.sample_list)
-        self.training_sample_num = math.floor(sample_num * training_split_ratio)
-        self.validation_sample_num = sample_num - self.training_sample_num
-        self.training_samples = self.sample_list[:self.training_sample_num]
-        self.validation_samples = self.sample_list[-self.validation_sample_num:]
-        self.training_sample_weights = sample_weights[:self.training_sample_num]
-        self.validation_sample_weights = sample_weights[-self.validation_sample_num]
+        self.sample_num = len(self.sample_list)
+        self.start = 0
+        self.end = self.sample_num
 
     def _load_synapses(self, path: str):
         self.synapses = OrderedDict()
@@ -114,40 +133,28 @@ class Dataset(torch.utils.data.Dataset):
             print(f'\n{fname}: distances from pre to post synapses (voxel unit): ', 
                     describe(distances))
 
-    @property
-    def random_training_patch(self):
-        # only sample one subject, so replacement option could be ignored
-        if self.training_sample_num == 1:
-            sample_index = 0
-        else:
-            sample_index = random.choices(
-                range(self.training_sample_num),
-                weights=self.training_sample_weights,
-                k=1,
-            )[0]
-        sample = self.training_samples[sample_index]
-        patch = sample.random_patch
-        self.transform(patch)
-        patch.apply_delayed_shrink_size()
-        print('patch shape: ', patch.shape)
-        assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
-        return patch
+    def __iter__(self):
+        """generate random patches from samples
 
-    @property
-    def random_validation_patch(self):
-        if self.validation_sample_num == 1:
-            sample_index = 0
-        else:
+        Yields:
+            tuple[tensor, tensor]: image and target tensors
+        """
+        while True:
+            # only sample one subject, so replacement option could be ignored
             sample_index = random.choices(
-                range(self.validation_sample_num),
-                weights=self.validation_sample_weights,
+                range(self.start, self.end),
+                weights=self.sample_weights,
                 k=1,
             )[0]
-        chunk = self.validation_samples[sample_index]
-        patch = chunk.random_patch
-        self.transform(patch)
-        patch.apply_delayed_shrink_size()
-        return patch
+            sample = self.sample_list[sample_index]
+            patch = sample.random_patch
+            self.transform(patch)
+            patch.apply_delayed_shrink_size()
+            print('patch shape: ', patch.shape)
+            assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
+            
+            patch.to_tensor()
+            yield patch.image, patch.target
            
     def _prepare_transform(self):
         self.transform = Compose([
@@ -171,8 +178,8 @@ class Dataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     dataset = Dataset(
-        "~/dropbox/40_gt/21_wasp_synapses/post.toml",
-        training_split_ratio=0.9,
+        "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
+        section_name="training",
     )
 
     from torch.utils.tensorboard import SummaryWriter
@@ -186,11 +193,11 @@ if __name__ == '__main__':
         patch = dataset.random_training_patch
         print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
         image = patch.image
-        label = patch.label
-        print('number of nonzero voxels: ', np.count_nonzero(label>0.5))
-        assert np.any(label > 0.5)
+        target = patch.target
+        print('number of nonzero voxels: ', np.count_nonzero(target>0.5))
+        assert np.any(target > 0.5)
 
         log_tensor(writer, 'train/image', image, n)
-        log_tensor(writer, 'train/label', label, n)
+        log_tensor(writer, 'train/target', target, n)
 
         sleep(1)

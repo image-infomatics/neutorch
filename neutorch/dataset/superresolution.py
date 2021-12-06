@@ -158,19 +158,19 @@ if __name__ == '__main__':
         patch = dataset.random_training_patch
         print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
         image = patch.image
-        label = patch.label
+        target = patch.target
         with h5py.File('/tmp/image.h5', 'w') as file:
             file['main'] = image[0,0, ...]
-        with h5py.File('/tmp/label.h5', 'w') as file:
-            file['main'] = label[0,0, ...]
+        with h5py.File('/tmp/target.h5', 'w') as file:
+            file['main'] = target[0,0, ...]
 
-        assert np.any(label > 0)
-        print('number of nonzero voxels: ', np.count_nonzero(label))
+        assert np.any(target > 0)
+        print('number of nonzero voxels: ', np.count_nonzero(target))
         # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)
-        label = torch.from_numpy(label)
+        target = torch.from_numpy(target)
         log_tensor(writer, 'train/image', image, n)
-        log_tensor(writer, 'train/label', label, n)
+        log_tensor(writer, 'train/target', target, n)
 
         # # print(patch)
         # logits = model(image)
