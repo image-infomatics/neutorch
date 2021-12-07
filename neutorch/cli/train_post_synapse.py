@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader
 from neutorch.dataset.patch import collate_batch
 
 from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.post_synapses import Dataset
+from neutorch.dataset.post_synapses import Dataset, worker_init_fn
 
 
 
@@ -53,22 +53,26 @@ from neutorch.dataset.post_synapses import Dataset
     type=float, default=0.001, help='learning rate'
 )
 @click.option('--training-interval', '-t',
-    type=int, default=500, help='training interval to record stuffs.'
+    type=int, default=1000, help='training interval to record stuffs.'
 )
 @click.option('--validation-interval', '-v',
     type=int, default=10000, help='validation and saving interval iterations.'
+)
+@click.option('--num-workers', '-p',
+    type=int, default=2, help='number of processes for data loading.'
 )
 def train(seed: int,  patch_size: tuple,
         iter_start: int, iter_stop: int, dataset_config_file: str, 
         output_dir: str,
         in_channels: int, out_channels: int, learning_rate: float,
-        training_interval: int, validation_interval: int):
+        training_interval: int, validation_interval: int, num_workers: int):
     
     random.seed(seed)
 
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
     model = Model(in_channels, out_channels)
+    model = load_chkpt(model, output_dir, iter_start)
     if torch.cuda.is_available():
         model = model.cuda()
 
@@ -88,11 +92,12 @@ def train(seed: int,  patch_size: tuple,
 
     training_data_loader = DataLoader(
         training_dataset,
-        num_workers=4,
-        prefetch_factor=4,
+        num_workers=num_workers,
+        prefetch_factor=2,
         drop_last=False,
         multiprocessing_context='spawn',
         collate_fn=collate_batch,
+        worker_init_fn=worker_init_fn,
     )
     
     validation_data_loader = DataLoader(
@@ -103,6 +108,7 @@ def train(seed: int,  patch_size: tuple,
         multiprocessing_context='spawn',
         collate_fn=collate_batch,
     )
+    validation_data_iter = iter(validation_data_loader)
 
     patch_voxel_num = np.product(patch_size)
     accumulated_loss = 0.
@@ -139,7 +145,7 @@ def train(seed: int,  patch_size: tuple,
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            validation_image, validation_target = next(validation_data_loader)
+            validation_image, validation_target = next(validation_data_iter)
 
             with torch.no_grad():
                 validation_logits = model(validation_image)

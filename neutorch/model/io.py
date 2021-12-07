@@ -7,7 +7,6 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import make_grid
 
 
 def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
@@ -29,8 +28,12 @@ def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
 def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
     print("LOAD CHECKPOINT: {} iters.".format(chkpt_num))
     fname = os.path.join(fpath, "model_{}.chkpt".format(chkpt_num))
-    checkpoint = torch.load(fname)
-    model.load_state_dict(checkpoint['state_dict'])
+    if os.path.exists(fname):
+        print('found existing model and load: ', fname)
+        checkpoint = torch.load(fname)
+        model.load_state_dict(checkpoint['state_dict'])
+    else:
+        print('did not find existing model to load: ', fname)
     return model
 
 

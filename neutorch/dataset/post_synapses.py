@@ -133,6 +133,23 @@ class Dataset(torch.utils.data.IterableDataset):
             print(f'\n{fname}: distances from pre to post synapses (voxel unit): ', 
                     describe(distances))
 
+    def __next__(self):
+        # only sample one subject, so replacement option could be ignored
+        sample_index = random.choices(
+            range(self.start, self.end),
+            weights=self.sample_weights[self.start : self.end],
+            k=1,
+        )[0]
+        sample = self.sample_list[sample_index]
+        patch = sample.random_patch
+        self.transform(patch)
+        patch.apply_delayed_shrink_size()
+        print('patch shape: ', patch.shape)
+        assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
+        
+        patch.to_tensor()
+        return patch.image, patch.target
+
     def __iter__(self):
         """generate random patches from samples
 
@@ -140,22 +157,8 @@ class Dataset(torch.utils.data.IterableDataset):
             tuple[tensor, tensor]: image and target tensors
         """
         while True:
-            # only sample one subject, so replacement option could be ignored
-            sample_index = random.choices(
-                range(self.start, self.end),
-                weights=self.sample_weights,
-                k=1,
-            )[0]
-            sample = self.sample_list[sample_index]
-            patch = sample.random_patch
-            self.transform(patch)
-            patch.apply_delayed_shrink_size()
-            print('patch shape: ', patch.shape)
-            assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
-            
-            patch.to_tensor()
-            yield patch.image, patch.target
-           
+            yield next(self)
+
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
@@ -177,10 +180,22 @@ class Dataset(torch.utils.data.IterableDataset):
 
 
 if __name__ == '__main__':
+    
+    from torch.utils.data import DataLoader
+    from neutorch.dataset.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
-        section_name="training",
+        section_name="validation",
     )
+    data_loader = DataLoader(
+        dataset,
+        num_workers=4,
+        prefetch_factor=2,
+        drop_last=False,
+        multiprocessing_context='spawn',
+        collate_fn=collate_batch,
+    )
+    data_iter = iter(data_loader)
 
     from torch.utils.tensorboard import SummaryWriter
     from neutorch.model.io import log_tensor
@@ -190,12 +205,13 @@ if __name__ == '__main__':
     print('start generating random patches...')
     for n in range(10000):
         ping = time()
-        patch = dataset.random_training_patch
+        image, target = next(data_iter)
+        image = image.cpu()
+        target = target.cpu()
         print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
-        image = patch.image
-        target = patch.target
         print('number of nonzero voxels: ', np.count_nonzero(target>0.5))
-        assert np.any(target > 0.5)
+        # assert np.any(target > 0.5)
+        assert torch.any(target > 0.5)
 
         log_tensor(writer, 'train/image', image, n)
         log_tensor(writer, 'train/target', target, n)
