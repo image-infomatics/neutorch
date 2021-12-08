@@ -126,7 +126,8 @@ def train(seed: int,  patch_size: tuple,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        accumulated_loss += loss.cpu().tolist()
+        breakpoint()
+        accumulated_loss += loss.tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
         if iter_idx % training_interval == 0 and iter_idx > 0:
@@ -151,7 +152,7 @@ def train(seed: int,  patch_size: tuple,
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(validation_logits, validation_target)
-                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                per_voxel_loss = validation_loss.tolist() / patch_voxel_num
                 print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
