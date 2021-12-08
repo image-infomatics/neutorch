@@ -23,6 +23,7 @@ from neutorch.dataset.transform import *
 
 def worker_init_fn(worker_id: int):
     worker_info = torch.utils.data.get_worker_info()
+    
     # the dataset copy in this worker process
     dataset = worker_info.dataset
     overall_start = dataset.start
@@ -144,7 +145,7 @@ class Dataset(torch.utils.data.IterableDataset):
         patch = sample.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
-        print('patch shape: ', patch.shape)
+        # print('patch shape: ', patch.shape)
         assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
         
         patch.to_tensor()

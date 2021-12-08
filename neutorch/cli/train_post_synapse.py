@@ -73,8 +73,19 @@ def train(seed: int,  patch_size: tuple,
 
     model = Model(in_channels, out_channels)
     model = load_chkpt(model, output_dir, iter_start)
+    
+    batch_size = 1
     if torch.cuda.is_available():
-        model = model.cuda()
+        device = torch.device("cuda")
+        if torch.cuda.device_count() > 1:
+            print("Let's use ", torch.cuda.device_count(), "GPUs!")
+            model = torch.nn.DataParallel(model)
+            # we use a batch for each GPU
+            batch_size = torch.cuda.device_count()
+    else:
+        device = torch.device("cpu")
+     
+    model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
@@ -98,6 +109,7 @@ def train(seed: int,  patch_size: tuple,
         multiprocessing_context='spawn',
         collate_fn=collate_batch,
         worker_init_fn=worker_init_fn,
+        batch_size=batch_size,
     )
     
     validation_data_loader = DataLoader(
@@ -107,6 +119,7 @@ def train(seed: int,  patch_size: tuple,
         drop_last=False,
         multiprocessing_context='spawn',
         collate_fn=collate_batch,
+        batch_size=batch_size,
     )
     validation_data_iter = iter(validation_data_loader)
 
@@ -126,7 +139,6 @@ def train(seed: int,  patch_size: tuple,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        breakpoint()
         accumulated_loss += loss.tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
