@@ -239,9 +239,7 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
             Cartesian(*pre), 
             extent=self.patch_size // 2
         )
-        # shrink the right side to make the shape as even numbers
-        # our network model only works with even number shape!
-        bbox.adjust((0, 0, 0, -1, -1, -1))
+        
         # Note that image is 4D array, the first dimension size is 1
         image = self.image.cutout(bbox)
         assert image.dtype == np.uint8

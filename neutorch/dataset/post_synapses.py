@@ -123,6 +123,7 @@ class Dataset(torch.utils.data.IterableDataset):
                 continue
             full_fname = os.path.join(path, fname)
             synapses = Synapses.from_h5(full_fname, c_order=False)
+            
             # some of the synapses only have presynapse without any postsynapses
             # this could be an error of ground truth!
             synapses.remove_synapses_without_post()
@@ -130,9 +131,18 @@ class Dataset(torch.utils.data.IterableDataset):
             key = fname[:-3]
             self.synapses[key] = synapses
 
+            print('stats of post synapse number: ',    
+                    describe(synapses.post_synapse_num_list)
+            )
+            
+            if np.all(synapses.post_synapse_num_list == 1):
+                raise ValueError('it should be impossible that all the synapses only have exactly one post synapse')
+                # breakpoint()
+
             distances = synapses.distances_from_pre_to_post
             print(f'\n{fname}: distances from pre to post synapses (voxel unit): ', 
-                    describe(distances))
+                    describe(distances)
+            )
 
     def __next__(self):
         # only sample one subject, so replacement option could be ignored
@@ -186,7 +196,8 @@ if __name__ == '__main__':
     from neutorch.dataset.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
-        section_name="validation",
+        # section_name="validation",
+        section_name="training",
     )
     data_loader = DataLoader(
         dataset,

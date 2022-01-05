@@ -72,19 +72,27 @@ def train(seed: int,  patch_size: tuple,
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
     model = Model(in_channels, out_channels)
-    model = load_chkpt(model, output_dir, iter_start)
-    
+
     batch_size = 1
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        if torch.cuda.device_count() > 1:
-            print("Let's use ", torch.cuda.device_count(), "GPUs!")
-            model = torch.nn.DataParallel(model)
-            # we use a batch for each GPU
-            batch_size = torch.cuda.device_count()
+        gpu_num = torch.cuda.device_count()
+        print("Let's use ", gpu_num, " GPUs!")
+        model = torch.nn.DataParallel(
+            model, 
+            device_ids=list(range(gpu_num)), 
+            dim=0,
+        )
+        # we use a batch for each GPU
+        batch_size = gpu_num
+
     else:
         device = torch.device("cpu")
-     
+
+    # note that we have to wrap the nn.DataParallel(model) before 
+    # loading the model since the dictionary is changed after the wrapping 
+    model = load_chkpt(model, output_dir, iter_start)
+    print('send model to device: ', device)
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -123,7 +131,7 @@ def train(seed: int,  patch_size: tuple,
     )
     validation_data_iter = iter(validation_data_loader)
 
-    patch_voxel_num = np.product(patch_size)
+    voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.
     iter_idx = iter_start
     for image, target in training_data_loader:
@@ -143,7 +151,7 @@ def train(seed: int,  patch_size: tuple,
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
         if iter_idx % training_interval == 0 and iter_idx > 0:
-            per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
+            per_voxel_loss = accumulated_loss / training_interval / voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
             predict = torch.sigmoid(logits)
@@ -164,7 +172,7 @@ def train(seed: int,  patch_size: tuple,
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(validation_logits, validation_target)
-                per_voxel_loss = validation_loss.tolist() / patch_voxel_num
+                per_voxel_loss = validation_loss.tolist() / voxel_num
                 print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
