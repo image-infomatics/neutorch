@@ -6,13 +6,17 @@ import click
 import numpy as np
 
 import torch
+torch.multiprocessing.set_start_method('spawn')
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.tbar import Dataset
+# from neutorch.dataset.tbar import Dataset
+from neutorch.dataset.volume import Dataset
+from neutorch.dataset.patch import collate_batch
 
 
 
@@ -21,13 +25,10 @@ from neutorch.dataset.tbar import Dataset
     type=int, default=1,
     help='for reproducibility'
 )
-@click.option('--training-split-ratio', '-s',
-    type=float, default=0.8,
-    help='use 80% of samples for training, 20% of samples for validation.'
-)
-@click.option('--patch-size', '-p',
-    type=int, nargs=3, default=(64, 64, 64),
-    help='input and output patch size.'
+@click.option('--volume-path', '-v',
+    type=str,
+    required=True,
+    help='Neuroglancer Precomputed volume path.'
 )
 @click.option('--iter-start', '-b',
     type=int, default=0,
@@ -37,23 +38,10 @@ from neutorch.dataset.tbar import Dataset
     type=int, default=200000,
     help='the stopping index of training iteration.'
 )
-@click.option('--dataset-config-file', '-d',
-    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
-    required=True,
-    help='dataset configuration file path.'
-)
 @click.option('--output-dir', '-o',
     type=click.Path(file_okay=False, dir_okay=True, writable=True, resolve_path=True),
     required=True,
     help='the directory to save all the outputs, such as checkpoints.'
-)
-@click.option('--in-channels', '-c', 
-    type=int, default=1, help='channel number of input tensor.'
-)
-@click.option('--out-channels', '-n',
-    type=int, default=1, help='channel number of output tensor.')
-@click.option('--learning-rate', '-l',
-    type=float, default=0.001, help='learning rate'
 )
 @click.option('--training-interval', '-t',
     type=int, default=100, help='training interval to record stuffs.'
@@ -61,42 +49,52 @@ from neutorch.dataset.tbar import Dataset
 @click.option('--validation-interval', '-v',
     type=int, default=1000, help='validation and saving interval iterations.'
 )
-def train(seed: int, training_split_ratio: float, patch_size: tuple,
-        iter_start: int, iter_stop: int, dataset_config_file: str, 
-        output_dir: str,
-        in_channels: int, out_channels: int, learning_rate: float,
+
+def train(seed: int, volume_path : str,
+        iter_start: int, iter_stop: int, output_dir: str,
         training_interval: int, validation_interval: int):
     
     random.seed(seed)
 
     writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
 
-    model = Model(in_channels, out_channels)
+    model = Model(1, 1)
     if torch.cuda.is_available():
+        model.share_memory()
         model = model.cuda()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     
     loss_module = BinomialCrossEntropyWithLogits()
-    dataset = Dataset(
-        dataset_config_file,
-        patch_size=patch_size,
-        training_split_ratio=training_split_ratio,
+    # loss_module = torch.nn.MSELoss()
+    
+    dataset = Dataset(volume_path)
+
+    data_loader = DataLoader(
+        dataset,
+        shuffle=True,
+        num_workers=2,
+        prefetch_factor=2,
+        multiprocessing_context='spawn',
+        drop_last=True,
+        # pin_memory=True,
+        collate_fn=collate_batch,
     )
 
-    patch_voxel_num = np.product(patch_size)
+    patch_voxel_num = np.product(dataset.patch_size)
     accumulated_loss = 0.
-    for iter_idx in range(iter_start, iter_stop):
+
+    iter_idx = iter_start
+    for image, target in data_loader:
+        iter_idx += 1
+        if iter_idx == iter_stop:
+            print(f'reached stopping iteration number: {iter_stop}')
+            return
         ping = time()
-        patch = dataset.random_training_patch
-        print('training patch shape: ', patch.shape)
-        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-        image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.target)
-        # Transfer Data to GPU if available
-        if torch.cuda.is_available():
-            image = image.cuda()
-            target = target.cuda()
+        # print('training patch shape: ', patch.shape)
+        # image = torch.from_numpy(patch.image)
+        # target = torch.from_numpy(patch.target)
+        
         logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()
@@ -105,7 +103,7 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
         accumulated_loss += loss.cpu().tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-        if iter_idx % training_interval == 0 and iter_idx > 0:
+        if iter_idx % training_interval == 0:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
@@ -115,21 +113,14 @@ def train(seed: int, training_split_ratio: float, patch_size: tuple,
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-        if iter_idx % validation_interval == 0 and iter_idx > 0:
+        if iter_idx % validation_interval == 0:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            patch = dataset.random_validation_patch
-            print('evaluation patch shape: ', patch.shape)
-            validation_image = torch.from_numpy(patch.image)
-            validation_target = torch.from_numpy(patch.target)
-            # Transfer Data to GPU if available
-            if torch.cuda.is_available():
-                validation_image = validation_image.cuda()
-                validation_target = validation_target.cuda()
-
+            validation_image, validation_target = dataset.random_sample
+            
             with torch.no_grad():
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)

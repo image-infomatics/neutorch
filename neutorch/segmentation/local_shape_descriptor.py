@@ -14,7 +14,7 @@ def get_local_shape_descriptors(
         sigma,
         voxel_size=None,
         roi=None,
-        labels=None,
+        targets=None,
         mode='gaussian',
         downsample=1):
     '''
@@ -24,7 +24,7 @@ def get_local_shape_descriptors(
 
         segmentation (``np.array`` of ``int``):
 
-            A label array to compute the local shape descriptors for.
+            A target array to compute the local shape descriptors for.
 
         sigma (``tuple`` of ``float``):
 
@@ -38,10 +38,10 @@ def get_local_shape_descriptors(
 
             Restrict the computation to the given ROI.
 
-        labels (array-like of ``int``, optional):
+        targets (array-like of ``int``, optional):
 
-            Restrict the computation to the given labels. Defaults to all
-            labels inside the ``roi`` of ``segmentation``.
+            Restrict the computation to the given targets. Defaults to all
+            targets inside the ``roi`` of ``segmentation``.
 
         mode (``string``, optional):
 
@@ -60,7 +60,7 @@ def get_local_shape_descriptors(
         segmentation,
         voxel_size,
         roi,
-        labels)
+        targets)
 
 class LsdExtractor(object):
 
@@ -100,14 +100,14 @@ class LsdExtractor(object):
             segmentation,
             voxel_size=None,
             roi=None,
-            labels=None):
+            targets=None):
         '''Compute local shape descriptors for a given segmentation.
 
         Args:
 
             segmentation (``np.array`` of ``int``):
 
-                A label array to compute the local shape descriptors for.
+                A target array to compute the local shape descriptors for.
 
             voxel_size (``tuple`` of ``int``, optional):
 
@@ -117,10 +117,10 @@ class LsdExtractor(object):
 
                 Restrict the computation to the given ROI in voxels.
 
-            labels (array-like of ``int``, optional):
+            targets (array-like of ``int``, optional):
 
-                Restrict the computation to the given labels. Defaults to all
-                labels inside the ``roi`` of ``segmentation``.
+                Restrict the computation to the given targets. Defaults to all
+                targets inside the ``roi`` of ``segmentation``.
         '''
 
         dims = len(segmentation.shape)
@@ -135,8 +135,8 @@ class LsdExtractor(object):
 
         roi_slices = roi.to_slices()
 
-        if labels is None:
-            labels = np.unique(segmentation[roi_slices])
+        if targets is None:
+            targets = np.unique(segmentation[roi_slices])
 
         if dims == 2:
             self.sigma = self.sigma[0:2]
@@ -195,16 +195,16 @@ class LsdExtractor(object):
 
         coords = self.coords[(sub_shape, sub_voxel_size)]
 
-        # for all labels
-        for label in labels:
+        # for all targets
+        for target in targets:
 
-            if label == 0:
+            if target == 0:
                 continue
 
-            logger.debug("Creating shape descriptors for label %d", label)
+            logger.debug("Creating shape descriptors for target %d", target)
 
-            mask = (segmentation==label).astype(np.float32)
-            logger.debug("Label mask %s", mask.shape)
+            mask = (segmentation==target).astype(np.float32)
+            logger.debug("target mask %s", mask.shape)
 
             try:
                 #3d by default
@@ -213,7 +213,7 @@ class LsdExtractor(object):
             except:
                 sub_mask = mask[::df, ::df]
 
-            logger.debug("Downsampled label mask %s", sub_mask.shape)
+            logger.debug("Downsampled target mask %s", sub_mask.shape)
 
             sub_count, sub_mean_offset, sub_variance, sub_pearson = self.__get_stats(
                 coords,

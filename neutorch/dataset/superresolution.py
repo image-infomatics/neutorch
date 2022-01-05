@@ -12,7 +12,7 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_volume import GroundTruthVolume
+from neutorch.dataset.ground_truth_sample import GroundTruthVolume
 from neutorch.dataset.transform import *
 
 
@@ -67,40 +67,40 @@ class Dataset(torch.utils.data.Dataset):
 
             image = Chunk.from_h5(image_path)
             image = image.astype(np.float32) / 255.
-            ground_truth_volume = GroundTruthVolume(
+            ground_truth_sample = GroundTruthVolume(
                 image,
                 image,
                 patch_size=patch_size_before_transform,
             )
-            volumes.append(ground_truth_volume)
+            volumes.append(ground_truth_sample)
         
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
 
         # use the number of candidate patches as volume sampling weight
-        volume_weights = []
+        sample_weights = []
         for volume in volumes:
-            volume_weights.append(volume.volume_sampling_weight)
+            sample_weights.append(volume.volume_sampling_weight)
 
-        self.training_volume_num = math.floor(len(volumes) * training_split_ratio)
-        self.validation_volume_num = len(volumes) - self.training_volume_num
-        self.training_volumes = volumes[:self.training_volume_num]
-        self.validation_volumes = volumes[-self.validation_volume_num:]
-        self.training_volume_weights = volume_weights[:self.training_volume_num]
-        self.validation_volume_weights = volume_weights[-self.validation_volume_num]
+        self.training_sample_num = math.floor(len(volumes) * training_split_ratio)
+        self.validation_sample_num = len(volumes) - self.training_sample_num
+        self.training_samples = volumes[:self.training_sample_num]
+        self.validation_samples = volumes[-self.validation_sample_num:]
+        self.training_sample_weights = sample_weights[:self.training_sample_num]
+        self.validation_sample_weights = sample_weights[-self.validation_sample_num]
         
     @property
     def random_training_patch(self):
         # only sample one subject, so replacement option could be ignored
-        if self.training_volume_num == 1:
-            volume_index = 0
+        if self.training_sample_num == 1:
+            sample_index = 0
         else:
-            volume_index = random.choices(
-                range(self.training_volume_num),
-                weights=self.training_volume_weights,
+            sample_index = random.choices(
+                range(self.training_sample_num),
+                weights=self.training_sample_weights,
                 k=1,
             )[0]
-        volume = self.training_volumes[volume_index]
+        volume = self.training_samples[sample_index]
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
@@ -110,15 +110,15 @@ class Dataset(torch.utils.data.Dataset):
 
     @property
     def random_validation_patch(self):
-        if self.validation_volume_num == 1:
-            volume_index = 0
+        if self.validation_sample_num == 1:
+            sample_index = 0
         else:
-            volume_index = random.choices(
-                range(self.validation_volume_num),
-                weights=self.validation_volume_weights,
+            sample_index = random.choices(
+                range(self.validation_sample_num),
+                weights=self.validation_sample_weights,
                 k=1,
             )[0]
-        volume = self.validation_volumes[volume_index]
+        volume = self.validation_samples[sample_index]
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
@@ -158,19 +158,19 @@ if __name__ == '__main__':
         patch = dataset.random_training_patch
         print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
         image = patch.image
-        label = patch.label
+        target = patch.target
         with h5py.File('/tmp/image.h5', 'w') as file:
             file['main'] = image[0,0, ...]
-        with h5py.File('/tmp/label.h5', 'w') as file:
-            file['main'] = label[0,0, ...]
+        with h5py.File('/tmp/target.h5', 'w') as file:
+            file['main'] = target[0,0, ...]
 
-        assert np.any(label > 0)
-        print('number of nonzero voxels: ', np.count_nonzero(label))
+        assert np.any(target > 0)
+        print('number of nonzero voxels: ', np.count_nonzero(target))
         # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)
-        label = torch.from_numpy(label)
+        target = torch.from_numpy(target)
         log_tensor(writer, 'train/image', image, n)
-        log_tensor(writer, 'train/label', label, n)
+        log_tensor(writer, 'train/target', target, n)
 
         # # print(patch)
         # logits = model(image)

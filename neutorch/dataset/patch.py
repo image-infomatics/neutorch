@@ -7,26 +7,26 @@ import torch
 
 
 class Patch(object):
-    def __init__(self, image: np.ndarray, label: np.ndarray,
+    def __init__(self, image: np.ndarray, target: np.ndarray,
         delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
-        """A patch of volume containing both image and label
+        """A patch of volume containing both image and target
 
         Args:
             image (np.ndarray): image
-            label (np.ndarray): label
+            target (np.ndarray): target
             delayed_shrink_size (tuple): delayed shrinking size.
                 some transform might shrink the patch size, but we
                 would like to delay it to keep a little bit more 
                 information. For exampling, warping the image will
                 make boundary some black region.
         """
-        assert image.shape == label.shape
+        assert image.shape == target.shape
 
         image = self._expand_to_5d(image)
-        label = self._expand_to_5d(label)
+        target = self._expand_to_5d(target)
 
         self.image = image
-        self.label = label
+        self.target = target
         self.delayed_shrink_size = delayed_shrink_size
 
     def _expand_to_5d(self, arr: np.ndarray):
@@ -66,7 +66,7 @@ class Patch(object):
             size[1]:y-size[4],
             size[2]:x-size[5],
         ]
-        self.label = self.label[
+        self.target = self.target[
             ...,
             size[0]:z-size[3],
             size[1]:y-size[4],
@@ -92,7 +92,7 @@ class Patch(object):
             return arr
 
         self.image = _to_tensor(self.image)
-        self.label = _to_tensor(self.label)
+        self.target = _to_tensor(self.target)
 
     def normalize(self):
         def _normalize(arr):
@@ -104,7 +104,7 @@ class Patch(object):
                 arr /= 255.
             return arr
         self.image = _normalize(self.image)
-        self.label = _normalize(self.label)
+        self.target = _normalize(self.target)
 
 def collate_batch(batch):
    

@@ -14,6 +14,7 @@ setup(
         [console_scripts]
         neutrain-tbar=neutorch.cli.train_tbar:train
         neutrain-denoise=neutorch.cli.train_denoise:train
+        neutrain-post-synapse=neutorch.cli.train_post_synapse:train
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

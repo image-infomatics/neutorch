@@ -3,13 +3,22 @@ import random
 from typing import Union
 
 import numpy as np
-from scipy.ndimage.measurements import label
+
+from chunkflow.lib.bounding_boxes import BoundingBox, Cartesian
 from .patch import Patch
 
+from chunkflow.chunk import Chunk
+from chunkflow.lib.synapses import Synapses
 
-class AbstractGroundTruthVolume(ABC):
-    def __init__(self):
-        pass
+
+class AbstractGroundTruthSample(ABC):
+    def __init__(self, patch_size: Cartesian = Cartesian(256, 256, 256)):
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * 3
+        else:
+            assert len(patch_size) == 3
+        self.patch_size = patch_size
 
     @property
     @abstractmethod
@@ -17,41 +26,45 @@ class AbstractGroundTruthVolume(ABC):
         pass
 
     @property
-    @abstractmethod
-    def volume_sampling_weight(self):
-        pass
+    def sampling_weight(self) -> int:
+        """the weight to sample 
+
+        Returns:
+            int: the relative weight. The default is 1, 
+                so all the sample have the same weight.
+        """
+        return 1 
 
 
-class GroundTruthVolume(AbstractGroundTruthVolume):
-    def __init__(self, image: np.ndarray, label: np.ndarray,
-            patch_size: Union[tuple, int], 
+class GroundTruthSample(AbstractGroundTruthSample):
+    def __init__(self, image: np.ndarray, target: np.ndarray,
+            patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
-        """Image volume with ground truth annotations
+        """Image sample with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
-            label (np.ndarray): training label
-            patch_size (Union[tuple, int]): output patch size
+            target (np.ndarray): training target
+            patch_size (Cartesian): output patch size
             forbbiden_distance_to_boundary (Union[tuple, int]): 
-                the distance from patch center to volume boundary that is not allowed to sample 
+                the distance from patch center to sample boundary that is not allowed to sample 
                 the order is z,y,x,-z,-y,-x
                 if this is an integer, then all dimension is the same.
                 if this is a tuple of three integers, the positive and negative is the same
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
         """
+        super().__init__(patch_size=patch_size)
+
         assert image.ndim == 3
-        assert label.ndim >= 3
-        assert image.shape == label.shape[-3:]
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * 3
-        else:
-            assert len(patch_size) == 3
+        assert target.ndim >= 3
+        assert image.shape == target.shape[-3:]
+
         
         if forbbiden_distance_to_boundary is None:
-            forbbiden_distance_to_boundary = tuple(ps // 2 for ps in patch_size)
+            forbbiden_distance_to_boundary = patch_size // 2 
         assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
-        
+
         for idx in range(3):
             # the center of random patch should not be too close to boundary
             # otherwise, the patch will go outside of the volume
@@ -59,8 +72,7 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
         self.image = image
-        self.label = label
-        self.patch_size = patch_size
+        self.target = target
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
     
@@ -96,42 +108,43 @@ class GroundTruthVolume(AbstractGroundTruthVolume):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
-        label_patch = self.label[...,
+        target_patch = self.target[...,
             bz : bz + self.patch_size[-3],
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
         # if we do not copy here, the augmentation will change our 
-        # image and label volume!
+        # image and target sample!
         image_patch = self._expand_to_5d(image_patch).copy()
-        label_patch = self._expand_to_5d(label_patch).copy()
-        return Patch(image_patch, label_patch)
+        target_patch = self._expand_to_5d(target_patch).copy()
+        return Patch(image_patch, target_patch)
     
     @property
-    def volume_sampling_weight(self):
+    def sampling_weight(self):
         return int(np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop))))
     
 
-class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
+class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
     def __init__(self, image: np.ndarray, 
             annotation_points: np.ndarray,
-            patch_size: Union[tuple, int], 
+            patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
-        """Image volume with ground truth annotations
+        """Image sample with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
             annotation_points (np.ndarray): point annotations with zyx order.
-            patch_size (Union[tuple, int]): output patch size
+            patch_size (Cartesian): output patch size
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
-                from volume boundary. Defaults to None.
+                from sample boundary. Defaults to None.
         """
 
         assert annotation_points.shape[1] == 3
         self.annotation_points = annotation_points 
-        label = self._points_to_label(image)
+        target = self._points_to_target(image)
         super().__init__(
-            image, label, patch_size,
+            image, target, 
+            patch_size = patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
@@ -158,13 +171,13 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
 
     #     return self.random_patch_from_center_range(center_start, center_stop)
 
-    # @property
-    # def volume_sampling_weight(self):
-    #     # use number of annotated points as weight
-    #     # to sample volume
-    #     return self.annotation_points.shape[0]
+    @property
+    def sampling_weight(self):
+        # use number of annotated points as weight
+        # to sample volume
+        return self.annotation_points.shape[0]
 
-    def _points_to_label(self, image: np.ndarray,
+    def _points_to_target(self, image: np.ndarray,
             expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
@@ -174,19 +187,91 @@ class GroundTruthVolumeWithPointAnnotation(GroundTruthVolume):
                 The expansion should be small enough to ensure that all the voxels are inside T-bar.
 
         Returns:
-            bin_presyn: binary label of annotated position.
+            bin_presyn: binary target of annotated position.
         """
         # assert synapses['resolution'] == [8, 8, 8]
-        label = np.zeros_like(image, dtype=np.float32)
+        target = np.zeros_like(image, dtype=np.float32)
         # adjust target to 0.05-0.95 for better regularization
         # the effect might be similar with Focal loss!
-        label += 0.05
+        target += 0.05
         for idx in range(self.annotation_points.shape[0]):
             coordinate = self.annotation_points[idx, :]
-            label[...,
+            target[...,
                 coordinate[0]-expand_distance : coordinate[0]+expand_distance,
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 0.95
-        return label
+        return target
 
+
+class PostSynapseGroundTruth(AbstractGroundTruthSample):
+    def __init__(self, 
+            image: Chunk, 
+            synapses: Synapses,
+            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            point_expand: int = 2,
+        ):
+        """Ground Truth for post synapses
+
+        Args:
+            image (Chunk): image chunk covering the whole synapses
+            synapses (Synapses): including both presynapses and postsynapses
+            patch_size (Cartesian): image patch size covering the whole synapse
+            point_expand (int): expand the point. range from 1 to half of patch size.
+        """
+        if isinstance(patch_size, tuple):
+            patch_size = Cartesian(*patch_size)
+        super().__init__(patch_size=patch_size)
+
+        self.image = image
+        self.synapses = synapses
+        self.pre_index2post_indices = synapses.pre_index2post_indices
+        self.point_expand = point_expand
+
+    @property
+    def random_patch(self):
+        pre_index = random.randint(0, self.synapses.pre_num - 1)
+        pre = self.synapses.pre[pre_index, :]
+        
+        post_indices = self.pre_index2post_indices[pre_index]
+
+        bbox = BoundingBox.from_center(
+            Cartesian(*pre), 
+            extent=self.patch_size // 2
+        )
+        
+        # Note that image is 4D array, the first dimension size is 1
+        image = self.image.cutout(bbox)
+        assert image.dtype == np.uint8
+        image = image.astype(np.float32)
+        image /= 255.
+        # pre_target = np.zeros_like(image)
+        # pre_target[
+            
+        #     pre[0] - self.point_expand : pre[0] + self.point_expand,
+        #     pre[1] - self.point_expand : pre[1] + self.point_expand,
+        #     pre[2] - self.point_expand : pre[2] + self.point_expand,
+        # ] = 0.95
+
+        # stack them together in the channel dimension
+        # image = np.expand_dims(image, axis=0)
+        # pre_target = np.expand_dims(pre_target, axis=0)
+        # image = np.concatenate((image, pre_target), axis=0)
+
+        target = np.zeros(image.shape, dtype=np.float32)
+        target = Chunk(target, voxel_offset=image.voxel_offset)
+        target += 0.05
+        if len(post_indices) == 0:
+            breakpoint()
+        for post_index in post_indices:
+            if post_index >= self.synapses.post_num:
+                breakpoint()
+            coord = self.synapses.post_coordinates[post_index, :]
+            coord = coord - target.voxel_offset
+            target[...,
+                coord[0] - self.point_expand : coord[0] + self.point_expand,
+                coord[1] - self.point_expand : coord[1] + self.point_expand,
+                coord[2] - self.point_expand : coord[2] + self.point_expand,
+            ] = 0.95
+        assert np.any(target > 0.5)
+        return Patch(image, target)

@@ -92,12 +92,12 @@ class Dataset(torch.utils.data.Dataset):
         # image /= 255.
         # chunk = Chunk(arr, voxel_offset=bbox.minpt, voxel_size=self.voxel_size)
         # tensor = torch.Tensor(arr)
-        label = deepcopy(image)
-        patch = Patch(image, label)
+        target = deepcopy(image)
+        patch = Patch(image, target)
         self.transform(patch)
         patch.to_tensor()
         patch.normalize()
-        return patch.image, patch.label
+        return patch.image, patch.target
 
     @property
     def random_sample(self):
@@ -135,11 +135,11 @@ if __name__ == '__main__':
     print('start generating random patches...')
     idx = 0
     ping = time()
-    for image, label in data_loader:
+    for image, target in data_loader:
         idx += 1
         print(f'iteration index: {idx} with time: {time()-ping}')
         log_tensor(writer, 'train/image', image, iter_idx = idx, nrow=1, zstride=64)
-        log_tensor(writer, 'train/label', label, iter_idx = idx, nrow=1, zstride=64)
+        log_tensor(writer, 'train/target', target, iter_idx = idx, nrow=1, zstride=64)
         sleep(1)
         ping = time()
 
