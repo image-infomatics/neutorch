@@ -12,12 +12,10 @@ from chunkflow.chunk import Chunk
 from chunkflow.lib.bounding_boxes import Cartesian
 from chunkflow.lib.synapses import Synapses
 
-from cloudvolume import CloudVolume
-
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_sample import PostSynapseGroundTruth
+from neutorch.dataset.sample import PostSynapseGroundTruth
 from neutorch.dataset.transform import *
 
 

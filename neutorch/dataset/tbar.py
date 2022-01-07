@@ -1,3 +1,4 @@
+from functools import cached_property
 import json
 import os
 import math
@@ -9,12 +10,14 @@ import numpy as np
 import h5py
 
 from chunkflow.chunk import Chunk
+from chunkflow.lib.bounding_boxes import Cartesian
 
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_sample import GroundTruthVolumeWithPointAnnotation
+from neutorch.dataset.sample import GroundTruthVolumeWithPointAnnotation
 from neutorch.dataset.transform import *
+from .dataset_base import DatasetBase
 
 
 def image_reader(path: str):
@@ -24,10 +27,10 @@ def image_reader(path: str):
     return img, None
 
 
-class Dataset(torch.utils.data.Dataset):
+class Dataset(DatasetBase):
     def __init__(self, config_file: str, 
             training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=(64, 64, 64), 
+            patch_size: Cartesian=Cartesian(64, 64, 64), 
             ):
         """
         Parameters:
@@ -35,25 +38,15 @@ class Dataset(torch.utils.data.Dataset):
             training_split_ratio (float): split the datasets to training and validation sets.
             patch_size (int or tuple): the patch size we are going to provide.
         """
-        super().__init__()
+        super().__init__(
+            config_file=config_file, 
+            patch_size=patch_size
+        )
         assert training_split_ratio > 0.5
         assert training_split_ratio < 1.
 
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * 3
-
-        config_file = os.path.expanduser(config_file)
-        assert config_file.endswith('.toml'), "we use toml file as configuration format."
-
-        with open(config_file, 'r') as file:
-            meta = toml.load(file)
-
         config_dir = os.path.dirname(config_file)
 
-        self._prepare_transform()
-        assert isinstance(self.transform, Compose)
-
-        self.patch_size = patch_size
         patch_size_before_transform = tuple(
             p + s0 + s1 for p, s0, s1 in zip(
                 patch_size, 
@@ -64,7 +57,7 @@ class Dataset(torch.utils.data.Dataset):
         
         # load all the datasets
         volumes = []
-        for gt in meta.values():
+        for gt in self.meta.values():
             image_path = gt['image']
             synapse_path = gt['synapses']
             image_path = os.path.expanduser(image_path)
@@ -155,9 +148,10 @@ class Dataset(torch.utils.data.Dataset):
         self.transform(patch)
         patch.apply_delayed_shrink_size()
         return patch
-           
-    def _prepare_transform(self):
-        self.transform = Compose([
+
+    @cached_property 
+    def transform(self):
+        return Compose([
             NormalizeTo01(probability=1.),
             AdjustBrightness(),
             AdjustContrast(),

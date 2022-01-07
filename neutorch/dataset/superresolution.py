@@ -12,7 +12,7 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_sample import GroundTruthVolume
+from neutorch.dataset.sample import GroundTruthVolume
 from neutorch.dataset.transform import *
 
 
