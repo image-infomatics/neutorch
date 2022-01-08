@@ -15,3 +15,4 @@ The design and implementation is based on some other packages. Following the Lic
 - [PyTorchUtils](https://github.com/nicholasturner1/PyTorchUtils)
 - [DeepEM](https://github.com/seung-lab/DeepEM)
 - [torchio](https://github.com/fepegar/torchio)
+- [pytorch_connectomics](https://github.com/zudi-lin/pytorch_connectomics)
