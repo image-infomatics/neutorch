@@ -122,6 +122,7 @@ class Dataset(torch.utils.data.IterableDataset):
                 # ignore all other files or directories 
                 continue
             full_fname = os.path.join(path, fname)
+
             # the ground truth data is ordered in XYZ rather than ZYX!
             synapses = Synapses.from_h5(full_fname, c_order=False)
             
