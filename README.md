@@ -1,6 +1,8 @@
 # neutorch
 Neuron segmentation and synapse detection using PyTorch
 
+> :warning: **This package is still under development, not suitable for production usage.**
+
 # Install
     python setup.py install
 
