@@ -1,3 +1,4 @@
+.secrets.baseline
 *.code-workspace
 *.vscode
 
