@@ -59,6 +59,7 @@ class GroundTruthSample(AbstractGroundTruthSample):
         assert image.ndim == 3
         assert target.ndim >= 3
         assert image.shape == target.shape[-3:]
+        assert isinstance(patch_size, Cartesian)
 
         
         if forbbiden_distance_to_boundary is None:
@@ -102,7 +103,7 @@ class GroundTruthSample(AbstractGroundTruthSample):
         bz = center[0] - self.patch_size[-3] // 2
         by = center[1] - self.patch_size[-2] // 2
         bx = center[2] - self.patch_size[-1] // 2
-        print('center: ', center)
+        # print('center: ', center)
         image_patch = self.image[...,
             bz : bz + self.patch_size[-3],
             by : by + self.patch_size[-2],
@@ -175,7 +176,7 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
     def sampling_weight(self):
         # use number of annotated points as weight
         # to sample volume
-        return self.annotation_points.shape[0]
+        return int(self.annotation_points.shape[0])
 
     def _points_to_target(self, image: np.ndarray,
             expand_distance: int = 2) -> tuple:
@@ -201,6 +202,10 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 0.95
+        if np.all(target < 0.5):
+            print('we did not find any annotated point here!')
+            breakpoint()
+        assert np.any(target > 0.5)
         return target
 
 

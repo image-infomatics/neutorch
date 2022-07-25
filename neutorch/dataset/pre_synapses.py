@@ -4,51 +4,50 @@ import math
 import random
 from typing import Union
 from time import time, sleep
+from glob import glob
 
+from tqdm import tqdm
 import numpy as np
 import h5py
 
 from chunkflow.chunk import Chunk
+from chunkflow.lib.bounding_boxes import Cartesian
+from chunkflow.lib.synapses import Synapses
 
 import torch
-import toml
 
-from neutorch.dataset.ground_truth_sample import GroundTruthVolumeWithPointAnnotation
+from neutorch.dataset.ground_truth_sample import GroundTruthSampleWithPointAnnotation
 from neutorch.dataset.transform import *
 
 
-def image_reader(path: str):
-    with h5py.File(path, 'r') as file:
-        img = np.asarray(file['main'])
-    # the last one is affine transformation matrix in torchio image type
-    return img, None
-
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, config_file: str, 
-            training_split_ratio: float = 0.9,
-            patch_size: Union[int, tuple]=(64, 64, 64), 
-            ):
+    def __init__(self, 
+            glob_path: str, 
+            validation_names: list,
+            test_names: list,
+            patch_size: Union[int, tuple, Cartesian]=(64, 64, 64),
+        ):
         """
         Parameters:
-            config_file (str): file_path to provide metadata of all the ground truth data.
-            training_split_ratio (float): split the datasets to training and validation sets.
+            glob_path (str): the glob path with regular expression.
+            validation_names (list[str]): the substring to select sample names as validation set.
+            test_names (list[str]): the substring to select sample names as test set.
             patch_size (int or tuple): the patch size we are going to provide.
         """
         super().__init__()
-        assert training_split_ratio > 0.5
-        assert training_split_ratio < 1.
 
         if isinstance(patch_size, int):
-            patch_size = (patch_size,) * 3
+            patch_size = Cartesian(patch_size, patch_size, patch_size)
+        else:
+            patch_size = Cartesian.from_collection(patch_size)
 
-        config_file = os.path.expanduser(config_file)
-        assert config_file.endswith('.toml'), "we use toml file as configuration format."
-
-        with open(config_file, 'r') as file:
-            meta = toml.load(file)
-
-        config_dir = os.path.dirname(config_file)
+        glob_path = os.path.expanduser(glob_path)
+        path_list = glob(glob_path, recursive=True)
+        path_list = sorted(path_list)
+        assert len(path_list) > 1
+        assert len(path_list) % 2 == 0, \
+            "the image and synapses should be paired."
 
         self._prepare_transform()
         assert isinstance(self.transform, Compose)
@@ -61,65 +60,70 @@ class Dataset(torch.utils.data.Dataset):
                 self.transform.shrink_size[-3:]
             )
         )
+        patch_size_before_transform = Cartesian.from_collection(patch_size_before_transform)
         
         # load all the datasets
-        volumes = []
-        for gt in meta.values():
-            image_path = gt['image']
-            synapse_path = gt['synapses']
+        training_samples = []
+        validation_samples = []
+        for idx in tqdm(range(0, len(path_list), 2)):
+            image_path = path_list[idx]
+            synapse_path = path_list[idx+1]
+                
             image_path = os.path.expanduser(image_path)
             synapse_path = os.path.expanduser(synapse_path)
             print(f'image path: {image_path}')
-            assert h5py.is_hdf5(image_path)
-            assert synapse_path.endswith('.json')
-            image_path = os.path.join(config_dir, image_path)
-            synapse_path = os.path.join(config_dir, synapse_path)
+            print(f'synapses path: {synapse_path}')
+
+            if 'img' not in image_path:
+                breakpoint()
+            assert 'img_' in image_path
+            assert 'syns_' in synapse_path
 
             image = Chunk.from_h5(image_path)
             voxel_offset = image.voxel_offset
             image = image.astype(np.float32) / 255.
             # use the voxel number as the sampling weights
             # subject_weights.append(len(img))
-            with open(synapse_path, 'r') as file:
-                synapses = json.load(file)
-                assert synapses['order'] == ['z', 'y', 'x']
-            # use the number of T-bars as subject sampling weights
-            # subject_weights.append(len(synapses['presynapses']))
-            del synapses['order']
-            del synapses['resolution']
+            synapses = Synapses.from_h5(synapse_path)
+            synapses.remove_synapses_outside_bounding_box(image.bbox)
 
-            assert len(synapses) > 0
-            tbar_points = np.zeros((len(synapses), 3), dtype=np.int64)
-            for idx, synapse in enumerate(synapses.values()):
-                # transform xyz to zyx
-                tbar_points[idx, :] = synapse['coord'] 
-            tbar_points -= voxel_offset
-            print(f'min offset: {np.min(tbar_points, axis=0)}')
-            print(f'max offset: {np.max(tbar_points, axis=0)}')
-            # all the points should be inside the image
-            # np.testing.assert_array_less(np.max(tbar_points, axis=0), image.shape)
+            pre = synapses.pre 
+            # print(f'min offset: {np.min(pre, axis=0)}')
+            # print(f'max offset: {np.max(pre, axis=0)}')
+            pre -= np.asarray(voxel_offset, dtype=pre.dtype)
+            # breakpoint()
 
-            ground_truth_sample = GroundTruthVolumeWithPointAnnotation(
-                image,
-                annotation_points=tbar_points,
+            ground_truth_sample = GroundTruthSampleWithPointAnnotation(
+                image.array,
+                annotation_points=pre,
                 patch_size=patch_size_before_transform,
             )
-            volumes.append(ground_truth_sample)
+
+
+            if any(s in synapse_path for s in validation_names):
+                validation_samples.append(ground_truth_sample)
+            elif any(s in synapse_path for s in test_names):
+                print(f'skipping the test sample: {synapse_path}')
+                pass
+            else:
+                training_samples.append(ground_truth_sample)
         
-        # shuffle the volume list and then split it to training and test
-        # random.shuffle(volumes)
 
         # use the number of candidate patches as volume sampling weight
-        sample_weights = []
-        for volume in volumes:
-            sample_weights.append(int(volume.volume_sampling_weight))
+        validation_sample_weights = []
+        for volume in validation_samples:
+            validation_sample_weights.append(volume.sampling_weight)
+        
+        training_sample_weights = []
+        for volume in training_samples:
+            training_sample_weights.append(volume.sampling_weight)
 
-        self.training_sample_num = int( math.floor(len(volumes) * training_split_ratio) )
-        self.validation_sample_num = int(len(volumes) - self.training_sample_num)
-        self.training_samples = volumes[:self.training_sample_num]
-        self.validation_samples = volumes[-self.validation_sample_num:]
-        self.training_sample_weights = sample_weights[:self.training_sample_num]
-        self.validation_sample_weights = sample_weights[-self.validation_sample_num:]
+        self.training_sample_num = len(training_samples)
+        self.validation_sample_num = len(validation_samples)
+        self.training_samples = training_samples
+        self.validation_samples = validation_samples
+        self.training_sample_weights = training_sample_weights
+        self.validation_sample_weights = validation_sample_weights
         
     @property
     def random_training_patch(self):
@@ -136,7 +140,7 @@ class Dataset(torch.utils.data.Dataset):
         patch = volume.random_patch
         self.transform(patch)
         patch.apply_delayed_shrink_size()
-        print('patch shape: ', patch.shape)
+        # print('patch shape: ', patch.shape)
         assert patch.shape[-3:] == self.patch_size, f'patch shape: {patch.shape}'
         return patch
 
@@ -202,7 +206,6 @@ if __name__ == '__main__':
             file['main'] = target[0,0, ...]
 
         print('number of nonzero voxels: ', np.count_nonzero(target))
-        # assert np.count_nonzero(tbar) == 8
         image = torch.from_numpy(image)
         target = torch.from_numpy(target)
         log_tensor(writer, 'train/image', image, n)

@@ -37,20 +37,8 @@ def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
     return model
 
 
-def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
-        iter_idx: int, nrow: int=8, zstride: int = 1):
-    """write a 5D tensor in tensorboard log
-
-    Args:
-        writer (SummaryWriter): 
-        tag (str): the name of the tensor in the log
-        tensor (torch.Tensor): the tensor to visualize
-        iter_idx (int): training iteration index
-        nrow (int): number of images in a row
-        zstride (int): skip a number of z sections to make the image smaller. 
-            Note that zstride is not working correctly. This is a bug here.
-            It only works correctly for zstride=1 for now.
-    """
+def volume_to_image(tensor: torch.Tensor, 
+        nrow: int=8, zstride: int = 1):
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
     else:
@@ -59,7 +47,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     
     if tensor.dtype == torch.uint8:
         # normalize from 0 to 1
-        tensor = tensor.type(torch.float32)
+        tensor = tensor.type(torch.float64)
         tensor -= tensor.min()
         tensor /= tensor.max()
     
@@ -74,7 +62,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     # img = make_grid(imgs, nrow=depth, padding=0)
     # number of images in a column
     ncol = math.ceil( depth / nrow / zstride)
-    img = torch.zeros((height*ncol, width*nrow))
+    img = torch.zeros((height*ncol, width*nrow), dtype=torch.float64)
     # breakpoint()
     for z in range(0, depth, zstride):
         row = math.floor( z / nrow / zstride )
@@ -85,4 +73,39 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
             col*width  : (col+1)*width ] = torch.squeeze(
                 tensor[..., z, :, :]
         )
-    writer.add_image(tag, img, iter_idx, dataformats='HW')
+    return img
+
+
+def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
+        iter_idx: int, nrow: int=8, zstride: int = 1, 
+        mask: torch.Tensor = None):
+    """write a 5D tensor in tensorboard log
+
+    Args:
+        writer (SummaryWriter): 
+        tag (str): the name of the tensor in the log
+        tensor (torch.Tensor): the tensor to visualize
+        iter_idx (int): training iteration index
+        nrow (int): number of images in a row
+        zstride (int): skip a number of z sections to make the image smaller. 
+            Note that zstride is not working correctly. This is a bug here.
+            It only works correctly for zstride=1 for now.
+        mask (Tensor): the binary mask that used to indicate the manual label
+    """
+    img = volume_to_image(tensor, nrow=nrow, zstride=zstride)
+    if mask is not None:
+        mask = volume_to_image(mask, nrow=nrow, zstride=zstride)
+        assert img.size() == mask.size()
+        img = torch.unsqueeze(img, 0)
+        img = img.repeat(3, 1, 1)
+        img[0, :,:][mask>0.5] = 1.
+        img[1, :,:][mask>0.5] = 0.
+        img[2, :,:][mask>0.5] = 0.
+        # img = img.double()
+        dataformats = 'CHW'
+    else:
+        # assert img.dim == 2
+        dataformats = 'HW'
+    # breakpoint()
+    # img = img.numpy()
+    writer.add_image(tag, img, iter_idx, dataformats=dataformats)
