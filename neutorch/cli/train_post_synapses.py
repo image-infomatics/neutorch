@@ -1,9 +1,13 @@
 import random
 import os
 from time import time
+from glob import glob
 
+from yacs.config import CfgNode
 import click
 import numpy as np
+
+from chunkflow.lib.bounding_boxes import Cartesian
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -13,65 +17,54 @@ from neutorch.dataset.patch import collate_batch
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.post_synapses import Dataset, worker_init_fn
+from neutorch.dataset.post_synapses import PostSynapsesDataset, worker_init_fn
 
 
 
 @click.command()
-@click.option('--seed', 
-    type=int, default=1,
-    help='for reproducibility'
+@click.option('--config-file', '-c',
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, readable=True, resolve_path=True), 
+    default='./config.yaml', 
+    help = 'configuration file containing all the parameters.'
 )
-@click.option('--patch-size', '-p',
-    type=int, nargs=3, default=(256, 256, 256),
-    help='input and output patch size.'
-)
-@click.option('--iter-start', '-b',
-    type=int, default=0,
-    help='the starting index of training iteration.'
-)
-@click.option('--iter-stop', '-e',
-    type=int, default=200000,
-    help='the stopping index of training iteration.'
-)
-@click.option('--dataset-config-file', '-d',
-    type=click.Path(exists=True, dir_okay=False, readable=True, resolve_path=True),
-    required=True,
-    help='dataset configuration file path.'
-)
-@click.option('--output-dir', '-o',
-    type=click.Path(file_okay=False, dir_okay=True, writable=True, resolve_path=True),
-    required=True,
-    help='the directory to save all the outputs, such as checkpoints.'
-)
-@click.option('--in-channels', '-c', 
-    type=int, default=1, help='channel number of input tensor.'
-)
-@click.option('--out-channels', '-n',
-    type=int, default=1, help='channel number of output tensor.')
-@click.option('--learning-rate', '-l',
-    type=float, default=0.001, help='learning rate'
-)
-@click.option('--training-interval', '-t',
-    type=int, default=1000, help='training interval to record stuffs.'
-)
-@click.option('--validation-interval', '-v',
-    type=int, default=10000, help='validation and saving interval iterations.'
-)
-@click.option('--num-workers', '-p',
-    type=int, default=2, help='number of processes for data loading.'
-)
-def train(seed: int,  patch_size: tuple,
-        iter_start: int, iter_stop: int, dataset_config_file: str, 
-        output_dir: str,
-        in_channels: int, out_channels: int, learning_rate: float,
-        training_interval: int, validation_interval: int, num_workers: int):
+def main(config_file: str):
+    with open(config_file) as file:
+        cfg = CfgNode.load_cfg(file)
+    cfg.freeze()
     
-    random.seed(seed)
+    patch_size=Cartesian.from_collection(cfg.train.patch_size)
 
-    writer = SummaryWriter(log_dir=os.path.join(output_dir, 'log'))
+    # split path list
+    glob_path = os.path.expanduser(cfg.dataset.glob_path)
+    path_list = glob(glob_path, recursive=True)
+    path_list = sorted(path_list)
+    print(f'path_list \n: {path_list}')
+    assert len(path_list) > 1
+    assert len(path_list) % 2 == 0, \
+        "the image and synapses should be paired."
 
-    model = Model(in_channels, out_channels)
+    training_path_list = []
+    validation_path_list = []
+    for path in path_list:
+        assignment_flag = False
+        for validation_name in cfg.dataset.validation_names:
+            if validation_name in path:
+                validation_path_list.append(path)
+                assignment_flag = True
+        
+        for test_name in cfg.dataset.test_names:
+            if test_name in path:
+                assignment_flag = True
+
+        if not assignment_flag:
+            training_path_list.append(path)
+
+    print(f'split {len(path_list)} ground truth samples to {len(training_path_list)} training samples, {len(validation_path_list)} validation samples, and {len(path_list)-len(training_path_list)-len(validation_path_list)} test samples.')
+
+    random.seed(cfg.system.seed)
+    writer = SummaryWriter(log_dir=cfg.train.output_dir)
+
+    model = Model(cfg.model.in_channels, cfg.model.out_channels)
 
     batch_size = 1
     if torch.cuda.is_available():
@@ -85,33 +78,32 @@ def train(seed: int,  patch_size: tuple,
         )
         # we use a batch for each GPU
         batch_size = gpu_num
-
     else:
         device = torch.device("cpu")
 
     # note that we have to wrap the nn.DataParallel(model) before 
     # loading the model since the dictionary is changed after the wrapping 
-    model = load_chkpt(model, output_dir, iter_start)
+    model = load_chkpt(model, cfg.train.output_dir, cfg.train.iter_start)
     print('send model to device: ', device)
     model = model.to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.learning_rate)
     
     loss_module = BinomialCrossEntropyWithLogits()
-    training_dataset = Dataset(
-        dataset_config_file,
-        section_name='training',
+    training_dataset = PostSynapsesDataset(
+        training_path_list,
+        cfg.dataset.image_dirs,
         patch_size=patch_size,
     )
-    validation_dataset = Dataset(
-        config_file=dataset_config_file,
-        section_name="validation",
+    validation_dataset = PostSynapsesDataset(
+        validation_path_list,
+        cfg.dataset.image_dirs,
         patch_size=patch_size,
     )
-
+  
     training_data_loader = DataLoader(
         training_dataset,
-        num_workers=num_workers,
+        num_workers=cfg.system.cpus,
         prefetch_factor=2,
         drop_last=False,
         multiprocessing_context='spawn',
@@ -123,7 +115,7 @@ def train(seed: int,  patch_size: tuple,
     validation_data_loader = DataLoader(
         validation_dataset,
         num_workers=1,
-        prefetch_factor=1,
+        prefetch_factor=2,
         drop_last=False,
         multiprocessing_context='spawn',
         collate_fn=collate_batch,
@@ -133,11 +125,11 @@ def train(seed: int,  patch_size: tuple,
 
     voxel_num = np.product(patch_size) * batch_size
     accumulated_loss = 0.
-    iter_idx = iter_start
+    iter_idx = cfg.train.iter_start
     for image, target in training_data_loader:
         iter_idx += 1
-        if iter_idx> iter_stop:
-            print('exceeds the maximum iteration: ', iter_stop)
+        if iter_idx> cfg.train.iter_stop:
+            print('exceeds the maximum iteration: ', cfg.train.iter_stop)
             return
 
         ping = time()
@@ -150,8 +142,8 @@ def train(seed: int,  patch_size: tuple,
         accumulated_loss += loss.tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-        if iter_idx % training_interval == 0 and iter_idx > 0:
-            per_voxel_loss = accumulated_loss / training_interval / voxel_num
+        if iter_idx % cfg.train.training_interval == 0 and iter_idx > 0:
+            per_voxel_loss = accumulated_loss / cfg.train.training_interval / voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
             predict = torch.sigmoid(logits)
@@ -160,10 +152,10 @@ def train(seed: int,  patch_size: tuple,
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-        if iter_idx % validation_interval == 0 and iter_idx > 0:
-            fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
+        if iter_idx % cfg.train.validation_interval == 0 and iter_idx > 0:
+            fname = os.path.join(cfg.train.output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
-            save_chkpt(model, output_dir, iter_idx, optimizer)
+            save_chkpt(model, cfg.train.output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
             validation_image, validation_target = next(validation_data_iter)
@@ -183,4 +175,4 @@ def train(seed: int,  patch_size: tuple,
 
 
 if __name__ == '__main__':
-    train()
+    main()

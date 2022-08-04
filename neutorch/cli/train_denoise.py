@@ -49,7 +49,7 @@ from neutorch.dataset.patch import collate_batch
     type=int, default=1000, help='validation and saving interval iterations.'
 )
 
-def train(seed: int, volume_path : str,
+def main(seed: int, volume_path : str,
         iter_start: int, iter_stop: int, output_dir: str,
         training_interval: int, validation_interval: int):
     

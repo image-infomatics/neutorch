@@ -12,9 +12,9 @@ setup(
     packages=find_packages(exclude=['bin']),
     entry_points='''
         [console_scripts]
-        neutrain-pre=neutorch.cli.train_pre_synapses:train
-        neutrain-denoise=neutorch.cli.train_denoise:train
-        neutrain-post=neutorch.cli.train_post_synapses:train
+        neutrain-pre=neutorch.cli.train_pre_synapses:main
+        neutrain-denoise=neutorch.cli.train_denoise:main
+        neutrain-post=neutorch.cli.train_post_synapses:main
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

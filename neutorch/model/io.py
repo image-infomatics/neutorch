@@ -63,7 +63,6 @@ def volume_to_image(tensor: torch.Tensor,
     # number of images in a column
     ncol = math.ceil( depth / nrow / zstride)
     img = torch.zeros((height*ncol, width*nrow), dtype=torch.float64)
-    # breakpoint()
     for z in range(0, depth, zstride):
         row = math.floor( z / nrow / zstride )
         col = z % nrow
@@ -106,6 +105,5 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
     else:
         # assert img.dim == 2
         dataformats = 'HW'
-    # breakpoint()
     # img = img.numpy()
     writer.add_image(tag, img, iter_idx, dataformats=dataformats)

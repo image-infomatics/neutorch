@@ -1,6 +1,4 @@
-import json
 import os
-import math
 import random
 from typing import Union
 from time import time, sleep
@@ -74,8 +72,6 @@ class Dataset(torch.utils.data.Dataset):
             print(f'image path: {image_path}')
             print(f'synapses path: {synapse_path}')
 
-            if 'img' not in image_path:
-                breakpoint()
             assert 'img_' in image_path
             assert 'syns_' in synapse_path
 

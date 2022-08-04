@@ -4,7 +4,6 @@ from time import time
 
 import click
 import numpy as np
-from tqdm import tqdm
 import yaml
 
 import torch
@@ -12,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.io import load_chkpt, save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.dataset.pre_synapses import Dataset
 
@@ -23,7 +22,7 @@ from chunkflow.lib.bounding_boxes import Cartesian
 @click.option('--config-file', '-c', default=None,
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True),
     help='configuration file path. yaml file format.')
-def train(config_file: str):
+def main(config_file: str):
     with open(config_file) as cf:
         config = yaml.load(cf, Loader=yaml.FullLoader) 
 
@@ -49,15 +48,19 @@ def train(config_file: str):
         config['in_channels'], 
         config['out_channels']
     )
-
-    if torch.cuda.is_available():
-        model = model.cuda()
+    
+    chkpt_fname = os.path.join(output_dir, f'model_{iter_start}.chkpt')
+    if os.path.exists(chkpt_fname):
+        model = load_chkpt(model, chkpt_fname, iter_start)
 
     optimizer = torch.optim.Adam(
         model.parameters(), 
         lr=config['learning_rate']
     )
     
+    if torch.cuda.is_available():
+        model = model.cuda()
+
     loss_module = BinomialCrossEntropyWithLogits()
 
     dataset = Dataset(
@@ -69,7 +72,7 @@ def train(config_file: str):
 
     accumulated_loss = 0.
     
-    for iter_idx in range(iter_start, iter_stop):
+    for iter_idx in range(iter_start, iter_stop+1):
         ping = time()
         patch = dataset.random_training_patch
         # print('training patch shape: ', patch.shape)
@@ -88,7 +91,7 @@ def train(config_file: str):
         accumulated_loss += loss.cpu().tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-        if iter_idx % training_interval == 0 and iter_idx > 0:
+        if iter_idx % training_interval == 0 and iter_idx > iter_start:
             per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
@@ -98,7 +101,7 @@ def train(config_file: str):
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-        if iter_idx % validation_interval == 0 and iter_idx > 0:
+        if iter_idx % validation_interval == 0 and iter_idx > iter_start:
             fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
             save_chkpt(model, output_dir, iter_idx, optimizer)

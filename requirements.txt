@@ -1,6 +1,6 @@
 torch 
 torchvision
-toml
+yacs
 h5py
 tensorboard
 opencv-python

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import random
-from typing import Union
+from typing import List
 
 import numpy as np
 
@@ -93,7 +93,6 @@ class GroundTruthSample(AbstractGroundTruthSample):
         return patch
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
-        # breakpoint()
         cz = random.randint(center_start[0], center_stop[0])
         cy = random.randint(center_start[1], center_stop[1])
         cx = random.randint(center_start[2], center_stop[2])
@@ -167,9 +166,6 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
     #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
     #     )
     #     for ct, cp in zip(center_start, center_stop):
-    #         if ct >= cp:
-    #             breakpoint()
-
     #     return self.random_patch_from_center_range(center_start, center_stop)
 
     @property
@@ -202,33 +198,30 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
                 coordinate[1]-expand_distance : coordinate[1]+expand_distance,
                 coordinate[2]-expand_distance : coordinate[2]+expand_distance,
             ] = 0.95
-        if np.all(target < 0.5):
-            print('we did not find any annotated point here!')
-            breakpoint()
         assert np.any(target > 0.5)
         return target
 
 
 class PostSynapseGroundTruth(AbstractGroundTruthSample):
-    def __init__(self, 
-            image: Chunk, 
+    def __init__(self,
             synapses: Synapses,
+            images: List[Chunk], 
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             point_expand: int = 2,
         ):
         """Ground Truth for post synapses
 
         Args:
-            image (Chunk): image chunk covering the whole synapses
             synapses (Synapses): including both presynapses and postsynapses
+            images (List[Chunk]): several image chunk versions covering the whole synapses
             patch_size (Cartesian): image patch size covering the whole synapse
             point_expand (int): expand the point. range from 1 to half of patch size.
         """
-        if isinstance(patch_size, tuple):
-            patch_size = Cartesian(*patch_size)
+        if not isinstance(patch_size, Cartesian):
+            patch_size = Cartesian.from_collection(patch_size)
         super().__init__(patch_size=patch_size)
 
-        self.image = image
+        self.images = images
         self.synapses = synapses
         self.pre_index2post_indices = synapses.pre_index2post_indices
         self.point_expand = point_expand
@@ -244,9 +237,11 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
             Cartesian(*pre), 
             extent=self.patch_size // 2
         )
+
+        image = random.choice(self.images)
         
         # Note that image is 4D array, the first dimension size is 1
-        image = self.image.cutout(bbox)
+        image = image.cutout(bbox)
         assert image.dtype == np.uint8
         image = image.astype(np.float32)
         image /= 255.
@@ -266,11 +261,8 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
         target = np.zeros(image.shape, dtype=np.float32)
         target = Chunk(target, voxel_offset=image.voxel_offset)
         target += 0.05
-        if len(post_indices) == 0:
-            breakpoint()
         for post_index in post_indices:
-            if post_index >= self.synapses.post_num:
-                breakpoint()
+            assert post_index < self.synapses.post_num
             coord = self.synapses.post_coordinates[post_index, :]
             coord = coord - target.voxel_offset
             target[...,

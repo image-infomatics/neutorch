@@ -1,24 +1,26 @@
 import os
 import math
-import random
+from re import I
 from time import time, sleep
 from collections import OrderedDict
+from functools import cached_property
+from typing import List
 
 import numpy as np
 from scipy.stats import describe
-from tqdm import tqdm
 
 from chunkflow.chunk import Chunk
-from chunkflow.lib.bounding_boxes import Cartesian
+from chunkflow.lib.bounding_boxes import Cartesian, BoundingBox
 from chunkflow.lib.synapses import Synapses
+from chunkflow.volume import Volume
 
-from cloudvolume import CloudVolume
+
 
 import torch
-import toml
 
 from neutorch.dataset.ground_truth_sample import PostSynapseGroundTruth
 from neutorch.dataset.transform import *
+from .base import DatasetBase
 
 
 def worker_init_fn(worker_id: int):
@@ -26,91 +28,84 @@ def worker_init_fn(worker_id: int):
     
     # the dataset copy in this worker process
     dataset = worker_info.dataset
-    overall_start = dataset.start
-    overall_end = dataset.end
+    overall_start = 0
+    overall_end = dataset.sample_num
 
     # configure the dataset to only process the split workload
-    per_worker = int(math.ceil((overall_end - overall_start) / float(worker_info.num_workers)))
+    per_worker = int(math.ceil(
+        (overall_end - overall_start) / float(worker_info.num_workers)))
     worker_id = worker_info.id
     dataset.start = overall_start + worker_id * per_worker
     dataset.end = min(dataset.start + per_worker, overall_end)
 
 
-class Dataset(torch.utils.data.IterableDataset):
-    def __init__(self, config_file: str,
-            section_name: str, 
+class PostSynapsesDataset(DatasetBase):
+    def __init__(self, 
+            syns_path_list: List[str],
+            image_dirs: dict,
             patch_size: Cartesian = Cartesian(256, 256, 256), 
-            ):
+        ):
         """postsynapse dataset
 
         Args:
-            config_file (str): the toml file path
-            section_name (str): the section name to be used in the toml file. [training, validation, testing]
-            patch_size (Cartesian, optional): [description]. Defaults to Cartesian(256, 256, 256).
+            syns_path_list (List[str]): the synapses file list
+            image_dirs (dict): map the sample or volume name to a list of versions the same dataset.
+            patch_size (Cartesian, optional): Defaults to Cartesian(256, 256, 256).
 
         Raises:
             ValueError: [description]
         """
-        super().__init__()
+        super().__init__(patch_size=patch_size)
 
-        if isinstance(patch_size, int):
-            patch_size = Cartesian(*((patch_size,) * 3))
-        else:
-            patch_size = Cartesian(*patch_size)
-        
-        config_file = os.path.expanduser(config_file)
-        assert config_file.endswith('.toml'), "we use toml file as configuration format."
-        with open(config_file, 'r') as file:
-            meta = toml.load(file)
+        vols = {}
+        for dataset_name, dir_list in image_dirs.items():
+            vol_list = []
+            for dir_path in dir_list:
+                vol = Volume.from_cloudvolume_path(
+                    'file://' + dir_path,
+                    bounded = True,
+                    fill_missing = True,
+                    parallel=True,
+                )
+                vol_list.append(vol)
+            vols[dataset_name] = vol_list
 
-        self._load_synapses(meta[section_name]['path'])
+        self.samples = []
 
-        vol1 = CloudVolume("file://" + meta['sample1']["image"])
-        vol2 = CloudVolume("file://" + meta['sample2']["image"])
+        def syns_path_to_dataset_name(syns_path: str, dataset_names: list):
+            for dataset_name in dataset_names:
+                if dataset_name in syns_path:
+                    return dataset_name
 
-        self._prepare_transform()
-        assert isinstance(self.transform, Compose)
+        for syns_path in syns_path_list:
+            synapses = Synapses.from_file(syns_path)
+            if synapses.post is None:
+                print(f'skip synapses without post: {syns_path}')
+                continue
+            print(f'loading {syns_path}')
 
-        self.patch_size = patch_size
-        patch_size_before_transform = self.patch_size + self.transform.shrink_size[:3]
-        patch_size_before_transform += self.transform.shrink_size[-3:]
-
-        self.sample_list = []
-        for key, synapses in tqdm(self.synapses.items(), desc="reading image chunks..."):
-            sample, _ = key.split(",")
-            # bbox = BoundingBox.from_filename(bbox_filename)
+            # bbox = BoundingBox.from_string(syns_path)
             bbox = synapses.pre_bounding_box
-            bbox.adjust(patch_size_before_transform // 2)
-            if "1" in sample:
-                vol = vol1
-            elif "2" in sample:
-                vol = vol2
-            else:
-                raise ValueError("we can only read data from sample 1 or 2")
+            bbox.adjust(self.patch_size_before_transform // 2)
 
-            chunk = vol[bbox.to_slices()[::-1]]
-            # CloudVolume uses xyz order and we use zyx order
-            chunk = np.transpose(chunk)
-            chunk = Chunk(np.asarray(chunk), voxel_offset=bbox.minpt)
+            images = []
+            dataset_name = syns_path_to_dataset_name(syns_path, image_dirs.keys())
+            for vol in vols[dataset_name]:
+                image = vol.cutout(bbox)
+                images.append(image)
             sample = PostSynapseGroundTruth(
-                chunk, synapses, 
-                patch_size=patch_size_before_transform
+                synapses, images,
+                patch_size=self.patch_size_before_transform
             )
-            self.sample_list.append(sample)
+            self.samples.append(sample)
 
-                
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
+        self._compute_sample_weights()
 
-        # use the number of candidate patches as volume sampling weight
-        sample_weights = []
-        for sample in self.sample_list:
-            sample_weights.append(sample.sampling_weight) 
-        self.sample_weights = sample_weights
-
-        self.sample_num = len(self.sample_list)
+        # the iteration range for DataLoader
         self.start = 0
-        self.end = self.sample_num
+        self.stop = self.sample_num
 
     def _load_synapses(self, path: str):
         self.synapses = OrderedDict()
@@ -137,41 +132,15 @@ class Dataset(torch.utils.data.IterableDataset):
             
             if np.all(synapses.post_synapse_num_list == 1):
                 raise ValueError('it should be impossible that all the synapses only have exactly one post synapse')
-                # breakpoint()
 
             distances = synapses.distances_from_pre_to_post
             print(f'\n{fname}: distances from pre to post synapses (voxel unit): ', 
                     describe(distances)
             )
 
-    def __next__(self):
-        # only sample one subject, so replacement option could be ignored
-        sample_index = random.choices(
-            range(self.start, self.end),
-            weights=self.sample_weights[self.start : self.end],
-            k=1,
-        )[0]
-        sample = self.sample_list[sample_index]
-        patch = sample.random_patch
-        self.transform(patch)
-        patch.apply_delayed_shrink_size()
-        # print('patch shape: ', patch.shape)
-        assert patch.shape[-3:] == self.patch_size, f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
-        
-        patch.to_tensor()
-        return patch.image, patch.target
-
-    def __iter__(self):
-        """generate random patches from samples
-
-        Yields:
-            tuple[tensor, tensor]: image and target tensors
-        """
-        while True:
-            yield next(self)
-
-    def _prepare_transform(self):
-        self.transform = Compose([
+    @cached_property
+    def transform(self):
+        return Compose([
             NormalizeTo01(probability=1.),
             AdjustBrightness(),
             AdjustContrast(),
