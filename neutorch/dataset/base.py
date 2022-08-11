@@ -1,5 +1,6 @@
 from typing import Union
 from functools import cached_property
+import math
 
 from chunkflow.lib.bounding_boxes import Cartesian
 
@@ -7,6 +8,21 @@ import torch
 
 from neutorch.dataset.transform import *
 
+
+def worker_init_fn(worker_id: int):
+    worker_info = torch.utils.data.get_worker_info()
+    
+    # the dataset copy in this worker process
+    dataset = worker_info.dataset
+    overall_start = 0
+    overall_end = dataset.sample_num
+
+    # configure the dataset to only process the split workload
+    per_worker = int(math.ceil(
+        (overall_end - overall_start) / float(worker_info.num_workers)))
+    worker_id = worker_info.id
+    dataset.start = overall_start + worker_id * per_worker
+    dataset.end = min(dataset.start + per_worker, overall_end)
 
 
 class DatasetBase(torch.utils.data.IterableDataset):
@@ -38,8 +54,13 @@ class DatasetBase(torch.utils.data.IterableDataset):
     @cached_property
     def sample_num(self):
         return len(self.samples)
+    
+    def setup_iteration_range(self):
+        # the iteration range for DataLoader
+        self.start = 0
+        self.stop = self.sample_num
 
-    def _compute_sample_weights(self):
+    def compute_sample_weights(self):
         # use the number of candidate patches as volume sampling weight
         sample_weights = []
         for sample in self.samples:

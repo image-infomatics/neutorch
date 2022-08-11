@@ -1,134 +1,179 @@
 import random
 import os
 from time import time
+from glob import glob
 
+from yacs.config import CfgNode
 import click
 import numpy as np
-import yaml
-
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-
-from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import load_chkpt, save_chkpt, log_tensor
-from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.pre_synapses import Dataset
 
 from chunkflow.lib.bounding_boxes import Cartesian
 
+import torch
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
+from neutorch.dataset.patch import collate_batch
+
+from neutorch.model.IsoRSUNet import Model
+from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
+from neutorch.loss import BinomialCrossEntropyWithLogits
+from neutorch.dataset.base import worker_init_fn
+from neutorch.dataset.synapses import PreSynapsesDataset
+
+
 
 @click.command()
-@click.option('--config-file', '-c', default=None,
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True),
-    help='configuration file path. yaml file format.')
+@click.option('--config-file', '-c',
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, readable=True, resolve_path=True), 
+    default='./config.yaml', 
+    help = 'configuration file containing all the parameters.'
+)
 def main(config_file: str):
-    with open(config_file) as cf:
-        config = yaml.load(cf, Loader=yaml.FullLoader) 
-
-    seed = config['seed']
-    dataset_path = config['dataset_path']
-    # validation_names = config['validation_names']
-    # test_names = config['test_names']
-    iter_start = config['iter_start']
-    iter_stop = config['iter_stop']
-    output_dir = os.path.expanduser(config['output_dir'])
-    training_interval = config['training_interval']
-    validation_interval = config['validation_interval']
-    patch_size = Cartesian.from_collection(config['patch_size'])
-
-    random.seed(seed)
-    patch_voxel_num = np.product(patch_size)
-
-    writer = SummaryWriter(
-        log_dir=output_dir
-    )
-
-    model = Model(
-        config['in_channels'], 
-        config['out_channels']
-    )
+    with open(config_file) as file:
+        cfg = CfgNode.load_cfg(file)
+    cfg.freeze()
     
-    chkpt_fname = os.path.join(output_dir, f'model_{iter_start}.chkpt')
-    if os.path.exists(chkpt_fname):
-        model = load_chkpt(model, chkpt_fname, iter_start)
+    patch_size=Cartesian.from_collection(cfg.train.patch_size)
 
-    optimizer = torch.optim.Adam(
-        model.parameters(), 
-        lr=config['learning_rate']
-    )
-    
+    # split path list
+    glob_path = os.path.expanduser(cfg.dataset.glob_path)
+    path_list = glob(glob_path, recursive=True)
+    path_list = sorted(path_list)
+    print(f'path_list \n: {path_list}')
+    assert len(path_list) > 1
+    assert len(path_list) % 2 == 0, \
+        "the image and synapses should be paired."
+
+    training_path_list = []
+    validation_path_list = []
+    for path in path_list:
+        assignment_flag = False
+        for validation_name in cfg.dataset.validation_names:
+            if validation_name in path:
+                validation_path_list.append(path)
+                assignment_flag = True
+        
+        for test_name in cfg.dataset.test_names:
+            if test_name in path:
+                assignment_flag = True
+
+        if not assignment_flag:
+            training_path_list.append(path)
+
+    print(f'split {len(path_list)} ground truth samples to {len(training_path_list)} training samples, {len(validation_path_list)} validation samples, and {len(path_list)-len(training_path_list)-len(validation_path_list)} test samples.')
+
+    random.seed(cfg.system.seed)
+    writer = SummaryWriter(log_dir=cfg.train.output_dir)
+
+    model = Model(cfg.model.in_channels, cfg.model.out_channels)
+
+    batch_size = 1
     if torch.cuda.is_available():
-        model = model.cuda()
+        device = torch.device("cuda")
+        gpu_num = torch.cuda.device_count()
+        print("Let's use ", gpu_num, " GPUs!")
+        model = torch.nn.DataParallel(
+            model, 
+            device_ids=list(range(gpu_num)), 
+            dim=0,
+        )
+        # we use a batch for each GPU
+        batch_size = gpu_num
+    else:
+        device = torch.device("cpu")
 
-    loss_module = BinomialCrossEntropyWithLogits()
+    # note that we have to wrap the nn.DataParallel(model) before 
+    # loading the model since the dictionary is changed after the wrapping 
+    model = load_chkpt(model, cfg.train.output_dir, cfg.train.iter_start)
+    print('send model to device: ', device)
+    model = model.to(device)
 
-    dataset = Dataset(
-        dataset_path,
-        patch_size = patch_size,
-        validation_names = config['validation_names'],
-        test_names = config['test_names'],
-    )
-
-    accumulated_loss = 0.
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.learning_rate)
     
-    for iter_idx in range(iter_start, iter_stop+1):
+    loss_module = BinomialCrossEntropyWithLogits()
+    training_dataset = PreSynapsesDataset(
+        training_path_list,
+        cfg.dataset.sample_name_to_image_versions,
+        patch_size=patch_size,
+    )
+    validation_dataset = PreSynapsesDataset(
+        validation_path_list,
+        cfg.dataset.sample_name_to_image_versions,
+        patch_size=patch_size,
+    )
+  
+    training_data_loader = DataLoader(
+        training_dataset,
+        num_workers=cfg.system.cpus,
+        prefetch_factor=2,
+        drop_last=False,
+        multiprocessing_context='spawn',
+        collate_fn=collate_batch,
+        worker_init_fn=worker_init_fn,
+        batch_size=batch_size,
+    )
+    
+    validation_data_loader = DataLoader(
+        validation_dataset,
+        num_workers=1,
+        prefetch_factor=2,
+        drop_last=False,
+        multiprocessing_context='spawn',
+        collate_fn=collate_batch,
+        batch_size=batch_size,
+    )
+    validation_data_iter = iter(validation_data_loader)
+
+    voxel_num = np.product(patch_size) * batch_size
+    accumulated_loss = 0.
+    iter_idx = cfg.train.iter_start
+    for image, target in training_data_loader:
+        iter_idx += 1
+        if iter_idx> cfg.train.iter_stop:
+            print('exceeds the maximum iteration: ', cfg.train.iter_stop)
+            return
+
         ping = time()
-        patch = dataset.random_training_patch
-        # print('training patch shape: ', patch.shape)
-        print(f'iteration {iter_idx}, preparing patch takes {round(time()-ping, 3)} seconds')
-        image = torch.from_numpy(patch.image)
-        target = torch.from_numpy(patch.target)
-        # Transfer Data to GPU if available
-        if torch.cuda.is_available():
-            image = image.cuda()
-            target = target.cuda()
+        # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        accumulated_loss += loss.cpu().tolist()
+        accumulated_loss += loss.tolist()
         print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-        if iter_idx % training_interval == 0 and iter_idx > iter_start:
-            per_voxel_loss = accumulated_loss / training_interval / patch_voxel_num
+        if iter_idx % cfg.train.training_interval == 0 and iter_idx > 0:
+            per_voxel_loss = accumulated_loss / cfg.train.training_interval / voxel_num
             print(f'training loss {round(per_voxel_loss, 3)}')
             accumulated_loss = 0.
             predict = torch.sigmoid(logits)
             writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
-            log_tensor(writer, 'train/image', image, iter_idx, mask=target)
+            log_tensor(writer, 'train/image', image, iter_idx)
             log_tensor(writer, 'train/prediction', predict, iter_idx)
             log_tensor(writer, 'train/target', target, iter_idx)
 
-        if iter_idx % validation_interval == 0 and iter_idx > iter_start:
-            fname = os.path.join(output_dir, f'model_{iter_idx}.chkpt')
+        if iter_idx % cfg.train.validation_interval == 0 and iter_idx > 0:
+            fname = os.path.join(cfg.train.output_dir, f'model_{iter_idx}.chkpt')
             print(f'save model to {fname}')
-            save_chkpt(model, output_dir, iter_idx, optimizer)
+            save_chkpt(model, cfg.train.output_dir, iter_idx, optimizer)
 
             print('evaluate prediction: ')
-            patch = dataset.random_validation_patch
-            # print('evaluation patch shape: ', patch.shape)
-            validation_image = torch.from_numpy(patch.image)
-            validation_target = torch.from_numpy(patch.target)
-            # Transfer Data to GPU if available
-            if torch.cuda.is_available():
-                validation_image = validation_image.cuda()
-                validation_target = validation_target.cuda()
+            validation_image, validation_target = next(validation_data_iter)
 
             with torch.no_grad():
                 validation_logits = model(validation_image)
                 validation_predict = torch.sigmoid(validation_logits)
                 validation_loss = loss_module(validation_logits, validation_target)
-                per_voxel_loss = validation_loss.cpu().tolist() / patch_voxel_num
+                per_voxel_loss = validation_loss.tolist() / voxel_num
                 print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                 writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
-                log_tensor(writer, 'validation/image', validation_image, iter_idx, mask=validation_target)
-                log_tensor(writer, 'validation/prediction', validation_predict, iter_idx)
-                log_tensor(writer, 'validation/target', validation_target, iter_idx)
+                log_tensor(writer, 'evaluate/image', validation_image, iter_idx)
+                log_tensor(writer, 'evaluate/prediction', validation_predict, iter_idx)
+                log_tensor(writer, 'evaluate/target', validation_target, iter_idx)
 
     writer.close()
 
 
 if __name__ == '__main__':
-    train()
+    main()

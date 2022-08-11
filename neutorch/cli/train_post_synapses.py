@@ -17,7 +17,8 @@ from neutorch.dataset.patch import collate_batch
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.post_synapses import PostSynapsesDataset, worker_init_fn
+from neutorch.dataset.synapses import PostSynapsesDataset
+from neutorch.dataset.base import worker_init_fn
 
 
 
@@ -92,12 +93,12 @@ def main(config_file: str):
     loss_module = BinomialCrossEntropyWithLogits()
     training_dataset = PostSynapsesDataset(
         training_path_list,
-        cfg.dataset.image_dirs,
+        cfg.dataset.sample_name_to_image_versions,
         patch_size=patch_size,
     )
     validation_dataset = PostSynapsesDataset(
         validation_path_list,
-        cfg.dataset.image_dirs,
+        cfg.dataset.sample_name_to_image_versions,
         patch_size=patch_size,
     )
   
@@ -133,7 +134,7 @@ def main(config_file: str):
             return
 
         ping = time()
-        print(f'preparing patch takes {round(time()-ping, 3)} seconds')
+        # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
         logits = model(image)
         loss = loss_module(logits, target)
         optimizer.zero_grad()

@@ -37,13 +37,14 @@ class AbstractGroundTruthSample(ABC):
 
 
 class GroundTruthSample(AbstractGroundTruthSample):
-    def __init__(self, image: np.ndarray, target: np.ndarray,
+    def __init__(self, 
+            images: List[Chunk], target: np.ndarray,
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
         Args:
-            image (np.ndarray): image normalized to 0-1
+            images (List[Chunk]): different versions of image chunks normalized to 0-1
             target (np.ndarray): training target
             patch_size (Cartesian): output patch size
             forbbiden_distance_to_boundary (Union[tuple, int]): 
@@ -55,10 +56,10 @@ class GroundTruthSample(AbstractGroundTruthSample):
                 direction is defined separately. 
         """
         super().__init__(patch_size=patch_size)
-
-        assert image.ndim == 3
+        assert len(images) > 0
+        assert images[0].ndim == 3
         assert target.ndim >= 3
-        assert image.shape == target.shape[-3:]
+        assert images[0].shape == target.shape[-3:]
         assert isinstance(patch_size, Cartesian)
 
         
@@ -72,10 +73,11 @@ class GroundTruthSample(AbstractGroundTruthSample):
             assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
-        self.image = image
+        self.images = images
         self.target = target
         self.center_start = forbbiden_distance_to_boundary[:3]
-        self.center_stop = tuple(s - d for s, d in zip(image.shape, forbbiden_distance_to_boundary[-3:]))
+        self.center_stop = tuple(s - d for s, d in zip(
+            images[0].shape, forbbiden_distance_to_boundary[-3:]))
     
     def _expand_to_5d(self, array: np.ndarray):
         if array.ndim == 3:
@@ -102,8 +104,9 @@ class GroundTruthSample(AbstractGroundTruthSample):
         bz = center[0] - self.patch_size[-3] // 2
         by = center[1] - self.patch_size[-2] // 2
         bx = center[2] - self.patch_size[-1] // 2
-        # print('center: ', center)
-        image_patch = self.image[...,
+
+        image = random.choice(self.images).array
+        image_patch = image[...,
             bz : bz + self.patch_size[-3],
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
@@ -121,11 +124,13 @@ class GroundTruthSample(AbstractGroundTruthSample):
     
     @property
     def sampling_weight(self):
-        return int(np.product(tuple(e-b for b, e in zip(self.center_start, self.center_stop))))
+        return int(np.product(tuple(e-b for b, e in zip(
+            self.center_start, self.center_stop))))
     
 
 class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
-    def __init__(self, image: np.ndarray, 
+    def __init__(self, 
+            images: List[Chunk], 
             annotation_points: np.ndarray,
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
@@ -140,41 +145,21 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
         """
 
         assert annotation_points.shape[1] == 3
-        self.annotation_points = annotation_points 
-        target = self._points_to_target(image)
+        self.annotation_points = annotation_points
+        target = np.zeros_like(images[0].array, dtype=np.float32)
+        target = self._points_to_target(target)
         super().__init__(
-            image, target, 
+            images, target, 
             patch_size = patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
-
-    # it turns out that this sampling is biased to patches containing T-bar
-    # the net will always try to find at least one T-bar in the input patch.
-    # the result will have a low precision containing a lot of false positive prediction.
-    # @property
-    # def random_patch(self):
-    #     point_num = self.annotation_points.shape[0]
-    #     idx = random.randint(0, point_num-1)
-    #     point = self.annotation_points[idx, :]
-    #     center_start = tuple(p - d for p, d in zip(point, self.max_sampling_distance))
-    #     center_stop = tuple(p + d for p, d in zip(point, self.max_sampling_distance))
-    #     center_start = tuple(
-    #         max(c1, c2) for c1, c2 in zip(center_start, self.center_start)
-    #     )
-    #     center_stop = tuple(
-    #         min(c1, c2) for c1, c2 in zip(center_stop, self.center_stop)
-    #     )
-    #     for ct, cp in zip(center_start, center_stop):
-    #     return self.random_patch_from_center_range(center_start, center_stop)
-
     @property
     def sampling_weight(self):
-        # use number of annotated points as weight
-        # to sample volume
+        """use number of annotated points as weight to sample volume."""
         return int(self.annotation_points.shape[0])
 
-    def _points_to_target(self, image: np.ndarray,
+    def _points_to_target(self, target: np.ndarray,
             expand_distance: int = 2) -> tuple:
         """transform point annotation to volumes
 
@@ -187,7 +172,7 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
             bin_presyn: binary target of annotated position.
         """
         # assert synapses['resolution'] == [8, 8, 8]
-        target = np.zeros_like(image, dtype=np.float32)
+        # target = np.zeros_like(image, dtype=np.float32)
         # adjust target to 0.05-0.95 for better regularization
         # the effect might be similar with Focal loss!
         target += 0.05
@@ -232,6 +217,7 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
         pre = self.synapses.pre[pre_index, :]
         
         post_indices = self.pre_index2post_indices[pre_index]
+        assert len(post_indices) > 0
 
         bbox = BoundingBox.from_center(
             Cartesian(*pre), 
