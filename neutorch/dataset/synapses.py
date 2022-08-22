@@ -7,7 +7,7 @@ from typing import Union, List
 import numpy as np
 from scipy.stats import describe
 
-from chunkflow.lib.bounding_boxes import Cartesian, BoundingBox
+from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import Volume
 
@@ -159,7 +159,8 @@ class PostSynapsesDataset(SynapsesDatasetBase):
             if synapses.post is None:
                 print(f'skip synapses without post: {syns_path}')
                 continue
-            print(f'loading {syns_path}')
+            print(f'loaded {syns_path}')
+            synapses.remove_synapses_without_post()
 
             # bbox = BoundingBox.from_string(syns_path)
             bbox = synapses.pre_bounding_box

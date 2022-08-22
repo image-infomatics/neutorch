@@ -7,7 +7,7 @@ from yacs.config import CfgNode
 import click
 import numpy as np
 
-from chunkflow.lib.bounding_boxes import Cartesian
+from chunkflow.lib.cartesian_coordinate import Cartesian
 
 import torch
 from torch.utils.tensorboard import SummaryWriter

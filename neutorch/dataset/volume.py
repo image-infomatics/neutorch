@@ -6,7 +6,7 @@ from copy import deepcopy
 import numpy as np
 
 from chunkflow.chunk import Chunk
-from chunkflow.lib.bounding_boxes import BoundingBoxes
+from chunkflow.lib.cartesian_coordinate import BoundingBoxes
 
 import torch
 from torch.utils.data import DataLoader

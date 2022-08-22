@@ -2,7 +2,7 @@ from typing import Union
 from functools import cached_property
 import math
 
-from chunkflow.lib.bounding_boxes import Cartesian
+from chunkflow.lib.cartesian_coordinate import Cartesian
 
 import torch
 

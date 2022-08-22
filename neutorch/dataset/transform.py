@@ -3,7 +3,7 @@ import random
 from functools import lru_cache
 
 
-from chunkflow.lib.bounding_boxes import Cartesian
+from chunkflow.lib.cartesian_coordinate import Cartesian
 # from copy import deepcopy
 
 import numpy as np
