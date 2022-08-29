@@ -11,6 +11,7 @@ Neuron segmentation and synapse detection using PyTorch
 # Features
 - [x] Training using whole terabyte or even petabyte of image volume.
 - [x] Training using multiple version of image datasets as data augmentation.
+- [x] Data augmentation without zero-filling.
 
 # Install
     python setup.py install

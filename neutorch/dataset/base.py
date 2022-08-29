@@ -1,3 +1,4 @@
+from abc import abstractproperty
 from typing import Union
 from functools import cached_property
 import math
@@ -24,6 +25,12 @@ def worker_init_fn(worker_id: int):
     dataset.start = overall_start + worker_id * per_worker
     dataset.end = min(dataset.start + per_worker, overall_end)
 
+def path_to_dataset_name(path: str, dataset_names: list):
+    for dataset_name in dataset_names:
+        if dataset_name in path:
+            return dataset_name
+
+
 
 class DatasetBase(torch.utils.data.IterableDataset):
     def __init__(self, 
@@ -48,8 +55,10 @@ class DatasetBase(torch.utils.data.IterableDataset):
             self.transform.shrink_size[:3] + \
             self.transform.shrink_size[-3:]
 
-        # inherite this class and build the samples
-        self.samples = None
+    @cached_property
+    @abstractproperty
+    def samples(self):
+        pass
 
     @cached_property
     def sample_num(self):

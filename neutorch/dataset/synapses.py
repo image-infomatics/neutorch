@@ -1,11 +1,8 @@
-import os
 from time import time, sleep
-from collections import OrderedDict
 from functools import cached_property
 from typing import Union, List
 
 import numpy as np
-from scipy.stats import describe
 
 from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
 from chunkflow.lib.synapses import Synapses
@@ -13,16 +10,9 @@ from chunkflow.volume import Volume
 
 import torch
 
-from neutorch.dataset.ground_truth_sample import PostSynapseGroundTruth
-from neutorch.dataset.transform import *
-from .base import DatasetBase
-from .ground_truth_sample import GroundTruthSampleWithPointAnnotation
-
-
-def syns_path_to_dataset_name(syns_path: str, dataset_names: list):
-    for dataset_name in dataset_names:
-        if dataset_name in syns_path:
-            return dataset_name
+from .transform import *
+from .base import DatasetBase, path_to_dataset_name
+from .ground_truth_sample import GroundTruthSampleWithPointAnnotation, PostSynapseGroundTruth
 
 
 class SynapsesDatasetBase(DatasetBase):
@@ -40,7 +30,7 @@ class SynapsesDatasetBase(DatasetBase):
                 vol = Volume.from_cloudvolume_path(
                     'file://' + dir_path,
                     bounded = True,
-                    fill_missing = True,
+                    fill_missing = False,
                     parallel=True,
                 )
                 vol_list.append(vol)
@@ -50,7 +40,7 @@ class SynapsesDatasetBase(DatasetBase):
 
     def syns_path_to_images(self, syns_path: str, bbox: BoundingBox):
         images = []
-        dataset_name = syns_path_to_dataset_name(
+        dataset_name = path_to_dataset_name(
             syns_path, 
             self.sample_name_to_image_versions.keys()
         )

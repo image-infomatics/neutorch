@@ -82,6 +82,7 @@ def main(config_file: str):
     else:
         device = torch.device("cpu")
 
+    # since we trained this model using DataParallel, we have to wrap it with DataParallel as well in the inference stage.
     # note that we have to wrap the nn.DataParallel(model) before 
     # loading the model since the dictionary is changed after the wrapping 
     model = load_chkpt(model, cfg.train.output_dir, cfg.train.iter_start)
