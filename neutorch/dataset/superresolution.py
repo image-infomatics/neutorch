@@ -75,17 +75,17 @@ class Dataset(torch.utils.data.Dataset):
             volumes.append(ground_truth_sample)
         
         # shuffle the volume list and then split it to training and test
-        # random.shuffle(volumes)
+        random.shuffle(volumes)
+        self.training_sample_num = math.floor(len(volumes) * training_split_ratio)
+        self.validation_sample_num = math.floor(len(volumes) - self.training_sample_num)
+        self.training_samples = volumes[:self.training_sample_num]
+        self.validation_samples = volumes[-self.validation_sample_num:]
 
         # use the number of candidate patches as volume sampling weight
         sample_weights = []
         for volume in volumes:
             sample_weights.append(volume.volume_sampling_weight)
 
-        self.training_sample_num = math.floor(len(volumes) * training_split_ratio)
-        self.validation_sample_num = len(volumes) - self.training_sample_num
-        self.training_samples = volumes[:self.training_sample_num]
-        self.validation_samples = volumes[-self.validation_sample_num:]
         self.training_sample_weights = sample_weights[:self.training_sample_num]
         self.validation_sample_weights = sample_weights[-self.validation_sample_num]
         
