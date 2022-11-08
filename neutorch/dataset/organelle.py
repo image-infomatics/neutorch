@@ -12,9 +12,9 @@ from neutorch.dataset.ground_truth_sample import GroundTruthSample
 from neutorch.dataset.transform import *
 
 
-class SemanticDataset(DatasetBase):
+class OrganelleDataset(DatasetBase):
     def __init__(self, path_list: list, 
-            sample_name_to_image_versions: dict,
+            sample_name_to_image_versions: dict = None,
             patch_size: Cartesian = Cartesian(128, 128, 128)):
         super().__init__(patch_size=patch_size)
 
