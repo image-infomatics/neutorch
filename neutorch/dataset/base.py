@@ -30,6 +30,12 @@ def path_to_dataset_name(path: str, dataset_names: list):
         if dataset_name in path:
             return dataset_name
 
+def to_tensor(arr):
+    if isinstance(arr, np.ndarray):
+        arr = torch.tensor(arr)
+    if torch.cuda.is_available():
+        arr = arr.cuda()
+    return arr
 
 
 class DatasetBase(torch.utils.data.IterableDataset):
@@ -76,9 +82,10 @@ class DatasetBase(torch.utils.data.IterableDataset):
             sample_weights.append(sample.sampling_weight)
 
         self.sample_weights = sample_weights
-    
-    def __next__(self):
-        # only sample one subject, so replacement option could be ignored
+
+    @property
+    def random_patch(self):
+         # only sample one subject, so replacement option could be ignored
         sample_index = random.choices(
             range(0, self.sample_num),
             weights=self.sample_weights,
@@ -93,7 +100,11 @@ class DatasetBase(torch.utils.data.IterableDataset):
             f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
         
         patch.to_tensor()
+
         return patch.image, patch.target
+   
+    def __next__(self):
+        return self.random_patch
 
     def __iter__(self):
         """generate random patches from samples

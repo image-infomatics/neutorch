@@ -83,17 +83,6 @@ class Patch(object):
     def center(self):
         return tuple(ps // 2 for ps in self.shape)
 
-    def to_tensor(self):
-        def _to_tensor(arr):
-            if isinstance(arr, np.ndarray):
-                arr = torch.tensor(arr)
-            if torch.cuda.is_available():
-                arr = arr.cuda()
-            return arr
-
-        self.image = _to_tensor(self.image)
-        self.target = _to_tensor(self.target)
-
     def normalize(self):
         def _normalize(arr):
             if arr.dtype == np.uint8:

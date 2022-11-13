@@ -30,8 +30,8 @@ class TrainerBase(ABC):
                 cfg = CfgNode.load_cfg(file)
         cfg.freeze()
         
-        if cfg.system.seed is not None:
-            random.seed(cfg.system.seed)
+        if cfg.seed is not None:
+            random.seed(cfg.seed)
         
         self.cfg = cfg
         self.batch_size = batch_size
