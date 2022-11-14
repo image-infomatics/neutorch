@@ -29,9 +29,7 @@ class OrganelleDataset(DatasetBase):
     @cached_property
     def samples(self):
         samples = []
-        for idx in range(0, len(self.path_list), 2):
-            img_path = self.path_list[idx]
-            sem_path = self.path_list[idx+1]
+        for img_path, sem_path in zip(self.path_list[0::2], self.path_list[1::2]):
             print(f'image path: {img_path}')
             print(f'sem path: {sem_path}')
 
