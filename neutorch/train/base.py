@@ -46,8 +46,10 @@ class TrainerBase(ABC):
         path_list = sorted(path_list)
         print(f'path_list \n: {path_list}')
         assert len(path_list) > 1
-        assert len(path_list) % 2 == 0, \
-            "the image and synapses should be paired."
+        
+        # sometimes, the path list only contains the label without corresponding image!
+        # assert len(path_list) % 2 == 0, \
+            # "the image and synapses should be paired."
         return path_list
 
     def _split_path_list(self):

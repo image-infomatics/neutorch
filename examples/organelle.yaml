@@ -4,7 +4,7 @@ system:
   seed: 1
 
 dataset:
-  glob_path: "~/dropbox/40_gt/81_open_organelle/jrc_*/crop*_*_*.h5"
+  glob_path: "~/dropbox/40_gt/81_open_organelle/jrc_*/crop*_label_*.h5"
   validation_names: [
     "jrc_hela-2/crop54_label_2540-2740_978-1178_10333-10533.h5",
     "jrc_hela-3/crop50_label_6608-6864_82-338_9273-9529.h5",

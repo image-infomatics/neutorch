@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import random
-from typing import List
+from typing import List, Union
 
 import numpy as np
 
@@ -38,7 +38,7 @@ class AbstractGroundTruthSample(ABC):
 
 class GroundTruthSample(AbstractGroundTruthSample):
     def __init__(self, 
-            images: List[Chunk], label: np.ndarray,
+            images: List[Chunk], label: Union[np.ndarray, Chunk],
             patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
@@ -59,6 +59,9 @@ class GroundTruthSample(AbstractGroundTruthSample):
         assert len(images) > 0
         assert images[0].ndim == 3
         assert label.ndim >= 3
+
+        if isinstance(label, Chunk):
+            label = label.array
 
         if images[0].shape != label.shape[-3:]:
             print(images[0].shape)

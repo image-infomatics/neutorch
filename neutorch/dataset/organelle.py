@@ -29,19 +29,20 @@ class OrganelleDataset(DatasetBase):
     @cached_property
     def samples(self):
         samples = []
-        for img_path, sem_path in zip(self.path_list[0::2], self.path_list[1::2]):
-            print(f'image path: {img_path}')
-            print(f'sem path: {sem_path}')
+        # for img_path, sem_path in zip(self.path_list[0::2], self.path_list[1::2]):
+        for label_path in self.path_list:
+            image_path = label_path.replace('label', 'image')
+            print(f'image path: {image_path}')
+            print(f'sem path: {label_path}')
 
-            assert 'image' in img_path, f'image path: {img_path}'
-            assert 'label' in sem_path, f'sem path: {sem_path}'
+            assert 'image' in image_path, f'image path: {image_path}'
+            assert 'label' in label_path, f'sem path: {label_path}'
             
-            assert os.path.exists(sem_path)
-            sem = Chunk.from_h5(sem_path)
-            img = Chunk.from_h5(img_path)
-            images = [img,]
+            assert os.path.exists(label_path)
+            label = Chunk.from_h5(label_path)
+            image = Chunk.from_h5(image_path)
+            images = [image,]
 
-            label = sem.array
             sample = GroundTruthSample(
                 images,
                 label = label, 
@@ -53,7 +54,8 @@ class OrganelleDataset(DatasetBase):
      
     @cached_property
     def target(self):
-        shape = (self.target_channel_num, *self.patch_size)
+        # the batch size is assumed to be 1
+        shape = (1, self.target_channel_num, *self.patch_size)
         return np.zeros(shape=shape, dtype=np.float32)
 
     def __next__(self):
@@ -63,12 +65,12 @@ class OrganelleDataset(DatasetBase):
         # transform label to multiple channel target
         self.target.fill(0.)
         for chann in range(self.target_channel_num):
-            self.target[chann, ...] = (label==chann)
+            self.target[0, chann, ...] = (label==chann)
 
         # transform to PyTorch Tensor
         # transfer to device, e.g. GPU, automatically.
         image = to_tensor(image)
-        target = to_tensor(target)
+        target = to_tensor(self.target)
         return image, target
 
     def _prepare_transform(self):

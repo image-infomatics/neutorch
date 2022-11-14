@@ -99,12 +99,15 @@ class DatasetBase(torch.utils.data.IterableDataset):
         assert patch.shape[-3:] == self.patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
         
-        patch.to_tensor()
+        # patch.to_tensor()
 
         return patch.image, patch.target
    
     def __next__(self):
-        return self.random_patch
+        image, target = self.random_patch
+        image = to_tensor(image)
+        target = to_tensor(target)
+        return image, target
 
     def __iter__(self):
         """generate random patches from samples
