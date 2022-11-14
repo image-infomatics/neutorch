@@ -1,13 +1,12 @@
 import os
 from functools import cached_property
 
-from tqdm import tqdm
+# from tqdm import tqdm
 
 from chunkflow.chunk import Chunk
 from chunkflow.lib.cartesian_coordinate import Cartesian
-from chunkflow.volume import Volume
 
-from neutorch.dataset.base import DatasetBase, path_to_dataset_name, to_tensor
+from neutorch.dataset.base import DatasetBase, to_tensor
 from neutorch.dataset.ground_truth_sample import GroundTruthSample
 from neutorch.dataset.transform import *
 
@@ -19,23 +18,10 @@ class OrganelleDataset(DatasetBase):
             target_channel_num: int = 37):
         super().__init__(patch_size=patch_size)
 
-        self.path_list = path_list
+        self.path_list = sorted(path_list)
+        # print(f'path list: {self.path_list}')
         self.sample_name_to_image_versions = sample_name_to_image_versions
         self.target_channel_num = target_channel_num
-
-        self.vols = {}
-        for dataset_name, dir_list in sample_name_to_image_versions.items():
-            vol_list = []
-            for dir_path in dir_list:
-                vol = Volume.from_cloudvolume_path(
-                    'file://' + dir_path,
-                    bounded = True,
-                    fill_missing = False,
-                    parallel = True,
-                    green_threads = False,
-                )
-                vol_list.append(vol)
-            self.vols[dataset_name] = vol_list
 
         self.compute_sample_weights()
         self.setup_iteration_range()
@@ -43,24 +29,24 @@ class OrganelleDataset(DatasetBase):
     @cached_property
     def samples(self):
         samples = []
-        for sem_path in tqdm(self.path_list):
+        for idx in range(0, len(self.path_list), 2):
+            img_path = self.path_list[idx]
+            sem_path = self.path_list[idx+1]
+            print(f'image path: {img_path}')
+            print(f'sem path: {sem_path}')
+
+            assert 'image' in img_path, f'image path: {img_path}'
+            assert 'label' in sem_path, f'sem path: {sem_path}'
+            
             assert os.path.exists(sem_path)
             sem = Chunk.from_h5(sem_path)
+            img = Chunk.from_h5(img_path)
+            images = [img,]
 
-            images = []
-            dataset_name = path_to_dataset_name(
-                sem_path,
-                self.sample_name_to_image_versions.keys()
-            )
-            for vol in self.vols[dataset_name]:
-                image = vol.cutout(sem.bbox)
-                images.append(image)
-
-            target = (sem.array>0)
-            target = target.astype(np.float32)
+            label = sem.array
             sample = GroundTruthSample(
                 images,
-                target=target, 
+                label = label, 
                 patch_size=self.patch_size_before_transform
             )
             samples.append(sample)
