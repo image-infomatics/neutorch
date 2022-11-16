@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 
+from skimage.color import label2rgb
 
 import torch
 from torch import nn
@@ -39,6 +40,7 @@ def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
 
 def volume_to_image(tensor: torch.Tensor, 
         nrow: int=8, zstride: int = 1):
+
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
     else:
@@ -51,8 +53,19 @@ def volume_to_image(tensor: torch.Tensor,
         tensor -= tensor.min()
         tensor /= tensor.max()
     
-    # this should work for ndim >= 3
     tensor = tensor.cpu()
+    if tensor.ndim > 3 and tensor.shape[-4] > 1:
+        label = torch.argmax(tensor, dim=-4, keepdim=False)
+        label = label.numpy()
+        rgb = label2rgb(label, channel_axis=0)
+        # rgb = np.transpose(rgb)
+        tensor = torch.tensor(rgb)
+        channel_num = 3
+    else: 
+        channel_num = 1
+    
+
+    # this should work for ndim >= 3
     # tensor = (tensor * 255.).type(torch.uint8)
     depth = tensor.shape[-3]
     height = tensor.shape[-2]
@@ -62,12 +75,16 @@ def volume_to_image(tensor: torch.Tensor,
     # img = make_grid(imgs, nrow=depth, padding=0)
     # number of images in a column
     ncol = math.ceil( depth / nrow / zstride)
-    img = torch.zeros((height*ncol, width*nrow), dtype=torch.float64)
+    if channel_num > 1:
+        img = torch.zeros((channel_num, height*ncol, width*nrow), dtype=torch.uint8)
+    else:
+        img = torch.zeros((height*ncol, width*nrow), dtype=torch.uint8)
+
     for z in range(0, depth, zstride):
         row = math.floor( z / nrow / zstride )
         col = z % nrow
         # print(col)
-        img[
+        img[...,
             row*height : (row+1)*height, 
             col*width  : (col+1)*width ] = torch.squeeze(
                 tensor[..., z, :, :]
@@ -102,8 +119,11 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         img[2, :,:][mask>0.5] = 0.
         # img = img.double()
         dataformats = 'CHW'
+    elif img.ndim == 3:
+        img.shape[0] == 3
+        dataformats = 'CHW'
     else:
-        # assert img.dim == 2
+        assert img.ndim == 2
         dataformats = 'HW'
     # img = img.numpy()
     writer.add_image(tag, img, iter_idx, dataformats=dataformats)
