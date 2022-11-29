@@ -94,7 +94,6 @@ class PreSynapsesDataset(SynapsesDatasetBase):
             # print(f'min offset: {np.min(pre, axis=0)}')
             # print(f'max offset: {np.max(pre, axis=0)}')
             pre -= np.asarray(bbox.start, dtype=pre.dtype)
-            # breakpoint()
 
             sample = GroundTruthSampleWithPointAnnotation(
                 images,

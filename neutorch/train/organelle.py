@@ -1,15 +1,22 @@
+import os
 from functools import cached_property
+from time import time
 
 import click
 from yacs.config import CfgNode
 
+import torch
+from torch.nn import CrossEntropyLoss
+from torch.utils.tensorboard import SummaryWriter
+
 from .base import TrainerBase
 from neutorch.dataset.organelle import OrganelleDataset
+from neutorch.model.io import save_chkpt, log_tensor
 
 
 class OrganelleTrainer(TrainerBase):
-    def __init__(self, cfg: CfgNode, batch_size: int = 1) -> None:
-        super().__init__(cfg, batch_size)
+    def __init__(self, cfg: CfgNode) -> None:
+        super().__init__(cfg)
 
     @cached_property
     def training_dataset(self):
@@ -17,13 +24,77 @@ class OrganelleTrainer(TrainerBase):
             self.training_path_list,
             patch_size=self.patch_size,
         )
-    
+       
     @cached_property
     def validation_dataset(self):
         return OrganelleDataset(
             self.validation_path_list,
             patch_size=self.patch_size,
         )
+    
+    @cached_property
+    def loss_module(self):
+        return CrossEntropyLoss(label_smoothing=0.0)
+
+    def post_processing(self, predict: torch.Tensor):
+        predict = torch.argmax(predict, dim=1, keepdim=False)
+        # predict = predict.to(torch.int64)
+        return predict
+
+    def __call__(self) -> None:
+        writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
+        accumulated_loss = 0.
+        iter_idx = self.cfg.train.iter_start
+        for image, target in self.training_data_loader:
+            iter_idx += 1
+            if iter_idx> self.cfg.train.iter_stop:
+                print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
+                return
+
+            ping = time()
+            # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
+            predict = self.model(image)
+            # predict = self.post_processing(predict)
+            loss = self.loss_module(predict, target)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            accumulated_loss += loss.tolist()
+            print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
+
+            if iter_idx % self.cfg.train.training_interval == 0 and iter_idx > 0:
+                per_voxel_loss = accumulated_loss / \
+                    self.cfg.train.training_interval / \
+                    self.voxel_num
+
+                print(f'training loss {round(per_voxel_loss, 3)}')
+                accumulated_loss = 0.
+                predict = self.post_processing(predict)
+                writer.add_scalar('loss/train', per_voxel_loss, iter_idx)
+                log_tensor(writer, 'train/image', image, 'image', iter_idx)
+                log_tensor(writer, 'train/prediction', predict, 'segmentation', iter_idx)
+                log_tensor(writer, 'train/target', target, 'segmentation', iter_idx)
+
+            if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
+                fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
+                print(f'save model to {fname}')
+                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
+
+                print('evaluate prediction: ')
+                validation_image, validation_target = next(self.validation_data_iter)
+
+                with torch.no_grad():
+                    validation_predict = self.model(validation_image)
+                    validation_loss = self.loss_module(validation_predict, validation_target)
+                    validation_predict = self.post_processing(validation_predict)
+                    per_voxel_loss = validation_loss.tolist() / self.voxel_num
+                    print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
+                    writer.add_scalar('loss/validation', per_voxel_loss, iter_idx)
+                    log_tensor(writer, 'validation/image', validation_image, 'image', iter_idx)
+                    log_tensor(writer, 'validation/prediction', validation_predict, 'segmentation', iter_idx)
+                    log_tensor(writer, 'validation/target', validation_target, 'segmentation', iter_idx)
+
+        writer.close()
 
 
 @click.command()

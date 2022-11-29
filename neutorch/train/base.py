@@ -23,8 +23,7 @@ from neutorch.dataset.base import worker_init_fn
 
 
 class TrainerBase(ABC):
-    def __init__(self, cfg: CfgNode, 
-            batch_size: int = 1) -> None:
+    def __init__(self, cfg: CfgNode) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
             with open(cfg) as file:
                 cfg = CfgNode.load_cfg(file)
@@ -34,10 +33,13 @@ class TrainerBase(ABC):
             random.seed(cfg.system.seed)
         
         self.cfg = cfg
-        self.batch_size = batch_size
         self.patch_size=Cartesian.from_collection(cfg.train.patch_size)
 
         self._split_path_list()
+
+    @cached_property
+    def batch_size(self):
+        return self.cfg.system.gpus * self.cfg.train.batch_size
 
     @cached_property
     def path_list(self):
@@ -85,8 +87,6 @@ class TrainerBase(ABC):
                 device_ids=list(range(gpu_num)), 
                 dim=0,
             )
-            # we normally use one batch for each GPU
-            self.batch_size *= gpu_num
         else:
             device = torch.device("cpu")
 
@@ -128,7 +128,7 @@ class TrainerBase(ABC):
             self.training_dataset,
             #num_workers=self.cfg.system.cpus,
             num_workers=1,
-            prefetch_factor=1,
+            prefetch_factor=2,
             drop_last=False,
             multiprocessing_context='spawn',
             collate_fn=collate_batch,
@@ -159,6 +159,9 @@ class TrainerBase(ABC):
     def voxel_num(self):
         return np.product(self.patch_size) * self.batch_size
 
+    def post_processing(self, prediction: torch.Tensor):
+        return torch.sigmoid(prediction)
+
     def __call__(self) -> None:
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
         accumulated_loss = 0.
@@ -171,8 +174,9 @@ class TrainerBase(ABC):
 
             ping = time()
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
-            logits = self.model(image)
-            loss = self.loss_module(logits, target)
+            predict = self.model(image)
+            # predict = self.post_processing(predict)
+            loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -186,7 +190,7 @@ class TrainerBase(ABC):
 
                 print(f'training loss {round(per_voxel_loss, 3)}')
                 accumulated_loss = 0.
-                predict = torch.sigmoid(logits)
+                predict = self.post_processing(predict)
                 writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'train/image', image, iter_idx)
                 log_tensor(writer, 'train/prediction', predict, iter_idx)
@@ -201,9 +205,9 @@ class TrainerBase(ABC):
                 validation_image, validation_target = next(self.validation_data_iter)
 
                 with torch.no_grad():
-                    validation_logits = self.model(validation_image)
-                    validation_predict = torch.sigmoid(validation_logits)
-                    validation_loss = self.loss_module(validation_logits, validation_target)
+                    validation_predict = self.model(validation_image)
+                    validation_loss = self.loss_module(validation_predict, validation_target)
+                    validation_predict = self.post_processing(validation_predict)
                     per_voxel_loss = validation_loss.tolist() / self.voxel_num
                     print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                     writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)

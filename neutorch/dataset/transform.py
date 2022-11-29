@@ -210,44 +210,29 @@ class NormalizeTo01(IntensityTransform):
         if np.issubdtype(patch.image.dtype, np.uint8):
             patch.image = patch.image.astype(np.float32) / 255.
 
-class AdjustBrightness(IntensityTransform):
-    def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            min_factor: float = 0.05,
-            max_factor: float = 0.3):
-        super().__init__(probability=probability)
-        max_factor = np.clip(max_factor, 0, 2)
-        self.min_factor = min_factor
-        self.max_factor = max_factor
-    
-    def transform(self, patch: Patch):
-        patch.image += random.uniform(-0.5, 0.5) * random.uniform(
-            self.min_factor, self.max_factor)
-        np.clip(patch.image, 0., 1., out=patch.image)
+class IntensityPerturbation(IntensityTransform):
+    def __init__(self, 
+            contrast_factor: float = 0.3, 
+            brightness_factor: float = 0.3,
+            probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability)
 
-class AdjustContrast(IntensityTransform):
-    def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor_range: tuple = (0.05, 2.)):
-        super().__init__(probability=probability)
-        # factor_range = np.clip(factor_range, 0., 2.)
-        self.factor_range = factor_range
+        self.contrast_factor = np.clip(contrast_factor, 0., 2.)
+        self.brightness_factor = np.clip(brightness_factor, 0, 2)
 
     def transform(self, patch: Patch):
-        #factor = 1 + random.uniform(-0.5, 0.5) * random.uniform(
-        #    self.factor_range[0], self.factor_range[1])
-        factor = random.uniform(self.factor_range[0], self.factor_range[1])
-        patch.image *= factor
-        np.clip(patch.image, 0., 1., out=patch.image)
+        image = patch.image
+        
+        contrast = 1. + random.uniform(-0.5, 0.5) * self.contrast_factor
+        image *= contrast
 
+        brightness = random.uniform(- 0.5, 0.5) * self.brightness_factor
+        image += brightness
 
-class Gamma(IntensityTransform):
-    def __init__(self, probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability=probability)
-
-    def transform(self, patch: Patch):
-        # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
-        patch.image **= 2.** gamma
-
+        image **=2.0**gamma
+        
+        image = np.clip(image, 0., 1., out = image)
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 

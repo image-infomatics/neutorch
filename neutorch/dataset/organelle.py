@@ -41,6 +41,17 @@ class OrganelleDataset(DatasetBase):
             assert os.path.exists(label_path)
             label = Chunk.from_h5(label_path)
             image = Chunk.from_h5(image_path)
+            # label start from 1
+            # it should be converted to start from 0
+            if label.min() <= 0:
+                breakpoint()
+            label -= 1
+            if label.max() >= 37:
+                breakpoint()
+            assert label.max() < 37, f'maximum number of label: {label.max()}'
+            # CrossEntropyLoss only works with int64 data type!
+            # uint8 will not work
+            label = label.astype(np.int64)
             images = [image,]
 
             sample = GroundTruthSample(
@@ -52,33 +63,26 @@ class OrganelleDataset(DatasetBase):
         
         return samples
      
-    @cached_property
-    def target(self):
-        # the batch size is assumed to be 1
-        shape = (1, self.target_channel_num, *self.patch_size)
-        return np.zeros(shape=shape, dtype=np.float32)
-
     def __next__(self):
         # get numpy arrays of image and label
         image, label = self.random_patch
+        if label.ndim == 5:
+            # the CrossEntropyLoss do not require channel axis
+            label = np.squeeze(label, axis=1)
         
-        # transform label to multiple channel target
-        self.target.fill(0.)
-        for chann in range(self.target_channel_num):
-            self.target[0, chann, ...] = (label==chann)
-
+        if np.mean(image)> 0.9:
+            breakpoint()
         # transform to PyTorch Tensor
         # transfer to device, e.g. GPU, automatically.
         image = to_tensor(image)
-        target = to_tensor(self.target)
+        target = to_tensor(label)
+
         return image, target
 
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

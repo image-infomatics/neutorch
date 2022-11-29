@@ -266,3 +266,11 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
             ] = 0.95
         assert np.any(label > 0.5)
         return Patch(image, label)
+
+
+# class SemanticSample(GroundTruthSample):
+#     def __init__(self, images: List[Chunk], label: Union[np.ndarray, Chunk], 
+#             patch_size: Cartesian = Cartesian(256, 256, 256), 
+#             forbbiden_distance_to_boundary: tuple = None) -> None:
+#         super().__init__(images, label, patch_size, forbbiden_distance_to_boundary)
+

@@ -68,9 +68,7 @@ class SemanticDataset(DatasetBase):
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),
