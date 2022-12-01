@@ -108,9 +108,7 @@ class PreSynapsesDataset(SynapsesDatasetBase):
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),
@@ -171,9 +169,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
     def transform(self):
         return Compose([
             NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

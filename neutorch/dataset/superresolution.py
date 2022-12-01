@@ -127,9 +127,7 @@ class Dataset(torch.utils.data.Dataset):
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 from typing import List, Union
-
+from functools import cached_property
 import numpy as np
 
 from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
@@ -268,9 +268,23 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
         return Patch(image, label)
 
 
-# class SemanticSample(GroundTruthSample):
-#     def __init__(self, images: List[Chunk], label: Union[np.ndarray, Chunk], 
-#             patch_size: Cartesian = Cartesian(256, 256, 256), 
-#             forbbiden_distance_to_boundary: tuple = None) -> None:
-#         super().__init__(images, label, patch_size, forbbiden_distance_to_boundary)
+class SemanticSample(GroundTruthSample):
+    def __init__(self, 
+            images: List[Chunk], 
+            label: Union[np.ndarray, Chunk], 
+            num_classes: int,
+            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            forbbiden_distance_to_boundary: tuple = None) -> None:
+        super().__init__(images, label, patch_size, forbbiden_distance_to_boundary)
+        # number of classes
+        self.num_classes = num_classes
+
+    @cached_property
+    def voxel_num(self):
+        return len(self.label)
+
+    @cached_property
+    def class_counts(self):
+        return np.bincount(self.label.flatten(), minlength=self.num_classes)
+
 

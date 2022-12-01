@@ -17,12 +17,15 @@ from neutorch.model.io import save_chkpt, log_tensor
 class OrganelleTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
         super().__init__(cfg)
+    
+        self.n_classes = self.cfg.model.out_channels
 
     @cached_property
     def training_dataset(self):
         return OrganelleDataset(
             self.training_path_list,
             patch_size=self.patch_size,
+            target_channel_num=self.n_classes,
         )
        
     @cached_property
@@ -30,11 +33,18 @@ class OrganelleTrainer(TrainerBase):
         return OrganelleDataset(
             self.validation_path_list,
             patch_size=self.patch_size,
+            target_channel_num=self.n_classes,
         )
     
     @cached_property
     def loss_module(self):
-        return CrossEntropyLoss(label_smoothing=0.0)
+        class_counts = self.training_dataset.class_counts
+        # the equation is from scikit-learn
+        # https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
+        class_weights = self.training_dataset.voxel_num / (self.n_classes * class_counts)
+        print(f'class weights: {class_weights}')
+        breakpoint()
+        return CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
 
     def post_processing(self, predict: torch.Tensor):
         predict = torch.argmax(predict, dim=1, keepdim=False)

@@ -7,7 +7,7 @@ from chunkflow.chunk import Chunk
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
 from neutorch.dataset.base import DatasetBase, to_tensor
-from neutorch.dataset.ground_truth_sample import GroundTruthSample
+from neutorch.dataset.ground_truth_sample import SemanticSample
 from neutorch.dataset.transform import *
 
 
@@ -45,23 +45,41 @@ class OrganelleDataset(DatasetBase):
             # it should be converted to start from 0
             if label.min() <= 0:
                 breakpoint()
-            label -= 1
-            if label.max() >= 37:
+            if np.any(label == 31):
                 breakpoint()
-            assert label.max() < 37, f'maximum number of label: {label.max()}'
+            if np.any(label == 34):
+                breakpoint()
+            label -= 1
+            if label.max() >= self.target_channel_num:
+                breakpoint()
+            assert label.max() < self.target_channel_num, f'maximum number of label: {label.max()}'
             # CrossEntropyLoss only works with int64 data type!
             # uint8 will not work
             label = label.astype(np.int64)
             images = [image,]
 
-            sample = GroundTruthSample(
+            sample = SemanticSample(
                 images,
-                label = label, 
+                label, 
+                self.target_channel_num,
                 patch_size=self.patch_size_before_transform
             )
             samples.append(sample)
         
         return samples
+
+    @cached_property
+    def voxel_num(self):
+        voxel_nums = [sample.voxel_num for sample in self.samples]
+        return sum(voxel_nums)
+
+    @cached_property
+    def class_counts(self):
+        counts = np.zeros((self.target_channel_num,), dtype=np.int)
+        for sample in self.samples:
+            counts += sample.class_counts
+
+        return counts
      
     def __next__(self):
         # get numpy arrays of image and label
