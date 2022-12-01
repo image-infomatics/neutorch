@@ -46,10 +46,10 @@ class AbstractTransform(ABC):
 
     @abstractmethod
     def transform(self, patch: Patch):
-        """perform the real transform of image and target
+        """perform the real transform of image and label
 
         Args:
-            patch (Patch): image and target
+            patch (Patch): image and label
         """
         pass
 
@@ -61,10 +61,10 @@ class SpatialTransform(AbstractTransform):
 
     @abstractmethod
     def transform(self, patch: Patch):
-        """transform the image and target together
+        """transform the image and label together
 
         Args:
-            patch (tuple): image and target pair
+            patch (tuple): image and label pair
         """
         pass
     
@@ -126,7 +126,7 @@ class Compose(object):
         # could be negative, and pytorch could not tranform
         # the array to Tensor. Copy can fix it.
         patch.image = patch.image.copy()
-        patch.target = patch.target.copy()
+        patch.label = patch.label.copy()
 
 
 class OneOf(AbstractTransform):
@@ -159,24 +159,25 @@ class DropSection(SpatialTransform):
         b0, c0, z0, y0, x0 = patch.shape
         z = random.randint(1, z0-1)
         image = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.image.dtype)
-        target = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.target.dtype)
+        label = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.label.dtype)
         image[..., :z, :, :] = patch.image[..., :z, :, :]
-        target[..., :z, :, :] = patch.target[..., :z, :, :]
+        label[..., :z, :, :] = patch.label[..., :z, :, :]
         image[..., z:, :, :] = patch.image[..., z+1:, :, :]
-        target[..., z:, :, :] = patch.target[..., z+1:, :, :]
+        label[..., z:, :, :] = patch.label[..., z+1:, :, :]
         patch.image = image
-        patch.target = target
+        patch.label = label
 
     @property
     def shrink_size(self):
         return (0, 0, 0, 1, 0, 0)
 
 
-class BlackBox(IntensityTransform):
+class MaskBox(IntensityTransform):
     def __init__(self,
             probability: float = DEFAULT_PROBABILITY,
-            max_box_size: tuple = (8,8,8),
-            max_box_num: int = 3):
+            max_box_size: Cartesian = Cartesian(16,16,16),
+            max_density: float = 0.1,
+            max_box_num: int = None):
         """make some black cubes in image patch
 
         Args:
@@ -186,12 +187,23 @@ class BlackBox(IntensityTransform):
         """
         super().__init__(probability=probability)
         assert len(max_box_size) == 3
+
+        if not isinstance(max_box_size, Cartesian):
+            max_box_size = Cartesian.from_collection(max_box_size)
+
         self.max_box_size = max_box_size
         self.max_box_num = max_box_num
+        self.max_density = max_density
 
+    def box_num(self, patch_size: tuple):
+        if self.max_box_num is None:
+            shape = Cartesian.from_collection(patch_size[-3:])
+            self.max_box_num = int(np.prod(shape * self.max_density))
+        
+        return random.randint(1, self.max_box_num)
+        
     def transform(self, patch: Patch):
-        box_num = random.randint(1, self.max_box_num)
-        for _ in range(box_num):
+        for _ in range(self.box_num(patch.shape)):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
             # randint is inclusive
             start = tuple(random.randint(1, t-b-1) for t, b in zip(patch.shape[-3:], box_size))
@@ -200,7 +212,7 @@ class BlackBox(IntensityTransform):
                 start[0] : start[0] + box_size[0],
                 start[1] : start[1] + box_size[1],
                 start[2] : start[2] + box_size[2],
-            ] = 0
+            ] = np.random.rand(*box_size)
 
 class NormalizeTo01(IntensityTransform):
     def __init__(self, probability: float = 1.):
@@ -276,11 +288,11 @@ class Flip(SpatialTransform):
     def transform(self, patch: Patch):
         axis_num = random.randint(1, 3)
         axis = random.sample(range(3), axis_num)
-        # the image and target is 5d
+        # the image and label is 5d
         # the first two axises are batch and channel
         axis5d = tuple(2+x for x in axis)
         patch.image = np.flip(patch.image, axis=axis5d)
-        patch.target = np.flip(patch.target, axis=axis5d)
+        patch.label = np.flip(patch.label, axis=axis5d)
 
         shrink = list(patch.delayed_shrink_size)
         for ax in axis:
@@ -298,7 +310,7 @@ class Transpose(SpatialTransform):
         random.shuffle(axis)
         axis5d = (0, 1, *axis,)
         patch.image = np.transpose(patch.image, axis5d)
-        patch.target = np.transpose(patch.target, axis5d)
+        patch.label = np.transpose(patch.label, axis5d)
 
         shrink = list(patch.delayed_shrink_size)
         for ax0, ax1 in enumerate(axis):
@@ -341,10 +353,10 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.target[..., zloc:, 
+            patch.label[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
                 self.max_displacement : sx-self.max_displacement,
-                ] = patch.target[..., zloc:, 
+                ] = patch.label[..., zloc:, 
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
@@ -362,11 +374,11 @@ class MissAlignment(SpatialTransform):
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.target[..., 
+            patch.label[..., 
                 self.max_displacement : sz-self.max_displacement,
                 yloc:,
                 self.max_displacement : sx-self.max_displacement,
-                ] = patch.target[..., 
+                ] = patch.label[..., 
                     self.max_displacement+displacement : sz+displacement-self.max_displacement,
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
@@ -382,11 +394,11 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:
                     ]
-            patch.target[..., 
+            patch.label[..., 
                 self.max_displacement : sz-self.max_displacement,
                 self.max_displacement : sy-self.max_displacement,
                 xloc:,
-                ] = patch.target[..., 
+                ] = patch.label[..., 
                     self.max_displacement+displacement : sz+displacement-self.max_displacement,
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:, 
@@ -470,8 +482,8 @@ class Perspective2D(SpatialTransform):
                     patch.image[batch,channel,z,...] = self._transform2d(
                         patch.image[batch, channel, z, ...], cv2.INTER_LINEAR, M, sy, sx
                     )
-                    patch.target[batch,channel,z,...] = self._transform2d(
-                        patch.target[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
+                    patch.label[batch,channel,z,...] = self._transform2d(
+                        patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
                     )
                 
         patch.shrink(self.shrink_size)
@@ -485,7 +497,7 @@ class Perspective2D(SpatialTransform):
 #     def __init__(self, probability: float=DEFAULT_PROBABILITY,
 #             max_scaling: float=1.3):
 #         super().__init__(probability=probability)
-#         raise NotImplementedError('this augmentation is not working correctly yet. The image and target could have patchy effect.We are not sure why.')
+#         raise NotImplementedError('this augmentation is not working correctly yet. The image and label could have patchy effect.We are not sure why.')
 #         self.max_scaling = max_scaling
 
 #     def transform(self, patch: Patch):
@@ -494,7 +506,7 @@ class Perspective2D(SpatialTransform):
 #         patch.apply_delayed_shrink_size()
 
 #         # if the rotation is close to diagnal, for example 45 degree
-#         # the target could be outside the volume and be black!
+#         # the label could be outside the volume and be black!
 #         # angle = random.choice([0, 90, 180, -90, -180]) + random.randint(-5, 5)
 #         angle = random.randint(0, 180)
 #         scale = random.uniform(1.1, self.max_scaling)
@@ -508,8 +520,8 @@ class Perspective2D(SpatialTransform):
 #                         patch.image[batch, channel, z, ...],
 #                         mat, patch.shape[-2:], flags=cv2.INTER_LINEAR
 #                     ) 
-#                     patch.target[batch, channel, z, ...] = cv2.warpAffine(
-#                         patch.target[batch, channel, z, ...],
+#                     patch.label[batch, channel, z, ...] = cv2.warpAffine(
+#                         patch.label[batch, channel, z, ...],
 #                         mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
 #                     ) 
 

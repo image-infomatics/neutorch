@@ -101,19 +101,19 @@ class DatasetBase(torch.utils.data.IterableDataset):
         
         # patch.to_tensor()
 
-        return patch.image, patch.target
+        return patch.image, patch.label
    
     def __next__(self):
-        image, target = self.random_patch
+        image, label = self.random_patch
         image = to_tensor(image)
-        target = to_tensor(target)
-        return image, target
+        label = to_tensor(label)
+        return image, label
 
     def __iter__(self):
         """generate random patches from samples
 
         Yields:
-            tuple[tensor, tensor]: image and target tensors
+            tuple[tensor, tensor]: image and label tensors
         """
         while True:
             yield next(self)
@@ -127,7 +127,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
             #DropSection(),

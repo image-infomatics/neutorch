@@ -73,7 +73,7 @@ class SemanticDataset(DatasetBase):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),

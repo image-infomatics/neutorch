@@ -15,16 +15,39 @@ class OrganelleDataset(DatasetBase):
     def __init__(self, path_list: list, 
             sample_name_to_image_versions: dict = None,
             patch_size: Cartesian = Cartesian(128, 128, 128),
-            target_channel_num: int = 37):
+            num_classes: int = 1,
+            skip_classes: list = None):
+        """Dataset for organelle semantic segmentation
+
+        Args:
+            path_list (list): list of label files
+            sample_name_to_image_versions (dict, optional): map sample name to image volumes. Defaults to None.
+            patch_size (Cartesian, optional): size of a patch. Defaults to Cartesian(128, 128, 128).
+            num_classes (int, optional): number of semantic classes to be classified. Defaults to 1.
+            skip_classes (list, optional): skip some classes in the label. Defaults to None.
+        """
         super().__init__(patch_size=patch_size)
 
         self.path_list = sorted(path_list)
         # print(f'path list: {self.path_list}')
         self.sample_name_to_image_versions = sample_name_to_image_versions
-        self.target_channel_num = target_channel_num
+        self.num_classes = num_classes
+        
+        if skip_classes is None:
+            self.skip_classes = None
+        else:
+            self.skip_classes = sorted(skip_classes, reverse=True)
 
+        # these two functions should always be put in the end
+        # since they call some functions and properties
         self.compute_sample_weights()
         self.setup_iteration_range()
+
+
+    def _compress_label_classes(self, label: Chunk):
+        for class_idx in self.skip_classes:
+            label.array[label.array>class_idx] -= 1
+        return label
 
     @cached_property
     def samples(self):
@@ -41,6 +64,7 @@ class OrganelleDataset(DatasetBase):
             assert os.path.exists(label_path)
             label = Chunk.from_h5(label_path)
             image = Chunk.from_h5(image_path)
+
             # label start from 1
             # it should be converted to start from 0
             if label.min() <= 0:
@@ -49,10 +73,17 @@ class OrganelleDataset(DatasetBase):
                 breakpoint()
             if np.any(label == 34):
                 breakpoint()
-            label -= 1
-            if label.max() >= self.target_channel_num:
+           
+            # some classes could be unlabeled!
+            # we also would like to reduce the number of classes for easier training
+            if self.skip_classes is not None:
+                self._compress_label_classes(label)
+
+            if label.max() > self.num_classes:
                 breakpoint()
-            assert label.max() < self.target_channel_num, f'maximum number of label: {label.max()}'
+            assert label.max() <= self.num_classes, f'maximum number of label: {label.max()}'
+ 
+            label -= 1
             # CrossEntropyLoss only works with int64 data type!
             # uint8 will not work
             label = label.astype(np.int64)
@@ -61,7 +92,7 @@ class OrganelleDataset(DatasetBase):
             sample = SemanticSample(
                 images,
                 label, 
-                self.target_channel_num,
+                self.num_classes,
                 patch_size=self.patch_size_before_transform
             )
             samples.append(sample)
@@ -75,7 +106,7 @@ class OrganelleDataset(DatasetBase):
 
     @cached_property
     def class_counts(self):
-        counts = np.zeros((self.target_channel_num,), dtype=np.int)
+        counts = np.zeros((self.num_classes,), dtype=np.int)
         for sample in self.samples:
             counts += sample.class_counts
 
@@ -105,7 +136,7 @@ class OrganelleDataset(DatasetBase):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),

@@ -2,6 +2,7 @@ import os
 from functools import cached_property
 from time import time
 
+import numpy as np
 import click
 from yacs.config import CfgNode
 
@@ -10,7 +11,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.tensorboard import SummaryWriter
 
 from .base import TrainerBase
-from neutorch.dataset.organelle import OrganelleDataset
+from neutorch.dataset.organelle import OrganelleDataset, to_tensor
 from neutorch.model.io import save_chkpt, log_tensor
 
 
@@ -18,14 +19,15 @@ class OrganelleTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
         super().__init__(cfg)
     
-        self.n_classes = self.cfg.model.out_channels
+        self.num_classes = self.cfg.model.out_channels
 
     @cached_property
     def training_dataset(self):
         return OrganelleDataset(
             self.training_path_list,
             patch_size=self.patch_size,
-            target_channel_num=self.n_classes,
+            num_classes=self.num_classes,
+            skip_classes=self.cfg.dataset.skip_classes
         )
        
     @cached_property
@@ -33,7 +35,8 @@ class OrganelleTrainer(TrainerBase):
         return OrganelleDataset(
             self.validation_path_list,
             patch_size=self.patch_size,
-            target_channel_num=self.n_classes,
+            num_classes=self.num_classes,
+            skip_classes=self.cfg.dataset.skip_classes
         )
     
     @cached_property
@@ -41,9 +44,11 @@ class OrganelleTrainer(TrainerBase):
         class_counts = self.training_dataset.class_counts
         # the equation is from scikit-learn
         # https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
-        class_weights = self.training_dataset.voxel_num / (self.n_classes * class_counts)
+        class_weights = self.training_dataset.voxel_num / (self.num_classes * class_counts)
+        class_weights = class_weights.astype(np.float32)
         print(f'class weights: {class_weights}')
-        breakpoint()
+        # send weights to device as a pytorch Tensor
+        class_weights = to_tensor(class_weights)
         return CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
 
     def post_processing(self, predict: torch.Tensor):
@@ -55,7 +60,7 @@ class OrganelleTrainer(TrainerBase):
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
-        for image, target in self.training_data_loader:
+        for image, label in self.training_data_loader:
             iter_idx += 1
             if iter_idx> self.cfg.train.iter_stop:
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
@@ -65,7 +70,7 @@ class OrganelleTrainer(TrainerBase):
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
             predict = self.model(image)
             # predict = self.post_processing(predict)
-            loss = self.loss_module(predict, target)
+            loss = self.loss_module(predict, label)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -83,7 +88,7 @@ class OrganelleTrainer(TrainerBase):
                 writer.add_scalar('loss/train', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'train/image', image, 'image', iter_idx)
                 log_tensor(writer, 'train/prediction', predict, 'segmentation', iter_idx)
-                log_tensor(writer, 'train/target', target, 'segmentation', iter_idx)
+                log_tensor(writer, 'train/label', label, 'segmentation', iter_idx)
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
                 fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
@@ -91,18 +96,18 @@ class OrganelleTrainer(TrainerBase):
                 save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
 
                 print('evaluate prediction: ')
-                validation_image, validation_target = next(self.validation_data_iter)
+                validation_image, validation_label = next(self.validation_data_iter)
 
                 with torch.no_grad():
                     validation_predict = self.model(validation_image)
-                    validation_loss = self.loss_module(validation_predict, validation_target)
+                    validation_loss = self.loss_module(validation_predict, validation_label)
                     validation_predict = self.post_processing(validation_predict)
                     per_voxel_loss = validation_loss.tolist() / self.voxel_num
                     print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                     writer.add_scalar('loss/validation', per_voxel_loss, iter_idx)
                     log_tensor(writer, 'validation/image', validation_image, 'image', iter_idx)
                     log_tensor(writer, 'validation/prediction', validation_predict, 'segmentation', iter_idx)
-                    log_tensor(writer, 'validation/target', validation_target, 'segmentation', iter_idx)
+                    log_tensor(writer, 'validation/label', validation_label, 'segmentation', iter_idx)
 
         writer.close()
 

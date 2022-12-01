@@ -5,28 +5,30 @@ import numpy as np
 import torch
 # torch.multiprocessing.set_start_method('spawn')
 
+from chunkflow.lib.cartesian_coordinate import Cartesian
+
 
 class Patch(object):
-    def __init__(self, image: np.ndarray, target: np.ndarray,
+    def __init__(self, image: np.ndarray, label: np.ndarray,
         delayed_shrink_size: tuple = (0, 0, 0, 0, 0, 0)):
-        """A patch of volume containing both image and target
+        """A patch of volume containing both image and label
 
         Args:
             image (np.ndarray): image
-            target (np.ndarray): target
+            label (np.ndarray): label
             delayed_shrink_size (tuple): delayed shrinking size.
                 some transform might shrink the patch size, but we
                 would like to delay it to keep a little bit more 
                 information. For exampling, warping the image will
                 make boundary some black region.
         """
-        assert image.shape == target.shape
+        assert image.shape == label.shape
 
         image = self._expand_to_5d(image)
-        target = self._expand_to_5d(target)
+        label = self._expand_to_5d(label)
 
         self.image = image
-        self.target = target
+        self.label = label
         self.delayed_shrink_size = delayed_shrink_size
 
     def _expand_to_5d(self, arr: np.ndarray):
@@ -66,7 +68,7 @@ class Patch(object):
             size[1]:y-size[4],
             size[2]:x-size[5],
         ]
-        self.target = self.target[
+        self.label = self.label[
             ...,
             size[0]:z-size[3],
             size[1]:y-size[4],
@@ -77,6 +79,8 @@ class Patch(object):
     @property
     def shape(self):
         return self.image.shape
+
+
 
     @property
     @lru_cache
@@ -93,7 +97,7 @@ class Patch(object):
                 arr /= 255.
             return arr
         self.image = _normalize(self.image)
-        self.target = _normalize(self.target)
+        self.label = _normalize(self.label)
 
 def collate_batch(batch):
    
