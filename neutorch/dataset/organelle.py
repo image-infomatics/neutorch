@@ -119,8 +119,6 @@ class OrganelleDataset(DatasetBase):
             # the CrossEntropyLoss do not require channel axis
             label = np.squeeze(label, axis=1)
         
-        if np.mean(image)> 0.9:
-            breakpoint()
         # transform to PyTorch Tensor
         # transfer to device, e.g. GPU, automatically.
         image = to_tensor(image)
