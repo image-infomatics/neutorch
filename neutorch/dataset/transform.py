@@ -241,10 +241,11 @@ class IntensityPerturbation(IntensityTransform):
         brightness = random.uniform(- 0.5, 0.5) * self.brightness_factor
         image += brightness
 
+        image = np.clip(image, 0., 1., out = image)
+        
         gamma = random.uniform(-1., 1.)
         image **=2.0**gamma
         
-        image = np.clip(image, 0., 1., out = image)
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
