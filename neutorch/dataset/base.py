@@ -1,10 +1,9 @@
-from typing import Union
-from functools import cached_property
 import math
-
-from chunkflow.lib.cartesian_coordinate import Cartesian
+from functools import cached_property
+from typing import Union
 
 import torch
+from chunkflow.lib.cartesian_coordinate import Cartesian
 
 from neutorch.dataset.transform import *
 

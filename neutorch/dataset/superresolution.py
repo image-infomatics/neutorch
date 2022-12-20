@@ -1,16 +1,14 @@
-import os
 import math
+import os
 import random
+from time import sleep, time
 from typing import Union
-from time import time, sleep
 
-import numpy as np
 import h5py
-
-from chunkflow.chunk import Chunk
-
-import torch
+import numpy as np
 import toml
+import torch
+from chunkflow.chunk import Chunk
 
 from neutorch.dataset.ground_truth_sample import GroundTruthVolume
 from neutorch.dataset.transform import *
@@ -146,6 +144,7 @@ if __name__ == '__main__':
     )
 
     from torch.utils.tensorboard import SummaryWriter
+
     from neutorch.model.io import log_tensor
     writer = SummaryWriter(log_dir='/tmp/log')
 
