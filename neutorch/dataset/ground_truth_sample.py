@@ -1,13 +1,14 @@
-import random
 from abc import ABC, abstractmethod
+import random
 from typing import List
 
 import numpy as np
-from chunkflow.chunk import Chunk
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
-from chunkflow.lib.synapses import Synapses
 
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from .patch import Patch
+
+from chunkflow.chunk import Chunk
+from chunkflow.lib.synapses import Synapses
 
 
 class AbstractGroundTruthSample(ABC):
@@ -38,8 +39,8 @@ class AbstractGroundTruthSample(ABC):
 class GroundTruthSample(AbstractGroundTruthSample):
     def __init__(self, 
             images: List[Chunk], target: np.ndarray,
-            patch_size: Cartesian = Cartesian(128, 128, 128), 
-            forbidden_distance_to_boundary: tuple = None) -> None:
+            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
         Args:
@@ -62,21 +63,21 @@ class GroundTruthSample(AbstractGroundTruthSample):
         assert isinstance(patch_size, Cartesian)
 
         
-        if forbidden_distance_to_boundary is None:
-            forbidden_distance_to_boundary = patch_size // 2 
-        assert len(forbidden_distance_to_boundary) == 3 or len(forbidden_distance_to_boundary)==6
+        if forbbiden_distance_to_boundary is None:
+            forbbiden_distance_to_boundary = patch_size // 2 
+        assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
 
         for idx in range(3):
             # the center of random patch should not be too close to boundary
             # otherwise, the patch will go outside of the volume
-            assert forbidden_distance_to_boundary[idx] >= patch_size[idx] // 2
-            assert forbidden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
+            assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
+            assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
         
         self.images = images
         self.target = target
-        self.center_start = forbidden_distance_to_boundary[:3]
+        self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
-            images[0].shape, forbidden_distance_to_boundary[-3:]))
+            images[0].shape, forbbiden_distance_to_boundary[-3:]))
     
     def _expand_to_5d(self, array: np.ndarray):
         if array.ndim == 3:
@@ -132,7 +133,7 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
             images: List[Chunk], 
             annotation_points: np.ndarray,
             patch_size: Cartesian = Cartesian(256, 256, 256), 
-            forbidden_distance_to_boundary: tuple = None) -> None:
+            forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
         Args:
@@ -150,7 +151,7 @@ class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
         super().__init__(
             images, target, 
             patch_size = patch_size,
-            forbbiden_distance_to_boundary=forbidden_distance_to_boundary
+            forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
     @property

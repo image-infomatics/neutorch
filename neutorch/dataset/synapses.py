@@ -1,17 +1,20 @@
 import os
+from time import time, sleep
+from collections import OrderedDict
 from functools import cached_property
-from time import sleep, time
-from typing import List, Union
+from typing import Union, List
 
 import numpy as np
-import torch
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
+from scipy.stats import describe
+
+from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import Volume
+
+import torch
+
 from neutorch.dataset.ground_truth_sample import PostSynapseGroundTruth
 from neutorch.dataset.transform import *
-from sklearn import datasets
-
 from .base import DatasetBase
 from .ground_truth_sample import GroundTruthSampleWithPointAnnotation
 
@@ -21,6 +24,7 @@ def syns_path_to_dataset_name(syns_path: str, dataset_names: list):
         if dataset_name in syns_path:
             return dataset_name
 
+
 class SynapsesDatasetBase(DatasetBase):
     def __init__(self, 
             sample_name_to_image_versions: dict,
@@ -29,7 +33,7 @@ class SynapsesDatasetBase(DatasetBase):
 
         self.sample_name_to_image_versions = sample_name_to_image_versions
 
-        self.vols = {} #make a list
+        self.vols = {}
         for dataset_name, dir_list in sample_name_to_image_versions.items():
             vol_list = []
             for dir_path in dir_list:
@@ -87,7 +91,6 @@ class PreSynapsesDataset(SynapsesDatasetBase):
                 self.transform.shrink_size[-3:]
             )
         )
-
         patch_size_before_transform = Cartesian.from_collection(patch_size_before_transform)
 
         for syns_path in syns_path_list:
@@ -198,9 +201,9 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 
 if __name__ == '__main__':
     
-    from neutorch.dataset.patch import collate_batch
     from torch.utils.data import DataLoader
-    dataset = datasets(
+    from neutorch.dataset.patch import collate_batch
+    dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",
         section_name="training",
@@ -215,8 +218,8 @@ if __name__ == '__main__':
     )
     data_iter = iter(data_loader)
 
-    from neutorch.model.io import log_tensor
     from torch.utils.tensorboard import SummaryWriter
+    from neutorch.model.io import log_tensor
     writer = SummaryWriter(log_dir='/tmp/log')
 
     model = torch.nn.Identity()
