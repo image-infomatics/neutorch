@@ -46,7 +46,8 @@ class GroundTruthSample(AbstractGroundTruthSample):
         Args:
             images (List[Chunk]): different versions of image chunks normalized to 0-1
             label (np.ndarray): training label
-            patch_size (Cartesian): output patch size
+            patch_size (Cartesian): output patch size. this should be the patch_size before transform. 
+                the patch is expected to be shrinked to be the output patch size.
             forbbiden_distance_to_boundary (Union[tuple, int]): 
                 the distance from patch center to sample boundary that is not allowed to sample 
                 the order is z,y,x,-z,-y,-x
@@ -140,9 +141,9 @@ class GroundTruthSample(AbstractGroundTruthSample):
         weight = int(np.product(tuple(e-b for b, e in zip(
             self.center_start, self.center_stop))))
         
-        if len(np.unique(self.label)) == 1:
-            # reduce the weight
-            weight /= 10.
+        # if len(np.unique(self.label)) == 1:
+        #     # reduce the weight
+        #     weight /= 10.
 
         return weight 
     

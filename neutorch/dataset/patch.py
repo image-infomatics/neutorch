@@ -1,11 +1,11 @@
-from functools import lru_cache
+from functools import cached_property
 import numpy as np
 
 # from torch import tensor, device
 import torch
 # torch.multiprocessing.set_start_method('spawn')
 
-from chunkflow.lib.cartesian_coordinate import Cartesian
+# from chunkflow.lib.cartesian_coordinate import Cartesian
 
 
 class Patch(object):
@@ -80,12 +80,9 @@ class Patch(object):
     def shape(self):
         return self.image.shape
 
-
-
-    @property
-    @lru_cache
+    @cached_property
     def center(self):
-        return tuple(ps // 2 for ps in self.shape)
+        return tuple(ps // 2 for ps in self.shape[-3:])
 
     def normalize(self):
         def _normalize(arr):

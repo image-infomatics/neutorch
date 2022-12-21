@@ -25,7 +25,7 @@ class OrganelleDataset(DatasetBase):
         Args:
             path_list (list): list of label files
             sample_name_to_image_versions (dict, optional): map sample name to image volumes. Defaults to None.
-            patch_size (Cartesian, optional): size of a patch. Defaults to Cartesian(128, 128, 128).
+            patch_size (Cartesian, optional): size of a output patch. Defaults to Cartesian(128, 128, 128).
             num_classes (int, optional): number of semantic classes to be classified. Defaults to 1.
             skip_classes (list, optional): skip some classes in the label. Defaults to None.
         """
@@ -133,7 +133,6 @@ class OrganelleDataset(DatasetBase):
             label = label.astype(np.float32)
             images = [image,]
 
-            # breakpoint()
             sample = SemanticSample(
                 images,
                 label, 
@@ -188,7 +187,7 @@ class OrganelleDataset(DatasetBase):
             # DropSection(),
             Flip(),
             Transpose(),
-            MissAlignment(),
+            # MissAlignment(),
         ])
 
 

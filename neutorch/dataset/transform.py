@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import random
-from functools import lru_cache
+from functools import cached_property
 
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
@@ -28,7 +28,6 @@ class AbstractTransform(ABC):
         assert probability > 0.
         assert probability <= 1.
         self.probability = probability
-        self.tranformed = False
 
     @property
     def name(self):
@@ -40,7 +39,6 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
-            self.tranformed = True
         else:
             # for spatial transform, we need to correct the size
             # to make sure that the final patch size is correct 
@@ -71,7 +69,7 @@ class SpatialTransform(AbstractTransform):
         """
         pass
 
-    @property
+    @cached_property
     def shrink_size(self):
         """this transform might shrink the patch size.
         for example, droping a section will shrink the z axis.
@@ -108,29 +106,6 @@ class SectionTransform(AbstractTransform):
     def transform_section(self, patch: Patch):
         pass
 
-class Compose(object):
-    def __init__(self, transforms: list):
-        """compose multiple transforms
-
-        Args:
-            transforms (list): list of transform instances
-        """
-        self.transforms = transforms
-        shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
-            if isinstance(transform, SpatialTransform):
-                shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
-
-    def __call__(self, patch: Patch):
-        for transform in self.transforms:
-            transform(patch)
-        # after the transformation, the stride of array
-        # could be negative, and pytorch could not tranform
-        # the array to Tensor. Copy can fix it.
-        patch.image = patch.image.copy()
-        patch.label = patch.label.copy()
-
 
 class OneOf(AbstractTransform):
     def __init__(self, transforms: list, 
@@ -139,11 +114,13 @@ class OneOf(AbstractTransform):
         assert len(transforms) > 1
         self.transforms = transforms
 
+    @cached_property
+    def shrink_size(self):
         shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
+        for transform in self.transforms:
             if isinstance(transform, SpatialTransform):
                 shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
+        return tuple(x for x in shrink_size)
 
     def transform(self, patch: Patch):
         # select one of the transforms
@@ -156,27 +133,14 @@ class DropSection(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        # since this transform really removes information
-        # we do not delay the shrinking
-        # make the first and last section missing is meaning less
-        b0, c0, z0, y0, x0 = patch.shape
-        z = random.randint(1, z0-1)
-        image = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.image.dtype)
-        label = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.label.dtype)
-        image[..., :z, :, :] = patch.image[..., :z, :, :]
-        label[..., :z, :, :] = patch.label[..., :z, :, :]
-        image[..., z:, :, :] = patch.image[..., z+1:, :, :]
-        label[..., z:, :, :] = patch.label[..., z+1:, :, :]
-        patch.image = image
-        patch.label = label
+        z = random.randint(1, patch.shape[-3]-1)
+        patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
+        patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+        patch.shrink(self.shrink_size)
 
-    @property
+    @cached_property
     def shrink_size(self):
-        if self.tranformed:
-            return (0, 0, 0, -1, 0, 0)
-        else:
-            return DEFAULT_SHRINK_SIZE
-
+        return (0, 0, 0, 1, 0, 0)
 
 class MaskBox(IntensityTransform):
     def __init__(self,
@@ -435,14 +399,10 @@ class MissAlignment(SpatialTransform):
         # only keep the central region  
         patch.shrink(self.shrink_size)       
     
-    @property
-    @lru_cache
+    @cached_property
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
-        if self.tranformed:
-            return (self.max_displacement,) * 6
-        else:
-            return DEFAULT_SHRINK_SIZE
+        return (self.max_displacement,) * 6
 
 
 class Perspective2D(SpatialTransform):
@@ -571,3 +531,31 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
+
+class Compose(object):
+    def __init__(self, transforms: list):
+        """compose multiple transforms
+
+        Args:
+            transforms (list): list of transform instances
+        """
+        self.transforms = transforms
+
+
+    @cached_property
+    def shrink_size(self):
+        shrink_size = np.zeros((6,), dtype=np.int64)
+        for transform in self.transforms:
+            if isinstance(transform, SpatialTransform):
+                shrink_size += np.asarray(transform.shrink_size)
+        return tuple(x for x in shrink_size)
+
+    def __call__(self, patch: Patch):
+        for transform in self.transforms:
+            transform(patch)
+        # after the transformation, the stride of array
+        # could be negative, and pytorch could not tranform
+        # the array to Tensor. Copy can fix it.
+        patch.image = patch.image.copy()
+        patch.label = patch.label.copy()
+
