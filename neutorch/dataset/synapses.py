@@ -169,7 +169,9 @@ class PostSynapsesDataset(SynapsesDatasetBase):
     def transform(self):
         return Compose([
             NormalizeTo01(probability=1.),
-            IntensityPerturbation(),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

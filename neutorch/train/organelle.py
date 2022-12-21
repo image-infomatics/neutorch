@@ -7,11 +7,11 @@ import click
 from yacs.config import CfgNode
 
 import torch
-from torch.nn import CrossEntropyLoss
+# from torch.nn import CrossEntropyLoss
 from torch.utils.tensorboard import SummaryWriter
 
 from .base import TrainerBase
-from neutorch.dataset.organelle import OrganelleDataset, to_tensor
+from neutorch.dataset.organelle import OrganelleDataset #, to_tensor
 from neutorch.model.io import save_chkpt, log_tensor
 
 
@@ -27,7 +27,9 @@ class OrganelleTrainer(TrainerBase):
             self.training_path_list,
             patch_size=self.patch_size,
             num_classes=self.num_classes,
-            skip_classes=self.cfg.dataset.skip_classes
+            skip_classes=self.cfg.dataset.skip_classes,
+            selected_classes=self.cfg.dataset.selected_classes,
+            image_intensity_rescale_range=self.cfg.dataset.rescale_intensity,
         )
        
     @cached_property
@@ -36,30 +38,32 @@ class OrganelleTrainer(TrainerBase):
             self.validation_path_list,
             patch_size=self.patch_size,
             num_classes=self.num_classes,
-            skip_classes=self.cfg.dataset.skip_classes
+            skip_classes=self.cfg.dataset.skip_classes,
+            selected_classes=self.cfg.dataset.selected_classes,
+            image_intensity_rescale_range=self.cfg.dataset.rescale_intensity,
         )
     
-    @cached_property
-    def loss_module(self):
-        if self.cfg.train.class_rebalance:
-            # the equation is from scikit-learn
-            # https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
-            class_counts = self.training_dataset.class_counts
-            class_weights = self.training_dataset.voxel_num / (self.num_classes * class_counts)
-            # class_weights /= class_weights.max()
-            class_weights = class_weights.astype(np.float32)
-            print(f'class weights: {class_weights}')
-            # send weights to device as a pytorch Tensor
-            class_weights = to_tensor(class_weights)
-            return CrossEntropyLoss(weight=class_weights, label_smoothing=0.0)
-        else:
-            return CrossEntropyLoss(label_smoothing=0.0)
+    # @cached_property
+    # def loss_module(self):
+    #     if self.cfg.train.class_rebalance:
+    #         # the equation is from scikit-learn
+    #         # https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html
+    #         class_counts = self.training_dataset.class_counts
+    #         class_weights = self.training_dataset.voxel_num / (self.num_classes * class_counts)
+    #         # class_weights /= class_weights.max()
+    #         class_weights = class_weights.astype(np.float32)
+    #         print(f'class weights: {class_weights}')
+    #         # send weights to device as a pytorch Tensor
+    #         class_weights = to_tensor(class_weights)
+    #         return CrossEntropyLoss(weight=class_weights, label_smoothing=0.0)
+    #     else:
+    #         return CrossEntropyLoss(label_smoothing=0.0)
         # return CrossEntropyLoss()
 
-    def post_processing(self, predict: torch.Tensor):
-        predict = torch.argmax(predict, dim=1, keepdim=False)
-        # predict = predict.to(torch.int64)
-        return predict
+    # def post_processing(self, predict: torch.Tensor):
+    #     predict = torch.argmax(predict, dim=1, keepdim=False)
+    #     # predict = predict.to(torch.int64)
+    #     return predict
 
     def __call__(self) -> None:
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
@@ -94,7 +98,7 @@ class OrganelleTrainer(TrainerBase):
                 predict = self.post_processing(predict)
                 writer.add_scalar('loss/train', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'train/image', image, 'image', iter_idx)
-                log_tensor(writer, 'train/prediction', predict, 'segmentation', iter_idx)
+                log_tensor(writer, 'train/prediction', predict.detach(), 'image', iter_idx)
                 log_tensor(writer, 'train/label', label, 'segmentation', iter_idx)
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
@@ -114,7 +118,7 @@ class OrganelleTrainer(TrainerBase):
                     # print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                     writer.add_scalar('loss/validation', per_voxel_loss, iter_idx)
                     log_tensor(writer, 'validation/image', validation_image, 'image', iter_idx)
-                    log_tensor(writer, 'validation/prediction', validation_predict, 'segmentation', iter_idx)
+                    log_tensor(writer, 'validation/prediction', validation_predict, 'image', iter_idx)
                     log_tensor(writer, 'validation/label', validation_label, 'segmentation', iter_idx)
 
         writer.close()

@@ -124,10 +124,13 @@ class Dataset(torch.utils.data.Dataset):
         patch.apply_delayed_shrink_size()
         return patch
            
-    def _prepare_transform(self):
-        self.transform = Compose([
+    @cached_property
+    def transform(self):
+        return Compose([
             NormalizeTo01(),
-            IntensityPerturbation(),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

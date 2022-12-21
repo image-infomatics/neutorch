@@ -193,7 +193,7 @@ class TrainerBase(ABC):
                 predict = self.post_processing(predict)
                 writer.add_scalar('Loss/train', per_voxel_loss, iter_idx)
                 log_tensor(writer, 'train/image', image, iter_idx)
-                log_tensor(writer, 'train/prediction', predict, iter_idx)
+                log_tensor(writer, 'train/prediction', predict.detach(), iter_idx)
                 log_tensor(writer, 'train/target', target, iter_idx)
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:

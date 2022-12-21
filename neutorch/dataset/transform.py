@@ -20,6 +20,7 @@ from .patch import Patch
 
 
 DEFAULT_PROBABILITY = .5
+DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 
 
 class AbstractTransform(ABC):
@@ -27,6 +28,7 @@ class AbstractTransform(ABC):
         assert probability > 0.
         assert probability <= 1.
         self.probability = probability
+        self.tranformed = False
 
     @property
     def name(self):
@@ -38,6 +40,7 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
+            self.tranformed = True
         else:
             # for spatial transform, we need to correct the size
             # to make sure that the final patch size is correct 
@@ -67,7 +70,7 @@ class SpatialTransform(AbstractTransform):
             patch (tuple): image and label pair
         """
         pass
-    
+
     @property
     def shrink_size(self):
         """this transform might shrink the patch size.
@@ -76,7 +79,7 @@ class SpatialTransform(AbstractTransform):
         Return:
             shrink_size (tuple): z0,y0,x0,z1,y1,x1
         """
-        return (0, 0, 0, 0, 0, 0)
+        return DEFAULT_SHRINK_SIZE
 
 class IntensityTransform(AbstractTransform):
     """change image intensity only"""
@@ -169,7 +172,10 @@ class DropSection(SpatialTransform):
 
     @property
     def shrink_size(self):
-        return (0, 0, 0, 1, 0, 0)
+        if self.tranformed:
+            return (0, 0, 0, -1, 0, 0)
+        else:
+            return DEFAULT_SHRINK_SIZE
 
 
 class MaskBox(IntensityTransform):
@@ -207,12 +213,16 @@ class MaskBox(IntensityTransform):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
             # randint is inclusive
             start = tuple(random.randint(1, t-b-1) for t, b in zip(patch.shape[-3:], box_size))
+            if random.random() > 0.5:
+                box = np.random.rand(*box_size)
+            else:
+                box = np.ones(box_size, dtype = patch.image.dtype) * random.random()
             patch.image[
                 ...,
                 start[0] : start[0] + box_size[0],
                 start[1] : start[1] + box_size[1],
                 start[2] : start[2] + box_size[2],
-            ] = np.random.rand(*box_size)
+            ] = box
 
 class NormalizeTo01(IntensityTransform):
     def __init__(self, probability: float = 1.):
@@ -222,30 +232,46 @@ class NormalizeTo01(IntensityTransform):
         if np.issubdtype(patch.image.dtype, np.uint8):
             patch.image = patch.image.astype(np.float32) / 255.
 
-class IntensityPerturbation(IntensityTransform):
-    def __init__(self, 
-            contrast_factor: float = 0.3, 
-            brightness_factor: float = 0.3,
-            probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability)
+class AdjustBrightness(IntensityTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY,
+            min_factor: float = 0.05,
+            max_factor: float = 0.2):
+        super().__init__(probability=probability)
+        max_factor = np.clip(max_factor, 0, 2)
+        self.min_factor = min_factor
+        self.max_factor = max_factor
+    
+    def transform(self, patch: Patch):
+        brightness = random.uniform(-0.5, 0.5) * random.uniform(
+            self.min_factor, self.max_factor)
+        if patch.image.mean() + brightness < 0.9:
+            patch.image += brightness
+            np.clip(patch.image, 0., 1., out=patch.image)
 
-        self.contrast_factor = np.clip(contrast_factor, 0., 2.)
-        self.brightness_factor = np.clip(brightness_factor, 0, 2)
+class AdjustContrast(IntensityTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY,
+            factor_range: tuple = (0.2, 2.)):
+        super().__init__(probability=probability)
+        factor_range = np.clip(factor_range, 0., 2.)
+        self.factor_range = factor_range
 
     def transform(self, patch: Patch):
-        image = patch.image
-        
-        contrast = 1. + random.uniform(-0.5, 0.5) * self.contrast_factor
-        image *= contrast
+        #factor = 1 + random.uniform(-0.5, 0.5) * random.uniform(
+        #    self.factor_range[0], self.factor_range[1])
+        factor = random.uniform(self.factor_range[0], self.factor_range[1])
+        if np.mean(patch.image) * factor < 0.9:
+            patch.image *= factor
+            np.clip(patch.image, 0., 1., out=patch.image)
 
-        brightness = random.uniform(- 0.5, 0.5) * self.brightness_factor
-        image += brightness
 
-        image = np.clip(image, 0., 1., out = image)
-        
+class Gamma(IntensityTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    def transform(self, patch: Patch):
+        # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
-        image **=2.0**gamma
-        
+        patch.image **= 2.** gamma
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
@@ -307,9 +333,10 @@ class Transpose(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        axis = [2,3,4]
+        # only transform at XY
+        axis = [3,4]
         random.shuffle(axis)
-        axis5d = (0, 1, *axis,)
+        axis5d = (0, 1, 2, *axis,)
         patch.image = np.transpose(patch.image, axis5d)
         patch.label = np.transpose(patch.label, axis5d)
 
@@ -412,7 +439,10 @@ class MissAlignment(SpatialTransform):
     @lru_cache
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
-        return (self.max_displacement,) * 6
+        if self.tranformed:
+            return (self.max_displacement,) * 6
+        else:
+            return DEFAULT_SHRINK_SIZE
 
 
 class Perspective2D(SpatialTransform):

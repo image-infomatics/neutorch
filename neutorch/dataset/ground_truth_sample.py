@@ -63,10 +63,10 @@ class GroundTruthSample(AbstractGroundTruthSample):
         if isinstance(label, Chunk):
             label = label.array
 
-        if images[0].shape != label.shape[-3:]:
-            print(images[0].shape)
-            print(label.shape[-3:])
-            breakpoint()
+        # if images[0].shape != label.shape[-3:]:
+        #     print(images[0].shape)
+        #     print(label.shape[-3:])
+        #     breakpoint()
         assert images[0].shape == label.shape[-3:]
         assert isinstance(patch_size, Cartesian)
 
@@ -106,12 +106,14 @@ class GroundTruthSample(AbstractGroundTruthSample):
         cz = random.randint(center_start[0], center_stop[0])
         cy = random.randint(center_start[1], center_stop[1])
         cx = random.randint(center_start[2], center_stop[2])
-        return self.patch_from_center((cz, cy, cx)) 
+        center = Cartesian(cz, cy, cx)
+        return self.patch_from_center(center) 
 
-    def patch_from_center(self, center: tuple):
-        bz = center[0] - self.patch_size[-3] // 2
-        by = center[1] - self.patch_size[-2] // 2
-        bx = center[2] - self.patch_size[-1] // 2
+    def patch_from_center(self, center: Cartesian):
+        bz, by, bx = center - self.patch_size // 2
+        # bz = center[0] - self.patch_size[-3] // 2
+        # by = center[1] - self.patch_size[-2] // 2
+        # bx = center[2] - self.patch_size[-1] // 2
 
         image = random.choice(self.images).array
         image_patch = image[...,
@@ -124,16 +126,25 @@ class GroundTruthSample(AbstractGroundTruthSample):
             by : by + self.patch_size[-2],
             bx : bx + self.patch_size[-1]
         ]
+
+        # print(f'start: {(bz, by, bx)}, patch size: {self.patch_size}')
+        assert image_patch.shape[-1] == image_patch.shape[-2]
         # if we do not copy here, the augmentation will change our 
         # image and label sample!
         image_patch = self._expand_to_5d(image_patch).copy()
         label_patch = self._expand_to_5d(label_patch).copy()
         return Patch(image_patch, label_patch)
     
-    @property
+    @cached_property
     def sampling_weight(self):
-        return int(np.product(tuple(e-b for b, e in zip(
+        weight = int(np.product(tuple(e-b for b, e in zip(
             self.center_start, self.center_stop))))
+        
+        if len(np.unique(self.label)) == 1:
+            # reduce the weight
+            weight /= 10.
+
+        return weight 
     
 
 class GroundTruthSampleWithPointAnnotation(GroundTruthSample):
@@ -265,6 +276,8 @@ class PostSynapseGroundTruth(AbstractGroundTruthSample):
                 coord[2] - self.point_expand : coord[2] + self.point_expand,
             ] = 0.95
         assert np.any(label > 0.5)
+
+        breakpoint()
         return Patch(image, label)
 
 

@@ -65,10 +65,13 @@ class SemanticDataset(DatasetBase):
         
         return samples
 
-    def _prepare_transform(self):
-        self.transform = Compose([
+    @cached_property
+    def transform(self):
+        return Compose([
             NormalizeTo01(probability=1.),
-            IntensityPerturbation(),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),
