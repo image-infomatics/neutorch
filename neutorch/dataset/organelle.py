@@ -9,7 +9,7 @@ from chunkflow.chunk.image import Image
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
 from neutorch.dataset.base import DatasetBase, to_tensor
-from neutorch.dataset.ground_truth_sample import SemanticSample
+from neutorch.dataset.sample import SemanticSample
 from neutorch.dataset.transform import *
 
 

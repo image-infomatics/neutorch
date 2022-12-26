@@ -124,7 +124,9 @@ class DatasetBase(torch.utils.data.IterableDataset):
     def transform(self):
         return Compose([
             NormalizeTo01(probability=1.),
-            IntensityPerturbation(),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),

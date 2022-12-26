@@ -12,7 +12,7 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_sample import GroundTruthVolume
+from neutorch.dataset.sample import ReferenceVolume
 from neutorch.dataset.transform import *
 
 
@@ -67,12 +67,12 @@ class Dataset(torch.utils.data.Dataset):
 
             image = Chunk.from_h5(image_path)
             image = image.astype(np.float32) / 255.
-            ground_truth_sample = GroundTruthVolume(
+            reference_sample = ReferenceVolume(
                 image,
                 image,
                 patch_size=patch_size_before_transform,
             )
-            volumes.append(ground_truth_sample)
+            volumes.append(reference_sample)
         
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
