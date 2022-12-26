@@ -39,11 +39,10 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
-        else:
-            # for spatial transform, we need to correct the size
-            # to make sure that the final patch size is correct 
-            if hasattr(self, 'shrink_size'):
-                patch.accumulate_delayed_shrink_size(self.shrink_size) 
+        # for spatial transform, we need to correct the size
+        # to make sure that the final patch size is correct 
+        if hasattr(self, 'shrink_size'):
+            patch.accumulate_delayed_shrink_size(self.shrink_size) 
 
     @abstractmethod
     def transform(self, patch: Patch):
@@ -136,7 +135,6 @@ class DropSection(SpatialTransform):
         z = random.randint(1, patch.shape[-3]-1)
         patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
         patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
-        patch.shrink(self.shrink_size)
 
     @cached_property
     def shrink_size(self):

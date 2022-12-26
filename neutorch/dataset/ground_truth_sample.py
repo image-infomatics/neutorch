@@ -141,9 +141,9 @@ class GroundTruthSample(AbstractGroundTruthSample):
         weight = int(np.product(tuple(e-b for b, e in zip(
             self.center_start, self.center_stop))))
         
-        # if len(np.unique(self.label)) == 1:
-        #     # reduce the weight
-        #     weight /= 10.
+        if len(np.unique(self.label)) == 1:
+            # reduce the weight
+            weight /= 10.
 
         return weight 
     

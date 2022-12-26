@@ -5,6 +5,7 @@ from functools import cached_property
 from skimage.exposure import rescale_intensity
 
 from chunkflow.chunk import Chunk
+from chunkflow.chunk.image import Image
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
 from neutorch.dataset.base import DatasetBase, to_tensor
@@ -19,7 +20,8 @@ class OrganelleDataset(DatasetBase):
             num_classes: int = 1,
             skip_classes: list = None,
             selected_classes: list = None,
-            image_intensity_rescale_range: tuple = None):
+            image_intensity_rescale_range: tuple = None,
+            normalize_contrast: bool = True):
         """Dataset for organelle semantic segmentation
 
         Args:
@@ -36,6 +38,7 @@ class OrganelleDataset(DatasetBase):
         self.sample_name_to_image_versions = sample_name_to_image_versions
         self.num_classes = num_classes
         self.image_intensity_rescale_range = image_intensity_rescale_range
+        self.normalize_contrast = normalize_contrast
         
         if skip_classes is not None:
             skip_classes = sorted(skip_classes, reverse=True)
@@ -89,6 +92,9 @@ class OrganelleDataset(DatasetBase):
             if np.all(image==255):
                 warn('skipping image path with all 255: ', image_path)
                 continue
+            
+            image = Image.from_chunk(image)
+            image.normalize_contrast(per_section=False)
 
             if self.image_intensity_rescale_range is not None and \
                     len(self.image_intensity_rescale_range) > 0:
@@ -174,8 +180,10 @@ class OrganelleDataset(DatasetBase):
     def transform(self):
         return Compose([
             NormalizeTo01(probability=1.),
-            AdjustContrast(factor_range = (0.95, 1.5)),
-            AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
+            # AdjustContrast(factor_range = (0.95, 1.8)),
+            # AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
+            AdjustContrast(),
+            AdjustBrightness(),
             Gamma(),
             OneOf([
                 Noise(),
@@ -193,8 +201,8 @@ class OrganelleDataset(DatasetBase):
 
 if __name__ == '__main__':
 
-    VOLUME_NUM = 1
-    PATCH_NUM = 100
+    VOLUME_NUM = 10
+    PATCH_NUM = 200
 
     from yacs.config import CfgNode
 
@@ -223,13 +231,14 @@ if __name__ == '__main__':
         )
     
     from PIL import Image
-    OUT_DIR = os.path.expanduser('~/Downloads/patches/')
+    OUT_DIR = os.path.expanduser('~/dropbox/patches/')
     from tqdm import tqdm
 
     for idx in tqdm(range(PATCH_NUM)):
         image, label = dataset.random_patch
         
-        section_idx = image.shape[-3]//2
+        # section_idx = image.shape[-3]//2
+        section_idx = 0
         image = image[0,0, section_idx, :,:]
         label = label[0,0, section_idx, :,:]
 

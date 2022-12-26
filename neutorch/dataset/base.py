@@ -93,11 +93,11 @@ class DatasetBase(torch.utils.data.IterableDataset):
         )[0]
         sample = self.samples[sample_index]
         patch = sample.random_patch
-        print(f'patch size before transform: {patch.shape}')
+        # print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
-        print(f'patch size after transform: {patch.shape}')
+        # print(f'patch size after transform: {patch.shape}')
         patch.apply_delayed_shrink_size()
-        print(f'patch size after shrink: {patch.shape}')
+        # print(f'patch size after shrink: {patch.shape}')
         assert patch.shape[-3:] == self.patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
         
