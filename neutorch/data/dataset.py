@@ -1,3 +1,4 @@
+import random
 from typing import Union
 from functools import cached_property
 import math
@@ -7,7 +8,6 @@ from yacs.config import CfgNode
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
-from neutorch.dataset.transform import *
 
 
 def load_cfg(cfg_file: str, freeze: bool = True):
@@ -62,15 +62,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
         else:
             patch_size = Cartesian.from_collection(patch_size)
 
-        assert isinstance(self.transform, Compose)
-
         self.patch_size = patch_size
-
-    @cached_property
-    def patch_size_before_transform(self):
-        return self.patch_size + \
-            self.transform.shrink_size[:3] + \
-            self.transform.shrink_size[-3:]
 
     @cached_property
     def sample_num(self):
@@ -81,13 +73,13 @@ class DatasetBase(torch.utils.data.IterableDataset):
         self.start = 0
         self.stop = self.sample_num
 
-    def compute_sample_weights(self):
+    @cached_property
+    def sample_weights(self):
         # use the number of candidate patches as volume sampling weight
         sample_weights = []
         for sample in self.samples:
             sample_weights.append(sample.sampling_weight)
-
-        self.sample_weights = sample_weights
+        return sample_weights
 
     @property
     def random_patch(self):
@@ -99,16 +91,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
         )[0]
         sample = self.samples[sample_index]
         patch = sample.random_patch
-        # print(f'patch size before transform: {patch.shape}')
-        self.transform(patch)
-        # print(f'patch size after transform: {patch.shape}')
-        patch.apply_delayed_shrink_size()
-        # print(f'patch size after shrink: {patch.shape}')
-        assert patch.shape[-3:] == self.patch_size, \
-            f'get patch shape: {patch.shape}, expected patch size {self.patch_size}'
-        
         # patch.to_tensor()
-
         return patch.image, patch.label
    
     def __next__(self):
@@ -125,24 +108,4 @@ class DatasetBase(torch.utils.data.IterableDataset):
         """
         while True:
             yield next(self)
-
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustContrast(),
-            AdjustBrightness(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            #DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-        ])
 

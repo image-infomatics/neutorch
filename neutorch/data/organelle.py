@@ -1,6 +1,8 @@
 import os
 from functools import cached_property
 
+from yacs.config import CfgNode
+
 from chunkflow.chunk.image import Image
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
@@ -24,7 +26,7 @@ class OrganelleDataset(DatasetBase):
             num_classes (int, optional): number of semantic classes to be classified. Defaults to 1.
             skip_classes (list, optional): skip some classes in the label. Defaults to None.
         """
-        super().__init__(patch_size=patch_size)
+        super().__init__(samples, patch_size=patch_size)
 
         self.samples = samples
         self.num_classes = num_classes
@@ -37,9 +39,28 @@ class OrganelleDataset(DatasetBase):
 
         # these two functions should always be put in the end
         # since they call some functions and properties
-        self.compute_sample_weights()
+        # self.compute_sample_weights()
         self.setup_iteration_range()
-    
+
+    @classmethod
+    def from_config(cls, cfg: CfgNode, is_train: bool):
+        if is_train:
+            name2chunks = cfg.dataset.training
+        else:
+            name2chunks = cfg.dataset.validation
+
+        samples = []
+        for name2path in name2chunks.values():
+            sample = OrganelleSample.from_explicit_dict(name2path)
+            samples.append(sample)
+
+        return cls(samples, 
+            patch_size = cfg.train.patch_size,
+            num_classes=cfg.model.out_channels,
+            )
+        
+            
+
     @classmethod
     def from_path_list(cls, path_list: list,
             patch_size: Cartesian = Cartesian(128, 128, 128),
@@ -89,27 +110,7 @@ class OrganelleDataset(DatasetBase):
 
         return image, target
     
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            # AdjustContrast(factor_range = (0.95, 1.8)),
-            # AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
-            AdjustContrast(),
-            AdjustBrightness(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            # MissAlignment(),
-        ])
+    
 
 
 if __name__ == '__main__':
@@ -122,23 +123,18 @@ if __name__ == '__main__':
     cfg_file = './config_mito.yaml'
     
     
-    from glob import glob    
-    glob_path = os.path.expanduser(cfg.dataset.glob_path)
-    path_list = glob(glob_path, recursive=True)
-    # path_list = sorted(path_list)
-    from random import shuffle
-    shuffle(path_list)
-    if VOLUME_NUM > 0:
-        path_list = path_list[:VOLUME_NUM]
+    # from glob import glob    
+    # glob_path = os.path.expanduser(cfg.dataset.glob_path)
+    # path_list = glob(glob_path, recursive=True)
+    # # path_list = sorted(path_list)
+    # from random import shuffle
+    # shuffle(path_list)
+    # if VOLUME_NUM > 0:
+    #     path_list = path_list[:VOLUME_NUM]
+    from neutorch.data.dataset import load_cfg
 
-    dataset = OrganelleDataset.from(
-            path_list,
-            patch_size=cfg.train.patch_size,
-            num_classes=cfg.model.out_channels,
-            skip_classes=cfg.dataset.skip_classes,
-            selected_classes=cfg.dataset.selected_classes,
-            image_intensity_rescale_range=cfg.dataset.rescale_intensity,
-        )
+    cfg = load_cfg(cfg_file) 
+    dataset = OrganelleDataset.from_config( cfg, is_train=True )
     
     from PIL import Image
     OUT_DIR = os.path.expanduser('~/dropbox/patches/')
@@ -156,7 +152,7 @@ if __name__ == '__main__':
         im = Image.fromarray(image).convert('L')
         im.save(os.path.join(OUT_DIR, f'{idx}_image.jpg'))
 
-        label *= 255.
+        label *= 255
         lbl = Image.fromarray(label).convert('L')
         lbl.save(os.path.join(OUT_DIR, f'{idx}_label.jpg'))
 

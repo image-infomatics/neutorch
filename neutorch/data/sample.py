@@ -9,19 +9,21 @@ from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from chunkflow.chunk import Chunk, load_chunk
 from chunkflow.lib.synapses import Synapses
 
-from .patch import Patch
+from neutorch.data.patch import Patch
+from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
+DEFAULT_NUM_CLASSES = 1
 
 
 class AbstractSample(ABC):
-    def __init__(self, patch_size: Cartesian = Cartesian(256, 256, 256)):
+    def __init__(self, output_patch_size: Cartesian = Cartesian(256, 256, 256)):
 
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * 3
+        if isinstance(output_patch_size, int):
+            output_patch_size = (output_patch_size,) * 3
         else:
-            assert len(patch_size) == 3
-        self.patch_size = patch_size
+            assert len(output_patch_size) == 3
+        self.output_patch_size = output_patch_size
 
     @property
     @abstractmethod
@@ -42,7 +44,7 @@ class AbstractSample(ABC):
 class Sample(AbstractSample):
     def __init__(self, 
             images: List[Chunk], label: Union[np.ndarray, Chunk],
-            patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
+            output_patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
@@ -59,7 +61,7 @@ class Sample(AbstractSample):
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
         """
-        super().__init__(patch_size=patch_size)
+        super().__init__(output_patch_size=output_patch_size)
         assert len(images) > 0
         assert images[0].ndim == 3
         assert label.ndim >= 3
@@ -75,16 +77,16 @@ class Sample(AbstractSample):
         self.images = images
         self.label = label
         
-        assert isinstance(patch_size, Cartesian)
+        assert isinstance(output_patch_size, Cartesian)
         if forbbiden_distance_to_boundary is None:
-            forbbiden_distance_to_boundary = patch_size // 2 
+            forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
         assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
 
         for idx in range(3):
             # the center of random patch should not be too close to boundary
             # otherwise, the patch will go outside of the volume
-            assert forbbiden_distance_to_boundary[idx] >= patch_size[idx] // 2
-            assert forbbiden_distance_to_boundary[-idx] >= patch_size[-idx] // 2
+            assert forbbiden_distance_to_boundary[idx] >= self.patch_size_before_transform[idx] // 2
+            assert forbbiden_distance_to_boundary[-idx] >= self.patch_size_before_transform[-idx] // 2
         
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
@@ -109,6 +111,14 @@ class Sample(AbstractSample):
     @property
     def random_patch(self):
         patch = self.random_patch_from_center_range(self.center_start, self.center_stop)
+        
+        # print(f'patch size before transform: {patch.shape}')
+        self.transform(patch)
+        # print(f'patch size after transform: {patch.shape}')
+        patch.apply_delayed_shrink_size()
+        # print(f'patch size after shrink: {patch.shape}')
+        assert patch.shape[-3:] == self.output_patch_size, \
+            f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
@@ -119,24 +129,24 @@ class Sample(AbstractSample):
         return self.patch_from_center(center) 
 
     def patch_from_center(self, center: Cartesian):
-        bz, by, bx = center - self.patch_size // 2
-        # bz = center[0] - self.patch_size[-3] // 2
-        # by = center[1] - self.patch_size[-2] // 2
-        # bx = center[2] - self.patch_size[-1] // 2
+        bz, by, bx = center - self.output_patch_size // 2
+        # bz = center[0] - self.output_patch_size[-3] // 2
+        # by = center[1] - self.output_patch_size[-2] // 2
+        # bx = center[2] - self.output_patch_size[-1] // 2
 
         image = random.choice(self.images).array
         image_patch = image[...,
-            bz : bz + self.patch_size[-3],
-            by : by + self.patch_size[-2],
-            bx : bx + self.patch_size[-1]
+            bz : bz + self.output_patch_size[-3],
+            by : by + self.output_patch_size[-2],
+            bx : bx + self.output_patch_size[-1]
         ]
         label_patch = self.label[...,
-            bz : bz + self.patch_size[-3],
-            by : by + self.patch_size[-2],
-            bx : bx + self.patch_size[-1]
+            bz : bz + self.output_patch_size[-3],
+            by : by + self.output_patch_size[-2],
+            bx : bx + self.output_patch_size[-1]
         ]
 
-        # print(f'start: {(bz, by, bx)}, patch size: {self.patch_size}')
+        # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2]
         # if we do not copy here, the augmentation will change our 
         # image and label sample!
@@ -153,21 +163,49 @@ class Sample(AbstractSample):
         #     # reduce the weight
         #     weight /= 10.
 
-        return weight 
+        return weight
+
+    @cached_property
+    def patch_size_before_transform(self):
+        return self.output_patch_size + \
+            self.transform.shrink_size[:3] + \
+            self.transform.shrink_size[-3:]
+
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            #DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+        ])
+
+ 
     
 
 class SampleWithPointAnnotation(Sample):
     def __init__(self, 
             images: List[Chunk], 
             annotation_points: np.ndarray,
-            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            output_patch_size: Cartesian = Cartesian(256, 256, 256), 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
         Args:
             image (np.ndarray): image normalized to 0-1
             annotation_points (np.ndarray): point annotations with zyx order.
-            patch_size (Cartesian): output patch size
+            output_patch_size (Cartesian): output patch size
             forbbiden_distance_to_boundary (tuple, optional): sample patches far away 
                 from sample boundary. Defaults to None.
         """
@@ -178,7 +216,7 @@ class SampleWithPointAnnotation(Sample):
         label = self._points_to_label(label)
         super().__init__(
             images, label, 
-            patch_size = patch_size,
+            output_patch_size = output_patch_size,
             forbbiden_distance_to_boundary=forbbiden_distance_to_boundary
         )
 
@@ -249,7 +287,7 @@ class PostSynapseReference(AbstractSample):
 
         bbox = BoundingBox.from_center(
             Cartesian(*pre), 
-            extent=self.patch_size // 2
+            extent=self.output_patch_size // 2
         )
 
         image = random.choice(self.images)
@@ -294,7 +332,7 @@ class SemanticSample(Sample):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
-            num_classes: int,
+            num_classes: int = DEFAULT_NUM_CLASSES,
             patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         super().__init__(images, label, patch_size, forbbiden_distance_to_boundary)
@@ -304,8 +342,10 @@ class SemanticSample(Sample):
     @classmethod
     def from_explicit_path(cls, 
             image_paths: list, label_path: str, 
-            num_classes: int, patch_size: Cartesian):
+            num_classes: int=DEFAULT_NUM_CLASSES, 
+            patch_size: Cartesian=DEFAULT_PATCH_SIZE):
         label = load_chunk(label_path)
+        print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
@@ -316,7 +356,7 @@ class SemanticSample(Sample):
 
     @classmethod
     def from_label_path(cls, label_path: str, 
-            num_classes: int, 
+            num_classes: int = DEFAULT_NUM_CLASSES, 
             patch_size: Cartesian=DEFAULT_PATCH_SIZE):
         """construct a sample from a single file of label
 
@@ -331,10 +371,13 @@ class SemanticSample(Sample):
             [image_path,], label_path, num_classes, patch_size)
 
     @classmethod
-    def from_explicit_dict(cls, d: dict, num_classes, patch_size: Cartesian=DEFAULT_PATCH_SIZE):
+    def from_explicit_dict(cls, d: dict, 
+            num_classes: int = DEFAULT_NUM_CLASSES, 
+            patch_size: Cartesian=DEFAULT_PATCH_SIZE):
         image_paths = d['images']
         label_path = d['label']
-        cls.from_explicit_path(image_paths, label_path, num_classes, patch_size)
+        return cls.from_explicit_path(
+            image_paths, label_path, num_classes, patch_size)
 
     @cached_property
     def voxel_num(self):
@@ -349,7 +392,7 @@ class OrganelleSample(SemanticSample):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
-            num_classes: int, 
+            num_classes: int = DEFAULT_NUM_CLASSES, 
             patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
             forbbiden_distance_to_boundary: tuple = None,
             skip_classes: list = None,
@@ -361,14 +404,34 @@ class OrganelleSample(SemanticSample):
                 self.label.array[self.label.array>class_idx] -= 1
         
         
-        if self.selected_classes is None:
-                # make the starting label from 0
-                self.label -= 1
-        else:
+        if selected_classes is not None:
             self.label.array = np.isin(self.label.array, selected_classes)
-
+    
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            # AdjustContrast(factor_range = (0.95, 1.8)),
+            # AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            # DropSection(),
+            Flip(),
+            Transpose(),
+            # MissAlignment(),
+        ])
 
 if __name__ == '__main__':
-    from .dataset import load_cfg
-    image = load_chunk('')
-    sample = 
+    from neutorch.data.dataset import load_cfg
+    cfg = load_cfg('./config_mito.yaml')
+
+    sample = SemanticSample.from_explicit_dict(cfg.dataset.validation.rat)
+    
