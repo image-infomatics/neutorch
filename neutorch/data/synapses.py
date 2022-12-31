@@ -12,7 +12,7 @@ import torch
 
 from .transform import *
 from .base import DatasetBase, path_to_dataset_name
-from .sample import ReferenceSampleWithPointAnnotation, PostSynapseReference
+from .sample import SampleWithPointAnnotation, PostSynapseReference
 
 
 class SynapsesDatasetBase(DatasetBase):
@@ -95,7 +95,7 @@ class PreSynapsesDataset(SynapsesDatasetBase):
             # print(f'max offset: {np.max(pre, axis=0)}')
             pre -= np.asarray(bbox.start, dtype=pre.dtype)
 
-            sample = ReferenceSampleWithPointAnnotation(
+            sample = SampleWithPointAnnotation(
                 images,
                 annotation_points=pre,
                 patch_size=patch_size_before_transform,

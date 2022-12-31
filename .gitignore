@@ -1,4 +1,5 @@
-config.yaml
+
+*.yaml
 *events.out.tfevents.*
 .secrets.baseline
 *.code-workspace

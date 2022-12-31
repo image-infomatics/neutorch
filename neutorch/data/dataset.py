@@ -1,14 +1,21 @@
-from abc import abstractproperty
 from typing import Union
 from functools import cached_property
 import math
 
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
 import torch
+from yacs.config import CfgNode
+
+from chunkflow.lib.cartesian_coordinate import Cartesian
 
 from neutorch.dataset.transform import *
 
+
+def load_cfg(cfg_file: str, freeze: bool = True):
+    with open(cfg_file) as file:
+        cfg = CfgNode.load_cfg(file)
+    if freeze:
+        cfg.freeze()
+    return cfg
 
 def worker_init_fn(worker_id: int):
     worker_info = torch.utils.data.get_worker_info()
@@ -39,7 +46,8 @@ def to_tensor(arr):
 
 
 class DatasetBase(torch.utils.data.IterableDataset):
-    def __init__(self, 
+    def __init__(self,
+            samples: list, 
             patch_size: Union[int, tuple, Cartesian]=(128, 128, 128),
         ):
         """
@@ -47,6 +55,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
             patch_size (int or tuple): the patch size we are going to provide.
         """
         super().__init__()
+        self.samples = samples
 
         if isinstance(patch_size, int):
             patch_size = Cartesian(patch_size, patch_size, patch_size)
@@ -57,14 +66,11 @@ class DatasetBase(torch.utils.data.IterableDataset):
 
         self.patch_size = patch_size
 
-        self.patch_size_before_transform = self.patch_size + \
+    @cached_property
+    def patch_size_before_transform(self):
+        return self.patch_size + \
             self.transform.shrink_size[:3] + \
             self.transform.shrink_size[-3:]
-
-    @cached_property
-    @abstractproperty
-    def samples(self):
-        pass
 
     @cached_property
     def sample_num(self):

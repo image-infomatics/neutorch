@@ -7,9 +7,9 @@ from chunkflow.chunk import Chunk
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from chunkflow.volume import Volume
 
-from neutorch.dataset.base import DatasetBase, path_to_dataset_name
-from neutorch.dataset.sample import ReferenceSample
-from neutorch.dataset.transform import *
+from neutorch.data.dataset import DatasetBase, path_to_dataset_name
+from neutorch.data.sample import Sample
+from neutorch.data.transform import *
 
 
 class SemanticDataset(DatasetBase):
@@ -56,7 +56,7 @@ class SemanticDataset(DatasetBase):
 
             target = (sem.array>0)
             target = target.astype(np.float32)
-            sample = ReferenceSample(
+            sample = Sample(
                 images,
                 label=target, 
                 patch_size=self.patch_size_before_transform
