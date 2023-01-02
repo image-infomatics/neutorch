@@ -12,8 +12,8 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.sample import ReferenceVolume
-from neutorch.dataset.transform import *
+from neutorch.data.sample import ReferenceVolume
+from neutorch.data.transform import *
 
 
 def image_reader(path: str):

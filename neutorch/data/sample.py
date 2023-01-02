@@ -17,12 +17,15 @@ DEFAULT_NUM_CLASSES = 1
 
 
 class AbstractSample(ABC):
-    def __init__(self, output_patch_size: Cartesian = Cartesian(256, 256, 256)):
+    def __init__(self, output_patch_size: Cartesian):
 
         if isinstance(output_patch_size, int):
             output_patch_size = (output_patch_size,) * 3
         else:
             assert len(output_patch_size) == 3
+
+        if not isinstance(output_patch_size, Cartesian):
+            output_patch_size = Cartesian.from_collection(output_patch_size)
         self.output_patch_size = output_patch_size
 
     @property
@@ -44,7 +47,7 @@ class AbstractSample(ABC):
 class Sample(AbstractSample):
     def __init__(self, 
             images: List[Chunk], label: Union[np.ndarray, Chunk],
-            output_patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
+            output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
@@ -77,7 +80,11 @@ class Sample(AbstractSample):
         self.images = images
         self.label = label
         
-        assert isinstance(output_patch_size, Cartesian)
+        print(f'output patch size: {self.output_patch_size}')
+        assert isinstance(self.output_patch_size, Cartesian)
+        for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
+            assert ls >= ps
+
         if forbbiden_distance_to_boundary is None:
             forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
         assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
@@ -91,6 +98,13 @@ class Sample(AbstractSample):
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
             images[0].shape, forbbiden_distance_to_boundary[-3:]))
+        for cs, cp in zip(self.center_start, self.center_stop):
+            assert cp > cs
+
+        print(f'center start: {self.center_start}')
+        print(f'center stop: {self.center_stop}')
+        print(f'forbbiden distance to boundary: {forbbiden_distance_to_boundary}')
+        # breakpoint()
 
     # @classmethod
     # def from_json(cls, json_file: str, patch_size: Cartesian = DEFAULT_PATCH_SIZE):
@@ -183,12 +197,12 @@ class Sample(AbstractSample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            Perspective2D(),
+            # Perspective2D(),
             # RotateScale(probability=1.),
             #DropSection(),
             Flip(),
             Transpose(),
-            MissAlignment(),
+            # MissAlignment(),
         ])
 
  
@@ -198,7 +212,7 @@ class SampleWithPointAnnotation(Sample):
     def __init__(self, 
             images: List[Chunk], 
             annotation_points: np.ndarray,
-            output_patch_size: Cartesian = Cartesian(256, 256, 256), 
+            output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
 
@@ -257,7 +271,7 @@ class PostSynapseReference(AbstractSample):
     def __init__(self,
             synapses: Synapses,
             images: List[Chunk], 
-            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            output_patch_size: Cartesian, 
             point_expand: int = 2,
         ):
         """Ground Truth for post synapses
@@ -268,9 +282,7 @@ class PostSynapseReference(AbstractSample):
             patch_size (Cartesian): image patch size covering the whole synapse
             point_expand (int): expand the point. range from 1 to half of patch size.
         """
-        if not isinstance(patch_size, Cartesian):
-            patch_size = Cartesian.from_collection(patch_size)
-        super().__init__(patch_size=patch_size)
+        super().__init__(output_patch_size=output_patch_size)
 
         self.images = images
         self.synapses = synapses
@@ -324,7 +336,6 @@ class PostSynapseReference(AbstractSample):
             ] = 0.95
         assert np.any(label > 0.5)
 
-        breakpoint()
         return Patch(image, label)
 
 
@@ -332,18 +343,18 @@ class SemanticSample(Sample):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
+            output_patch_size: Cartesian, 
             num_classes: int = DEFAULT_NUM_CLASSES,
-            patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
-        super().__init__(images, label, patch_size, forbbiden_distance_to_boundary)
+        super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
         # number of classes
         self.num_classes = num_classes
 
     @classmethod
     def from_explicit_path(cls, 
             image_paths: list, label_path: str, 
-            num_classes: int=DEFAULT_NUM_CLASSES, 
-            patch_size: Cartesian=DEFAULT_PATCH_SIZE):
+            output_patch_size: Cartesian,
+            num_classes: int=DEFAULT_NUM_CLASSES):
         label = load_chunk(label_path)
         print(f'label path: {label_path} with size {label.shape}')
 
@@ -352,12 +363,12 @@ class SemanticSample(Sample):
             image = load_chunk(image_path)
             images.append(image)
             print(f'image path: {image_path} with size {image.shape}')
-        return cls(images, label, num_classes, patch_size=patch_size)
+        return cls(images, label, output_patch_size, num_classes=num_classes)
 
     @classmethod
     def from_label_path(cls, label_path: str, 
-            num_classes: int = DEFAULT_NUM_CLASSES, 
-            patch_size: Cartesian=DEFAULT_PATCH_SIZE):
+            output_patch_size: Cartesian,
+            num_classes: int = DEFAULT_NUM_CLASSES):
         """construct a sample from a single file of label
 
         Args:
@@ -368,16 +379,16 @@ class SemanticSample(Sample):
         """
         image_path = label_path.replace('label', 'image')
         return cls.from_explicit_path(
-            [image_path,], label_path, num_classes, patch_size)
+            [image_path,], label_path, output_patch_size, num_classes=num_classes)
 
     @classmethod
     def from_explicit_dict(cls, d: dict, 
-            num_classes: int = DEFAULT_NUM_CLASSES, 
-            patch_size: Cartesian=DEFAULT_PATCH_SIZE):
+            output_patch_size: Cartesian,
+            num_classes: int = DEFAULT_NUM_CLASSES):
         image_paths = d['images']
         label_path = d['label']
         return cls.from_explicit_path(
-            image_paths, label_path, num_classes, patch_size)
+            image_paths, label_path, output_patch_size, num_classes=num_classes)
 
     @cached_property
     def voxel_num(self):
@@ -392,17 +403,18 @@ class OrganelleSample(SemanticSample):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
+            output_patch_size: Cartesian, 
             num_classes: int = DEFAULT_NUM_CLASSES, 
-            patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
             forbbiden_distance_to_boundary: tuple = None,
             skip_classes: list = None,
             selected_classes: list = None) -> None:
-        super().__init__(images, label, num_classes, patch_size, forbbiden_distance_to_boundary)
+        super().__init__(images, label, output_patch_size, 
+            num_classes=num_classes, 
+            forbbiden_distance_to_boundary=forbbiden_distance_to_boundary)
 
         if skip_classes is not None:
             for class_idx in skip_classes:
                 self.label.array[self.label.array>class_idx] -= 1
-        
         
         if selected_classes is not None:
             self.label.array = np.isin(self.label.array, selected_classes)
@@ -421,7 +433,7 @@ class OrganelleSample(SemanticSample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            Perspective2D(),
+            # Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),
             Flip(),

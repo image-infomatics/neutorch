@@ -14,8 +14,8 @@ from torch.utils.tensorboard import SummaryWriter
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.volume import Dataset
-from neutorch.dataset.patch import collate_batch
+from neutorch.data.volume import Dataset
+from neutorch.data.patch import collate_batch
 
 
 

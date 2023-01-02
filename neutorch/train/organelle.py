@@ -2,7 +2,6 @@ import os
 from functools import cached_property
 from time import time
 
-import numpy as np
 import click
 from yacs.config import CfgNode
 
@@ -10,39 +9,26 @@ import torch
 # from torch.nn import CrossEntropyLoss
 from torch.utils.tensorboard import SummaryWriter
 
-from .base import TrainerBase
-from neutorch.dataset.organelle import OrganelleDataset #, to_tensor
+from .base import SemanticTrainer
+from neutorch.data.dataset import OrganelleDataset #, to_tensor
 from neutorch.model.io import save_chkpt, log_tensor
 
 
-class OrganelleTrainer(TrainerBase):
+class OrganelleTrainer(SemanticTrainer):
     def __init__(self, cfg: CfgNode) -> None:
         super().__init__(cfg)
-    
-        self.num_classes = self.cfg.model.out_channels
 
     @cached_property
     def training_dataset(self):
-        return OrganelleDataset(
-            self.training_path_list,
-            patch_size=self.patch_size,
-            num_classes=self.num_classes,
-            skip_classes=self.cfg.dataset.skip_classes,
-            selected_classes=self.cfg.dataset.selected_classes,
-            image_intensity_rescale_range=self.cfg.dataset.rescale_intensity,
-        )
+        return OrganelleDataset.from_config(self.cfg, is_train=True)
        
     @cached_property
     def validation_dataset(self):
-        return OrganelleDataset(
-            self.validation_path_list,
-            patch_size=self.patch_size,
-            num_classes=self.num_classes,
-            skip_classes=self.cfg.dataset.skip_classes,
-            selected_classes=self.cfg.dataset.selected_classes,
-            image_intensity_rescale_range=self.cfg.dataset.rescale_intensity,
-        )
-    
+        return OrganelleDataset.from_config(self.cfg, is_train=False)
+
+    def label_to_target(self, label: torch.Tensor):
+        return (label > 0).float()
+
     # @cached_property
     # def loss_module(self):
     #     if self.cfg.train.class_rebalance:
@@ -131,5 +117,7 @@ class OrganelleTrainer(TrainerBase):
     help = 'configuration file containing all the parameters.'
 )
 def main(config_file: str):
-    trainer = OrganelleTrainer(config_file)
+    from neutorch.data.dataset import load_cfg
+    cfg = load_cfg(config_file)
+    trainer = OrganelleTrainer(cfg)
     trainer()

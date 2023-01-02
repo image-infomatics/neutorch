@@ -11,8 +11,8 @@ from chunkflow.lib.cartesian_coordinate import BoundingBoxes
 import torch
 from torch.utils.data import DataLoader
 
-from neutorch.dataset.transform import *
-from neutorch.dataset.patch import Patch, collate_batch
+from neutorch.data.transform import *
+from neutorch.data.patch import Patch, collate_batch
 
 from cloudvolume import CloudVolume
 

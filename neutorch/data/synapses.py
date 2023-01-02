@@ -189,7 +189,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 if __name__ == '__main__':
     
     from torch.utils.data import DataLoader
-    from neutorch.dataset.patch import collate_batch
+    from neutorch.data.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",
