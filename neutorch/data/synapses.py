@@ -12,7 +12,7 @@ import torch
 
 from .transform import *
 from .base import DatasetBase, path_to_dataset_name
-from .ground_truth_sample import GroundTruthSampleWithPointAnnotation, PostSynapseGroundTruth
+from .sample import SampleWithPointAnnotation, PostSynapseReference
 
 
 class SynapsesDatasetBase(DatasetBase):
@@ -94,9 +94,8 @@ class PreSynapsesDataset(SynapsesDatasetBase):
             # print(f'min offset: {np.min(pre, axis=0)}')
             # print(f'max offset: {np.max(pre, axis=0)}')
             pre -= np.asarray(bbox.start, dtype=pre.dtype)
-            # breakpoint()
 
-            sample = GroundTruthSampleWithPointAnnotation(
+            sample = SampleWithPointAnnotation(
                 images,
                 annotation_points=pre,
                 patch_size=patch_size_before_transform,
@@ -109,14 +108,12 @@ class PreSynapsesDataset(SynapsesDatasetBase):
     def _prepare_transform(self):
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
+            IntensityPerturbation(),
             OneOf([
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
             #DropSection(),
@@ -157,7 +154,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
             bbox.adjust(self.patch_size_before_transform // 2)
 
             images = self.syns_path_to_images(syns_path, bbox)
-            sample = PostSynapseGroundTruth(
+            sample = PostSynapseReference(
                 synapses, images,
                 patch_size=self.patch_size_before_transform
             )
@@ -179,7 +176,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
             #DropSection(),
@@ -192,7 +189,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 if __name__ == '__main__':
     
     from torch.utils.data import DataLoader
-    from neutorch.dataset.patch import collate_batch
+    from neutorch.data.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",

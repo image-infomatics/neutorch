@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import random
-from functools import lru_cache
+from functools import cached_property
 
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
@@ -20,6 +20,7 @@ from .patch import Patch
 
 
 DEFAULT_PROBABILITY = .5
+DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 
 
 class AbstractTransform(ABC):
@@ -38,18 +39,17 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
-        else:
-            # for spatial transform, we need to correct the size
-            # to make sure that the final patch size is correct 
-            if hasattr(self, 'shrink_size'):
-                patch.accumulate_delayed_shrink_size(self.shrink_size) 
+        # for spatial transform, we need to correct the size
+        # to make sure that the final patch size is correct 
+        if hasattr(self, 'shrink_size'):
+            patch.accumulate_delayed_shrink_size(self.shrink_size) 
 
     @abstractmethod
     def transform(self, patch: Patch):
-        """perform the real transform of image and target
+        """perform the real transform of image and label
 
         Args:
-            patch (Patch): image and target
+            patch (Patch): image and label
         """
         pass
 
@@ -61,14 +61,14 @@ class SpatialTransform(AbstractTransform):
 
     @abstractmethod
     def transform(self, patch: Patch):
-        """transform the image and target together
+        """transform the image and label together
 
         Args:
-            patch (tuple): image and target pair
+            patch (tuple): image and label pair
         """
         pass
-    
-    @property
+
+    @cached_property
     def shrink_size(self):
         """this transform might shrink the patch size.
         for example, droping a section will shrink the z axis.
@@ -76,7 +76,7 @@ class SpatialTransform(AbstractTransform):
         Return:
             shrink_size (tuple): z0,y0,x0,z1,y1,x1
         """
-        return (0, 0, 0, 0, 0, 0)
+        return DEFAULT_SHRINK_SIZE
 
 class IntensityTransform(AbstractTransform):
     """change image intensity only"""
@@ -105,29 +105,6 @@ class SectionTransform(AbstractTransform):
     def transform_section(self, patch: Patch):
         pass
 
-class Compose(object):
-    def __init__(self, transforms: list):
-        """compose multiple transforms
-
-        Args:
-            transforms (list): list of transform instances
-        """
-        self.transforms = transforms
-        shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
-            if isinstance(transform, SpatialTransform):
-                shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
-
-    def __call__(self, patch: Patch):
-        for transform in self.transforms:
-            transform(patch)
-        # after the transformation, the stride of array
-        # could be negative, and pytorch could not tranform
-        # the array to Tensor. Copy can fix it.
-        patch.image = patch.image.copy()
-        patch.target = patch.target.copy()
-
 
 class OneOf(AbstractTransform):
     def __init__(self, transforms: list, 
@@ -136,11 +113,13 @@ class OneOf(AbstractTransform):
         assert len(transforms) > 1
         self.transforms = transforms
 
+    @cached_property
+    def shrink_size(self):
         shrink_size = np.zeros((6,), dtype=np.int64)
-        for transform in transforms:
+        for transform in self.transforms:
             if isinstance(transform, SpatialTransform):
                 shrink_size += np.asarray(transform.shrink_size)
-        self.shrink_size = tuple(x for x in shrink_size)
+        return tuple(x for x in shrink_size)
 
     def transform(self, patch: Patch):
         # select one of the transforms
@@ -153,30 +132,20 @@ class DropSection(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        # since this transform really removes information
-        # we do not delay the shrinking
-        # make the first and last section missing is meaning less
-        b0, c0, z0, y0, x0 = patch.shape
-        z = random.randint(1, z0-1)
-        image = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.image.dtype)
-        target = np.zeros((b0, c0, z0-1, y0, x0), dtype=patch.target.dtype)
-        image[..., :z, :, :] = patch.image[..., :z, :, :]
-        target[..., :z, :, :] = patch.target[..., :z, :, :]
-        image[..., z:, :, :] = patch.image[..., z+1:, :, :]
-        target[..., z:, :, :] = patch.target[..., z+1:, :, :]
-        patch.image = image
-        patch.target = target
+        z = random.randint(1, patch.shape[-3]-1)
+        patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
+        patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
 
-    @property
+    @cached_property
     def shrink_size(self):
         return (0, 0, 0, 1, 0, 0)
 
-
-class BlackBox(IntensityTransform):
+class MaskBox(IntensityTransform):
     def __init__(self,
             probability: float = DEFAULT_PROBABILITY,
-            max_box_size: tuple = (8,8,8),
-            max_box_num: int = 3):
+            max_box_size: Cartesian = Cartesian(16,16,16),
+            max_density: float = 0.1,
+            max_box_num: int = None):
         """make some black cubes in image patch
 
         Args:
@@ -186,21 +155,36 @@ class BlackBox(IntensityTransform):
         """
         super().__init__(probability=probability)
         assert len(max_box_size) == 3
+
+        if not isinstance(max_box_size, Cartesian):
+            max_box_size = Cartesian.from_collection(max_box_size)
+
         self.max_box_size = max_box_size
         self.max_box_num = max_box_num
+        self.max_density = max_density
 
+    def box_num(self, patch_size: tuple):
+        if self.max_box_num is None:
+            shape = Cartesian.from_collection(patch_size[-3:])
+            self.max_box_num = int(np.prod(shape * self.max_density))
+        
+        return random.randint(1, self.max_box_num)
+        
     def transform(self, patch: Patch):
-        box_num = random.randint(1, self.max_box_num)
-        for _ in range(box_num):
+        for _ in range(self.box_num(patch.shape)):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
             # randint is inclusive
             start = tuple(random.randint(1, t-b-1) for t, b in zip(patch.shape[-3:], box_size))
+            if random.random() > 0.5:
+                box = np.random.rand(*box_size)
+            else:
+                box = np.ones(box_size, dtype = patch.image.dtype) * random.random()
             patch.image[
                 ...,
                 start[0] : start[0] + box_size[0],
                 start[1] : start[1] + box_size[1],
                 start[2] : start[2] + box_size[2],
-            ] = 0
+            ] = box
 
 class NormalizeTo01(IntensityTransform):
     def __init__(self, probability: float = 1.):
@@ -213,30 +197,33 @@ class NormalizeTo01(IntensityTransform):
 class AdjustBrightness(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
             min_factor: float = 0.05,
-            max_factor: float = 0.3):
+            max_factor: float = 0.2):
         super().__init__(probability=probability)
         max_factor = np.clip(max_factor, 0, 2)
         self.min_factor = min_factor
         self.max_factor = max_factor
     
     def transform(self, patch: Patch):
-        patch.image += random.uniform(-0.5, 0.5) * random.uniform(
+        brightness = random.uniform(-0.5, 0.5) * random.uniform(
             self.min_factor, self.max_factor)
-        np.clip(patch.image, 0., 1., out=patch.image)
+        if patch.image.mean() + brightness < 0.9:
+            patch.image += brightness
+            np.clip(patch.image, 0., 1., out=patch.image)
 
 class AdjustContrast(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
-            factor_range: tuple = (0.05, 2.)):
+            factor_range: tuple = (0.2, 2.)):
         super().__init__(probability=probability)
-        # factor_range = np.clip(factor_range, 0., 2.)
+        factor_range = np.clip(factor_range, 0., 2.)
         self.factor_range = factor_range
 
     def transform(self, patch: Patch):
         #factor = 1 + random.uniform(-0.5, 0.5) * random.uniform(
         #    self.factor_range[0], self.factor_range[1])
         factor = random.uniform(self.factor_range[0], self.factor_range[1])
-        patch.image *= factor
-        np.clip(patch.image, 0., 1., out=patch.image)
+        if np.mean(patch.image) * factor < 0.9:
+            patch.image *= factor
+            np.clip(patch.image, 0., 1., out=patch.image)
 
 
 class Gamma(IntensityTransform):
@@ -247,7 +234,6 @@ class Gamma(IntensityTransform):
         # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
         patch.image **= 2.** gamma
-
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
@@ -291,11 +277,11 @@ class Flip(SpatialTransform):
     def transform(self, patch: Patch):
         axis_num = random.randint(1, 3)
         axis = random.sample(range(3), axis_num)
-        # the image and target is 5d
+        # the image and label is 5d
         # the first two axises are batch and channel
         axis5d = tuple(2+x for x in axis)
         patch.image = np.flip(patch.image, axis=axis5d)
-        patch.target = np.flip(patch.target, axis=axis5d)
+        patch.label = np.flip(patch.label, axis=axis5d)
 
         shrink = list(patch.delayed_shrink_size)
         for ax in axis:
@@ -309,11 +295,12 @@ class Transpose(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        axis = [2,3,4]
+        # only transform at XY
+        axis = [3,4]
         random.shuffle(axis)
-        axis5d = (0, 1, *axis,)
+        axis5d = (0, 1, 2, *axis,)
         patch.image = np.transpose(patch.image, axis5d)
-        patch.target = np.transpose(patch.target, axis5d)
+        patch.label = np.transpose(patch.label, axis5d)
 
         shrink = list(patch.delayed_shrink_size)
         for ax0, ax1 in enumerate(axis):
@@ -356,10 +343,10 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.target[..., zloc:, 
+            patch.label[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
                 self.max_displacement : sx-self.max_displacement,
-                ] = patch.target[..., zloc:, 
+                ] = patch.label[..., zloc:, 
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
@@ -377,11 +364,11 @@ class MissAlignment(SpatialTransform):
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.target[..., 
+            patch.label[..., 
                 self.max_displacement : sz-self.max_displacement,
                 yloc:,
                 self.max_displacement : sx-self.max_displacement,
-                ] = patch.target[..., 
+                ] = patch.label[..., 
                     self.max_displacement+displacement : sz+displacement-self.max_displacement,
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
@@ -397,11 +384,11 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:
                     ]
-            patch.target[..., 
+            patch.label[..., 
                 self.max_displacement : sz-self.max_displacement,
                 self.max_displacement : sy-self.max_displacement,
                 xloc:,
-                ] = patch.target[..., 
+                ] = patch.label[..., 
                     self.max_displacement+displacement : sz+displacement-self.max_displacement,
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:, 
@@ -410,8 +397,7 @@ class MissAlignment(SpatialTransform):
         # only keep the central region  
         patch.shrink(self.shrink_size)       
     
-    @property
-    @lru_cache
+    @cached_property
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
         return (self.max_displacement,) * 6
@@ -485,8 +471,8 @@ class Perspective2D(SpatialTransform):
                     patch.image[batch,channel,z,...] = self._transform2d(
                         patch.image[batch, channel, z, ...], cv2.INTER_LINEAR, M, sy, sx
                     )
-                    patch.target[batch,channel,z,...] = self._transform2d(
-                        patch.target[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
+                    patch.label[batch,channel,z,...] = self._transform2d(
+                        patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
                     )
                 
         patch.shrink(self.shrink_size)
@@ -500,7 +486,7 @@ class Perspective2D(SpatialTransform):
 #     def __init__(self, probability: float=DEFAULT_PROBABILITY,
 #             max_scaling: float=1.3):
 #         super().__init__(probability=probability)
-#         raise NotImplementedError('this augmentation is not working correctly yet. The image and target could have patchy effect.We are not sure why.')
+#         raise NotImplementedError('this augmentation is not working correctly yet. The image and label could have patchy effect.We are not sure why.')
 #         self.max_scaling = max_scaling
 
 #     def transform(self, patch: Patch):
@@ -509,7 +495,7 @@ class Perspective2D(SpatialTransform):
 #         patch.apply_delayed_shrink_size()
 
 #         # if the rotation is close to diagnal, for example 45 degree
-#         # the target could be outside the volume and be black!
+#         # the label could be outside the volume and be black!
 #         # angle = random.choice([0, 90, 180, -90, -180]) + random.randint(-5, 5)
 #         angle = random.randint(0, 180)
 #         scale = random.uniform(1.1, self.max_scaling)
@@ -523,8 +509,8 @@ class Perspective2D(SpatialTransform):
 #                         patch.image[batch, channel, z, ...],
 #                         mat, patch.shape[-2:], flags=cv2.INTER_LINEAR
 #                     ) 
-#                     patch.target[batch, channel, z, ...] = cv2.warpAffine(
-#                         patch.target[batch, channel, z, ...],
+#                     patch.label[batch, channel, z, ...] = cv2.warpAffine(
+#                         patch.label[batch, channel, z, ...],
 #                         mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
 #                     ) 
 
@@ -543,3 +529,31 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
+
+class Compose(object):
+    def __init__(self, transforms: list):
+        """compose multiple transforms
+
+        Args:
+            transforms (list): list of transform instances
+        """
+        self.transforms = transforms
+
+
+    @cached_property
+    def shrink_size(self):
+        shrink_size = np.zeros((6,), dtype=np.int64)
+        for transform in self.transforms:
+            if isinstance(transform, SpatialTransform):
+                shrink_size += np.asarray(transform.shrink_size)
+        return tuple(x for x in shrink_size)
+
+    def __call__(self, patch: Patch):
+        for transform in self.transforms:
+            transform(patch)
+        # after the transformation, the stride of array
+        # could be negative, and pytorch could not tranform
+        # the array to Tensor. Copy can fix it.
+        patch.image = patch.image.copy()
+        patch.label = patch.label.copy()
+

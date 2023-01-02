@@ -12,8 +12,8 @@ from chunkflow.chunk import Chunk
 import torch
 import toml
 
-from neutorch.dataset.ground_truth_sample import GroundTruthVolume
-from neutorch.dataset.transform import *
+from neutorch.data.sample import ReferenceVolume
+from neutorch.data.transform import *
 
 
 def image_reader(path: str):
@@ -67,12 +67,12 @@ class Dataset(torch.utils.data.Dataset):
 
             image = Chunk.from_h5(image_path)
             image = image.astype(np.float32) / 255.
-            ground_truth_sample = GroundTruthVolume(
+            reference_sample = ReferenceVolume(
                 image,
                 image,
                 patch_size=patch_size_before_transform,
             )
-            volumes.append(ground_truth_sample)
+            volumes.append(reference_sample)
         
         # shuffle the volume list and then split it to training and test
         # random.shuffle(volumes)
@@ -124,8 +124,9 @@ class Dataset(torch.utils.data.Dataset):
         patch.apply_delayed_shrink_size()
         return patch
            
-    def _prepare_transform(self):
-        self.transform = Compose([
+    @cached_property
+    def transform(self):
+        return Compose([
             NormalizeTo01(),
             AdjustBrightness(),
             AdjustContrast(),
@@ -134,7 +135,7 @@ class Dataset(torch.utils.data.Dataset):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            BlackBox(),
+            MaskBox(),
         ])
 
 

@@ -1,3 +1,6 @@
+
+*.yaml
+*events.out.tfevents.*
 .secrets.baseline
 *.code-workspace
 *.vscode

@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 
+from skimage.color import label2rgb
 
 import torch
 from torch import nn
@@ -37,22 +38,70 @@ def load_chkpt(model: nn.Module, fpath: str, chkpt_num: int):
     return model
 
 
-def volume_to_image(tensor: torch.Tensor, 
-        nrow: int=8, zstride: int = 1):
+def volume_to_image(tensor: torch.Tensor, tensor_type: str,
+        nrow: int=8, 
+        zstride: int = 1):
+    """transform image to volume
+
+    Args:
+        tensor (torch.Tensor): input tensor
+        tensor_type (str): image or label
+        nrow (int, optional): number of rows. Defaults to 8.
+        zstride (int, optional): stride of Z scan. Defaults to 1.
+
+    Returns:
+        image: 2D RGB or gray image
+    """
+
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
     else:
         assert torch.is_tensor(tensor)
     assert tensor.ndim >= 3
     
-    if tensor.dtype == torch.uint8:
-        # normalize from 0 to 1
-        tensor = tensor.type(torch.float64)
-        tensor -= tensor.min()
-        tensor /= tensor.max()
+    # if tensor.dtype == torch.uint8:
+    #     # normalize from 0 to 1
+    #     tensor = tensor.type(torch.float64)
+    #     tensor -= tensor.min()
+    #     tensor /= tensor.max()
     
-    # this should work for ndim >= 3
+    if tensor.ndim == 5:
+        # tensor = torch.squeeze(tensor, dim=0)
+        # ignore other batches
+        tensor = tensor[0, ...]
+    if tensor.ndim == 4:
+        # only use the first channel
+        tensor = tensor[0, ...]
+
     tensor = tensor.cpu()
+    
+    if 'seg' in tensor_type:
+        # this is a segmentation volume
+        # label = torch.argmax(tensor, dim=-4, keepdim=False)
+        tensor = tensor.numpy()
+        # breakpoint()
+        rgb = label2rgb(tensor, 
+            bg_label=0, 
+            # bg_color=(100, 200, 49), 
+            image=None, 
+            channel_axis=0)
+        rgb *= 255
+        rgb = rgb.astype(np.uint8)
+        # assert tensor.dtype == np.uint8
+        tensor = torch.tensor(rgb)
+        # tensor = tensor.to(torch.uint8)
+        assert tensor.shape[0] == 3
+        channel_num = 3
+    elif 'image' in tensor_type:
+        # this is an image volume
+        if tensor.max() <= 1.:
+            tensor *= 255.
+            tensor = tensor.to(torch.uint8)
+        channel_num = 1
+    else:
+        raise ValueError(f'only support image or segmentation type, but got {tensor_type}')
+
+    # this should work for ndim >= 3
     # tensor = (tensor * 255.).type(torch.uint8)
     depth = tensor.shape[-3]
     height = tensor.shape[-2]
@@ -62,20 +111,23 @@ def volume_to_image(tensor: torch.Tensor,
     # img = make_grid(imgs, nrow=depth, padding=0)
     # number of images in a column
     ncol = math.ceil( depth / nrow / zstride)
-    img = torch.zeros((height*ncol, width*nrow), dtype=torch.float64)
+    if channel_num > 1:
+        img = torch.zeros((channel_num, height*ncol, width*nrow), dtype=torch.uint8)
+    else:
+        img = torch.zeros((height*ncol, width*nrow), dtype=torch.uint8)
+
     for z in range(0, depth, zstride):
         row = math.floor( z / nrow / zstride )
         col = z % nrow
         # print(col)
-        img[
+        img[...,
             row*height : (row+1)*height, 
-            col*width  : (col+1)*width ] = torch.squeeze(
-                tensor[..., z, :, :]
-        )
+            col*width  : (col+1)*width ] = tensor[..., z, :, :]
     return img
 
 
-def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
+def log_tensor(writer: SummaryWriter, tag: str, 
+        tensor: torch.Tensor, tensor_type: str,
         iter_idx: int, nrow: int=8, zstride: int = 1, 
         mask: torch.Tensor = None):
     """write a 5D tensor in tensorboard log
@@ -84,6 +136,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         writer (SummaryWriter): 
         tag (str): the name of the tensor in the log
         tensor (torch.Tensor): the tensor to visualize
+        tensor_type (str): image or segmentation
         iter_idx (int): training iteration index
         nrow (int): number of images in a row
         zstride (int): skip a number of z sections to make the image smaller. 
@@ -91,7 +144,7 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
             It only works correctly for zstride=1 for now.
         mask (Tensor): the binary mask that used to indicate the manual label
     """
-    img = volume_to_image(tensor, nrow=nrow, zstride=zstride)
+    img = volume_to_image(tensor, tensor_type, nrow=nrow, zstride=zstride)
     if mask is not None:
         mask = volume_to_image(mask, nrow=nrow, zstride=zstride)
         assert img.size() == mask.size()
@@ -102,8 +155,11 @@ def log_tensor(writer: SummaryWriter, tag: str, tensor: torch.Tensor,
         img[2, :,:][mask>0.5] = 0.
         # img = img.double()
         dataformats = 'CHW'
+    elif img.ndim == 3:
+        assert img.shape[0] == 3
+        dataformats = 'CHW'
     else:
-        # assert img.dim == 2
+        assert img.ndim == 2
         dataformats = 'HW'
     # img = img.numpy()
     writer.add_image(tag, img, iter_idx, dataformats=dataformats)

@@ -2,31 +2,30 @@ from functools import cached_property
 
 import click
 from yacs.config import CfgNode
+import torch
 
 from .base import TrainerBase
-from neutorch.dataset.semantic import SemanticDataset
+from neutorch.data.dataset import SemanticDataset
 
 
 class SemanticTrainer(TrainerBase):
-    def __init__(self, cfg: CfgNode, batch_size: int = 1) -> None:
-        super().__init__(cfg, batch_size)
+    def __init__(self, cfg: CfgNode) -> None:
+        assert isinstance(cfg, CfgNode)
+        super().__init__(cfg)
+
+        self.cfg = cfg
+        self.num_classes = self.cfg.model.out_channels
 
     @cached_property
     def training_dataset(self):
-        return SemanticDataset(
-            self.training_path_list,
-            self.cfg.dataset.sample_name_to_image_versions,
-            patch_size=self.patch_size,
-        )
-    
+        return SemanticDataset.from_config(self.cfg, is_train=True)
+       
     @cached_property
     def validation_dataset(self):
-        return SemanticDataset(
-            self.validation_path_list,
-            self.cfg.dataset.sample_name_to_image_versions,
-            patch_size=self.patch_size,
-        )
+        return SemanticDataset.from_config(self.cfg, is_train=False)
 
+    def label_to_target(self, label: torch.Tensor):
+        return (label > 0).float()
 
 @click.command()
 @click.option('--config-file', '-c',
@@ -35,5 +34,7 @@ class SemanticTrainer(TrainerBase):
     help = 'configuration file containing all the parameters.'
 )
 def main(config_file: str):
-    trainer = SemanticTrainer(config_file)
+    from neutorch.data.dataset import load_cfg
+    cfg = load_cfg(config_file)
+    trainer = SemanticTrainer(cfg)
     trainer()

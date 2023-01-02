@@ -12,13 +12,13 @@ from chunkflow.lib.cartesian_coordinate import Cartesian
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
-from neutorch.dataset.patch import collate_batch
+from neutorch.data.patch import collate_batch
 
 from neutorch.model.IsoRSUNet import Model
 from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
 from neutorch.loss import BinomialCrossEntropyWithLogits
-from neutorch.dataset.synapses import PostSynapsesDataset
-from neutorch.dataset.base import worker_init_fn
+from neutorch.data.synapses import PostSynapsesDataset
+from neutorch.data.dataset import worker_init_fn
 
 
 
