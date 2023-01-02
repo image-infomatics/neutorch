@@ -132,7 +132,7 @@ class DropSection(SpatialTransform):
         super().__init__(probability=probability)
 
     def transform(self, patch: Patch):
-        z = random.randint(1, patch.shape[-3]-1)
+        z = random.randrange(1, patch.shape[-3])
         patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
         patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
 
@@ -174,7 +174,7 @@ class MaskBox(IntensityTransform):
         for _ in range(self.box_num(patch.shape)):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
             # randint is inclusive
-            start = tuple(random.randint(1, t-b-1) for t, b in zip(patch.shape[-3:], box_size))
+            start = tuple(random.randrange(1, t-b) for t, b in zip(patch.shape[-3:], box_size))
             if random.random() > 0.5:
                 box = np.random.rand(*box_size)
             else:
@@ -335,7 +335,7 @@ class MissAlignment(SpatialTransform):
         # displacement *= random.choice([-1, 1])
         _,_, sz, sy, sx = patch.shape
         if axis == 2:
-            zloc = random.randint(1, sz-1)
+            zloc = random.randrange(1, sz)
             patch.image[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
                 self.max_displacement : sx-self.max_displacement,
@@ -351,7 +351,7 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
         elif axis == 3:
-            yloc = random.randint(1, sy-1)
+            yloc = random.randrange(1, sy)
             
             # print('right side shape: ', patch.image[...,  self.max_displacement+displacement : sz+displacement-self.max_displacement,yloc:,self.max_displacement+displacement : sx+displacement-self.max_displacement,].shape)
 

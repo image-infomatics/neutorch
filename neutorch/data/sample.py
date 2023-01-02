@@ -126,42 +126,47 @@ class Sample(AbstractSample):
     def random_patch(self):
         patch = self.random_patch_from_center_range(self.center_start, self.center_stop)
         
-        # print(f'patch size before transform: {patch.shape}')
+        print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
-        # print(f'patch size after transform: {patch.shape}')
+        print(f'patch size after transform: {patch.shape}')
         patch.apply_delayed_shrink_size()
-        # print(f'patch size after shrink: {patch.shape}')
+        print(f'patch size after shrink: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
     
     def random_patch_from_center_range(self, center_start: tuple, center_stop: tuple):
-        cz = random.randint(center_start[0], center_stop[0])
-        cy = random.randint(center_start[1], center_stop[1])
-        cx = random.randint(center_start[2], center_stop[2])
+        cz = random.randrange(center_start[0], center_stop[0])
+        cy = random.randrange(center_start[1], center_stop[1])
+        cx = random.randrange(center_start[2], center_stop[2])
         center = Cartesian(cz, cy, cx)
         return self.patch_from_center(center) 
 
     def patch_from_center(self, center: Cartesian):
-        bz, by, bx = center - self.output_patch_size // 2
+        patch_size = self.patch_size_before_transform
+        bz, by, bx = center - patch_size // 2
         # bz = center[0] - self.output_patch_size[-3] // 2
         # by = center[1] - self.output_patch_size[-2] // 2
         # bx = center[2] - self.output_patch_size[-1] // 2
 
         image = random.choice(self.images).array
         image_patch = image[...,
-            bz : bz + self.output_patch_size[-3],
-            by : by + self.output_patch_size[-2],
-            bx : bx + self.output_patch_size[-1]
+            bz : bz + patch_size[-3],
+            by : by + patch_size[-2],
+            bx : bx + patch_size[-1]
         ]
         label_patch = self.label[...,
-            bz : bz + self.output_patch_size[-3],
-            by : by + self.output_patch_size[-2],
-            bx : bx + self.output_patch_size[-1]
+            bz : bz + patch_size[-3],
+            by : by + patch_size[-2],
+            bx : bx + patch_size[-1]
         ]
 
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2]
+        if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
+            breakpoint()
+        assert image_patch.shape[-3:] == self.patch_size_before_transform.tuple, \
+            f'image patch shape: {image_patch.shape}, patch size before transform: {self.patch_size_before_transform}'
         # if we do not copy here, the augmentation will change our 
         # image and label sample!
         image_patch = self._expand_to_5d(image_patch).copy()
@@ -199,9 +204,9 @@ class Sample(AbstractSample):
             MaskBox(),
             # Perspective2D(),
             # RotateScale(probability=1.),
-            #DropSection(),
-            Flip(),
-            Transpose(),
+            DropSection(probability=1.),
+            # Flip(),
+            # Transpose(),
             # MissAlignment(),
         ])
 
@@ -291,7 +296,7 @@ class PostSynapseReference(AbstractSample):
 
     @property
     def random_patch(self):
-        pre_index = random.randint(0, self.synapses.pre_num - 1)
+        pre_index = random.randrange(0, self.synapses.pre_num)
         pre = self.synapses.pre[pre_index, :]
         
         post_indices = self.pre_index2post_indices[pre_index]
@@ -435,15 +440,46 @@ class OrganelleSample(SemanticSample):
             MaskBox(),
             # Perspective2D(),
             # RotateScale(probability=1.),
-            # DropSection(),
+            DropSection(probability=1.),
             Flip(),
             Transpose(),
             # MissAlignment(),
         ])
 
 if __name__ == '__main__':
+    import os
+    from tqdm import tqdm
+    from PIL import Image
     from neutorch.data.dataset import load_cfg
+    
+    PATCH_NUM = 100
+    DEFAULT_PATCH_SIZE=Cartesian(32, 64, 64)
+    OUT_DIR = os.path.expanduser('~/dropbox/patches/')
     cfg = load_cfg('./config_mito.yaml')
 
-    sample = SemanticSample.from_explicit_dict(cfg.dataset.validation.rat)
+    sample = SemanticSample.from_explicit_dict(
+        cfg.dataset.validation.human, 
+        output_patch_size=DEFAULT_PATCH_SIZE
+    )
+    
+    for idx in tqdm(range(PATCH_NUM)):
+        patch = sample.random_patch
+        image = patch.image
+        label = patch.label
+        if image.shape[-3:] != DEFAULT_PATCH_SIZE.tuple:
+            breakpoint()
+
+        # section_idx = image.shape[-3]//2
+        section_idx = 0
+        image = image[0,0, section_idx, :,:]
+        label = label[0,0, section_idx, :,:]
+
+        image *= 255.
+        im = Image.fromarray(image).convert('L')
+        im.save(os.path.join(OUT_DIR, f'{idx}_image.jpg'))
+
+        label *= 255
+        lbl = Image.fromarray(label).convert('L')
+        lbl.save(os.path.join(OUT_DIR, f'{idx}_label.jpg'))
+
     
