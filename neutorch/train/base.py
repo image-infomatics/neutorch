@@ -75,10 +75,10 @@ class TrainerBase(ABC):
     #     self.training_path_list = training_path_list
     #     self.validation_path_list = validation_path_list
 
-    @cached_property
-    def device(self):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return device
+    # @cached_property
+    # def device(self):
+    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #     return device
 
     @cached_property
     def model(self):
@@ -86,20 +86,20 @@ class TrainerBase(ABC):
         if torch.cuda.is_available():
             gpu_num = torch.cuda.device_count()
             print("Let's use ", gpu_num, " GPUs!")
-            model = torch.nn.DataParallel(
+            # we need to use DistributedDataParallel rather than DataParallel to use multiple GPUs!
+            # https://discuss.pytorch.org/t/run-pytorch-on-multiple-gpus/20932/62
+            model = torch.nn.DistributedDataParallel(
                 model, 
-                # device_ids=list(range(gpu_num)), 
-                dim=0,
+                device_ids=list(range(torch.cuda.device_count()))
             )
-
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping 
         model = load_chkpt(
             model, 
             self.cfg.train.output_dir, 
             self.cfg.train.iter_start)
-        print('send model to device: ', self.device)
-        model = model.to(self.device)
+        # print('send model to device: ', self.device)
+        # model = model.to(self.device)
         return model
 
     @cached_property
