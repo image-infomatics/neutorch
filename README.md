@@ -6,12 +6,13 @@ Neuron segmentation and synapse detection using PyTorch
 # Functions
 - [x] Synapse detection
 - [ ] Neuron boundary detection
+- [x] Semantic segmentation
 - [x] Image denoising by image inpainting
 
 # Features
 - [x] Training using whole terabyte or even petabyte of image volume.
 - [x] Training using multiple version of image datasets as data augmentation.
-- [x] Data augmentation without zero-filling.
+- [x] Data augmentation without zero-filling. The loaded patches before transformation/augmentation could be larger than the final training patch size. This size expansion is determined according to the transformation used. This careful adjustment of patch size ensures that there is no zero padding in the transformation and the distribution is closer to original dataset.
 
 # Install
     python setup.py install
