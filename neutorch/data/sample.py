@@ -204,7 +204,7 @@ class Sample(AbstractSample):
             MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
-            DropSection(probability=1.),
+            DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),

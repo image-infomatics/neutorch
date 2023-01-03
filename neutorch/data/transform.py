@@ -39,9 +39,9 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
-        else:
-            if self.shrink_size is not None:
-                patch.shrink(self.shrink_size)
+        
+        if self.shrink_size is not None:
+            patch.shrink(self.shrink_size)
         # for spatial transform, we need to correct the size
         # to make sure that the final patch size is correct 
 
@@ -140,8 +140,6 @@ class DropSection(SpatialTransform):
         z = random.randrange(1, patch.shape[-3])
         patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
         patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
-
-        patch.shrink(self.shrink_size)
 
     @cached_property
     def shrink_size(self):
@@ -404,9 +402,6 @@ class MissAlignment(SpatialTransform):
                     xloc:, 
                     ] 
 
-        # only keep the central region 
-        patch.shrink(self.shrink_size)       
-    
     @cached_property
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
@@ -485,8 +480,6 @@ class Perspective2D(SpatialTransform):
                         patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
                     )
                 
-        patch.shrink(self.shrink_size)
-
     def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
         return dst
