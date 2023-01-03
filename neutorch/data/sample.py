@@ -80,7 +80,7 @@ class Sample(AbstractSample):
         self.images = images
         self.label = label
         
-        print(f'output patch size: {self.output_patch_size}')
+        # print(f'output patch size: {self.output_patch_size}')
         assert isinstance(self.output_patch_size, Cartesian)
         for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
             assert ls >= ps
@@ -101,9 +101,9 @@ class Sample(AbstractSample):
         for cs, cp in zip(self.center_start, self.center_stop):
             assert cp > cs
 
-        print(f'center start: {self.center_start}')
-        print(f'center stop: {self.center_stop}')
-        print(f'forbbiden distance to boundary: {forbbiden_distance_to_boundary}')
+        # print(f'center start: {self.center_start}')
+        # print(f'center stop: {self.center_stop}')
+        # print(f'forbbiden distance to boundary: {forbbiden_distance_to_boundary}')
         # breakpoint()
 
     # @classmethod
@@ -126,11 +126,11 @@ class Sample(AbstractSample):
     def random_patch(self):
         patch = self.random_patch_from_center_range(self.center_start, self.center_stop)
         
-        print(f'patch size before transform: {patch.shape}')
+        # print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
-        print(f'patch size after transform: {patch.shape}')
-        patch.apply_delayed_shrink_size()
-        print(f'patch size after shrink: {patch.shape}')
+        # print(f'patch size after transform: {patch.shape}')
+        # patch.apply_delayed_shrink_size()
+        # print(f'patch size after shrink: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
@@ -202,12 +202,12 @@ class Sample(AbstractSample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            # Perspective2D(),
+            Perspective2D(),
             # RotateScale(probability=1.),
             DropSection(probability=1.),
-            # Flip(),
-            # Transpose(),
-            # MissAlignment(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
         ])
 
  

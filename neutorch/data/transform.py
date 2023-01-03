@@ -39,10 +39,15 @@ class AbstractTransform(ABC):
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
             self.transform(patch)
+        else:
+            if self.shrink_size is not None:
+                patch.shrink(self.shrink_size)
         # for spatial transform, we need to correct the size
         # to make sure that the final patch size is correct 
-        if hasattr(self, 'shrink_size'):
-            patch.accumulate_delayed_shrink_size(self.shrink_size) 
+
+    @property
+    def shrink_size(self):
+        return None
 
     @abstractmethod
     def transform(self, patch: Patch):
@@ -135,6 +140,8 @@ class DropSection(SpatialTransform):
         z = random.randrange(1, patch.shape[-3])
         patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
         patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+
+        patch.shrink(self.shrink_size)
 
     @cached_property
     def shrink_size(self):
@@ -283,11 +290,11 @@ class Flip(SpatialTransform):
         patch.image = np.flip(patch.image, axis=axis5d)
         patch.label = np.flip(patch.label, axis=axis5d)
 
-        shrink = list(patch.delayed_shrink_size)
-        for ax in axis:
-            # swap the axis to be shrinked
-            shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
-        patch.delayed_shrink_size = tuple(shrink)
+        # shrink = list(patch.delayed_shrink_size)
+        # for ax in axis:
+        #     # swap the axis to be shrinked
+        #     shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
+        # patch.delayed_shrink_size = tuple(shrink)
 
 
 class Transpose(SpatialTransform):
@@ -302,13 +309,13 @@ class Transpose(SpatialTransform):
         patch.image = np.transpose(patch.image, axis5d)
         patch.label = np.transpose(patch.label, axis5d)
 
-        shrink = list(patch.delayed_shrink_size)
-        for ax0, ax1 in enumerate(axis):
-            ax1 -= 2
-            # swap the axis to be shrinked
-            shrink[ax0] = patch.delayed_shrink_size[ax1]
-            shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
-        patch.delayed_shrink_size = tuple(shrink) 
+        # shrink = list(patch.delayed_shrink_size)
+        # for ax0, ax1 in enumerate(axis):
+        #     ax1 -= 2
+        #     # swap the axis to be shrinked
+        #     shrink[ax0] = patch.delayed_shrink_size[ax1]
+        #     shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
+        # patch.delayed_shrink_size = tuple(shrink) 
 
     
 class MissAlignment(SpatialTransform):
@@ -333,8 +340,9 @@ class MissAlignment(SpatialTransform):
         # random direction
         # no need to use random direction because we can combine with rotation and flipping
         # displacement *= random.choice([-1, 1])
-        _,_, sz, sy, sx = patch.shape
+        sz, sy, sx = patch.shape[-3:]
         if axis == 2:
+            # displacement at Z
             zloc = random.randrange(1, sz)
             patch.image[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
@@ -351,6 +359,7 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
         elif axis == 3:
+            # displacement at Y
             yloc = random.randrange(1, sy)
             
             # print('right side shape: ', patch.image[...,  self.max_displacement+displacement : sz+displacement-self.max_displacement,yloc:,self.max_displacement+displacement : sx+displacement-self.max_displacement,].shape)
@@ -374,6 +383,7 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
         elif axis == 4:
+            # displacement at X
             xloc = random.randint(1, sx-1)
             patch.image[..., 
                 self.max_displacement : sz-self.max_displacement,
@@ -394,7 +404,7 @@ class MissAlignment(SpatialTransform):
                     xloc:, 
                     ] 
 
-        # only keep the central region  
+        # only keep the central region 
         patch.shrink(self.shrink_size)       
     
     @cached_property
