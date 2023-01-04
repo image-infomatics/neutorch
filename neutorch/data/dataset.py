@@ -9,8 +9,9 @@ from yacs.config import CfgNode
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
-
 from neutorch.data.sample import SemanticSample
+
+from transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
@@ -57,10 +58,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
     def __init__(self,
             samples: list, 
         ):
-        """
-        Parameters:
-            patch_size (int or tuple): the patch size we are going to provide.
-        """
+
         super().__init__()
         self.samples = samples
 
@@ -141,7 +139,7 @@ class SemanticDataset(DatasetBase):
             MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
-            # DropSection(),
+            DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),
