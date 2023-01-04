@@ -1,17 +1,15 @@
-import random
-from typing import Union
-from functools import cached_property
 import math
+import random
+from functools import cached_property
+from typing import Union
 
 import numpy as np
 import torch
+from chunkflow.lib.cartesian_coordinate import Cartesian
+from transform import *
 from yacs.config import CfgNode
 
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
 from neutorch.data.sample import SemanticSample
-
-from transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
@@ -56,7 +54,7 @@ def to_tensor(arr):
 
 class DatasetBase(torch.utils.data.IterableDataset):
     def __init__(self,
-            samples: list, 
+            samples: list,   
         ):
 
         super().__init__()
@@ -105,7 +103,6 @@ class DatasetBase(torch.utils.data.IterableDataset):
 
 class SemanticDataset(DatasetBase):
     def __init__(self, samples: list):
-            #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
         super().__init__(samples)
     
     @classmethod

@@ -4,16 +4,14 @@ from time import sleep, time
 from typing import List, Union
 
 import numpy as np
-
-from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
+import torch
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import Volume
 
-import torch
-
-from .transform import *
 from .dataset import DatasetBase, SemanticDataset, path_to_dataset_name
-from .sample import SampleWithPointAnnotation, PostSynapseReference
+from .sample import PostSynapseReference, SampleWithPointAnnotation
+from .transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
@@ -67,12 +65,12 @@ class PreSynapsesDataset(SynapsesDatasetBase):
         """
 
         if isinstance(patch_size, int):
-            patch_size = Cartesian(patch_size, patch_size, patch_size)
+            patch_size = Cartesian(patch_size, ) * 3
         else:
             patch_size = Cartesian.from_collection(patch_size)
         super().__init__(sample_name_to_image_versions, patch_size=patch_size)
         
-        self.transform = transform() #why can't this be called from semantic?
+        self._prepare_transform()
         assert isinstance(self.transform, Compose)
 
         self.patch_size = patch_size
@@ -83,6 +81,7 @@ class PreSynapsesDataset(SynapsesDatasetBase):
                 self.transform.shrink_size[-3:]
             )
         )
+
         patch_size_before_transform = Cartesian.from_collection(patch_size_before_transform)
 
         for syns_path in syns_path_list:
@@ -106,6 +105,25 @@ class PreSynapsesDataset(SynapsesDatasetBase):
 
         self.compute_sample_weights()
         self.setup_iteration_range()
+
+    def _prepare_transform(self): #find a way to 
+        self.transform = Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+        ])
 
 class PostSynapsesDataset(SynapsesDatasetBase):
     def __init__(self, 
@@ -133,7 +151,6 @@ class PostSynapsesDataset(SynapsesDatasetBase):
             print(f'loaded {syns_path}')
             synapses.remove_synapses_without_post()
 
-            # bbox = BoundingBox.from_string(syns_path)
             bbox = synapses.pre_bounding_box
             bbox.adjust(self.patch_size_before_transform // 2)
 
@@ -149,8 +166,9 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 
 if __name__ == '__main__':
     
-    from neutorch.dataset.patch import collate_batch
     from torch.utils.data import DataLoader
+
+    from neutorch.dataset.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",
@@ -166,8 +184,9 @@ if __name__ == '__main__':
     )
     data_iter = iter(data_loader)
 
-    from neutorch.model.io import log_tensor
     from torch.utils.tensorboard import SummaryWriter
+
+    from neutorch.model.io import log_tensor
     writer = SummaryWriter(log_dir='/tmp/log')
 
     model = torch.nn.Identity()

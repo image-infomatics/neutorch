@@ -1,12 +1,11 @@
-from abc import ABC, abstractmethod
 import random
-from typing import List, Union
+from abc import ABC, abstractmethod
 from functools import cached_property
+from typing import List, Union
 
 import numpy as np
-
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from chunkflow.chunk import Chunk, load_chunk
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from chunkflow.lib.synapses import Synapses
 
 from neutorch.data.patch import Patch
@@ -14,7 +13,6 @@ from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 DEFAULT_NUM_CLASSES = 1
-
 
 class AbstractSample(ABC):
     def __init__(self, output_patch_size: Cartesian):
@@ -76,9 +74,9 @@ class Sample(AbstractSample):
         #     print(images[0].shape)
         #     print(label.shape[-3:])
         #     breakpoint()
-        assert images[0].shape == label.shape[-3:]
+        assert images[0].shape == label.shape[-3:] #importance
         self.images = images
-        self.label = label
+        self.label = label 
         
         # print(f'output patch size: {self.output_patch_size}')
         assert isinstance(self.output_patch_size, Cartesian)
@@ -352,7 +350,7 @@ class SemanticSample(Sample):
             num_classes: int = DEFAULT_NUM_CLASSES,
             forbbiden_distance_to_boundary: tuple = None) -> None:
         super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
-        # number of classes
+
         self.num_classes = num_classes
 
     @classmethod
@@ -448,8 +446,10 @@ class OrganelleSample(SemanticSample):
 
 if __name__ == '__main__':
     import os
-    from tqdm import tqdm
+
     from PIL import Image
+    from tqdm import tqdm
+
     from neutorch.data.dataset import load_cfg
     
     PATCH_NUM = 100

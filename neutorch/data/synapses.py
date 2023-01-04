@@ -1,18 +1,16 @@
-from time import time, sleep
 from functools import cached_property
-from typing import Union, List
+from time import sleep, time
+from typing import List, Union
 
 import numpy as np
-
-from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
+import torch
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import Volume
 
-import torch
-
+from .dataset import DatasetBase, SemanticDataset, path_to_dataset_name
+from .sample import PostSynapseReference, SampleWithPointAnnotation
 from .transform import *
-from .base import DatasetBase, path_to_dataset_name
-from .sample import SampleWithPointAnnotation, PostSynapseReference
 
 
 class SynapsesDatasetBase(DatasetBase):
@@ -189,6 +187,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 if __name__ == '__main__':
     
     from torch.utils.data import DataLoader
+
     from neutorch.data.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
@@ -206,6 +205,7 @@ if __name__ == '__main__':
     data_iter = iter(data_loader)
 
     from torch.utils.tensorboard import SummaryWriter
+
     from neutorch.model.io import log_tensor
     writer = SummaryWriter(log_dir='/tmp/log')
 
