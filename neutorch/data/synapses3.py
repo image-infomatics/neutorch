@@ -1,3 +1,4 @@
+import os
 from functools import cached_property
 from time import sleep, time
 from typing import List, Union
@@ -12,29 +13,32 @@ from .dataset import DatasetBase, SemanticDataset, path_to_dataset_name
 from .sample import PostSynapseReference, SampleWithPointAnnotation
 from .transform import *
 
+DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
-class SynapsesDatasetBase(DatasetBase):
+"""
+def vols_dir(sample_name_to_image_versions):
+    vols = {}
+    for dataset_name, dir_list in sample_name_to_image_versions.items():
+        vol_list = []
+        for dir_path in dir_list:
+            vol = Volume.from_cloudvolume_path(
+                'file://' + dir_path,
+                bounded = True,
+                fill_missing = False,
+                parallel=True,
+            )
+            vol_list.append(vol)
+        vols[dataset_name] = vol_list
+    return vols  
+"""
+
+class SynapsesDatasetBase(SemanticDataset):
     def __init__(self, 
-            sample_name_to_image_versions: dict,
-            patch_size: Union[int, tuple, Cartesian] = (128, 128, 128)):
-        super().__init__(patch_size)
+            samples: list,
+            patch_size: Union[int, tuple, Cartesian] = DEFAULT_PATCH_SIZE):
+        super().__init__(samples)
 
-        self.sample_name_to_image_versions = sample_name_to_image_versions
-
-        self.vols = {} 
-        for dataset_name, dir_list in sample_name_to_image_versions.items():
-            vol_list = []
-            for dir_path in dir_list:
-                vol = Volume.from_cloudvolume_path(
-                    'file://' + dir_path,
-                    bounded = True,
-                    fill_missing = False,
-                    parallel=True,
-                )
-                vol_list.append(vol)
-            self.vols[dataset_name] = vol_list
-
-        self.samples = []
+        self.patch_size = patch_size
 
     def syns_path_to_images(self, syns_path: str, bbox: BoundingBox):
         images = []
@@ -47,12 +51,11 @@ class SynapsesDatasetBase(DatasetBase):
             images.append(image)
         return images
 
-
 class PreSynapsesDataset(SynapsesDatasetBase):
     def __init__(self, 
             syns_path_list: List[str],
-            sample_name_to_image_versions: dict,
-            patch_size: Union[int, tuple, Cartesian]=Cartesian(128, 128, 128),
+            samples: list,
+            patch_size: Union[int, tuple, Cartesian] = DEFAULT_PATCH_SIZE,
         ):
         """
         Parameters:
@@ -62,11 +65,10 @@ class PreSynapsesDataset(SynapsesDatasetBase):
         """
 
         if isinstance(patch_size, int):
-            patch_size = Cartesian(patch_size, patch_size, patch_size)
+            patch_size = Cartesian(patch_size, ) * 3
         else:
             patch_size = Cartesian.from_collection(patch_size)
-        super().__init__(sample_name_to_image_versions, patch_size=patch_size)
-        
+        super().__init__(samples=samples, patch_size=patch_size)
         
         self._prepare_transform()
         assert isinstance(self.transform, Compose)
@@ -79,6 +81,7 @@ class PreSynapsesDataset(SynapsesDatasetBase):
                 self.transform.shrink_size[-3:]
             )
         )
+
         patch_size_before_transform = Cartesian.from_collection(patch_size_before_transform)
 
         for syns_path in syns_path_list:
@@ -100,13 +103,12 @@ class PreSynapsesDataset(SynapsesDatasetBase):
             )
             self.samples.append(sample)
 
-        self.compute_sample_weights()
-        self.setup_iteration_range()
-
-    def _prepare_transform(self):
+    def _prepare_transform(self): #keep for now
         self.transform = Compose([
             NormalizeTo01(probability=1.),
-            IntensityPerturbation(),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(), #using gamma currently
             OneOf([
                 Noise(),
                 GaussianBlur2D(),
@@ -114,30 +116,29 @@ class PreSynapsesDataset(SynapsesDatasetBase):
             MaskBox(),
             Perspective2D(),
             # RotateScale(probability=1.),
-            #DropSection(),
+            DropSection(),
             Flip(),
             Transpose(),
             MissAlignment(),
         ])
 
-
 class PostSynapsesDataset(SynapsesDatasetBase):
     def __init__(self, 
             syns_path_list: List[str],
-            sample_name_to_image_versions: dict,
-            patch_size: Cartesian = Cartesian(256, 256, 256), 
+            samples: list,
+            patch_size: Union[int, tuple, Cartesian] = DEFAULT_PATCH_SIZE, 
         ):
         """postsynapse dataset
 
         Args:
             syns_path_list (List[str]): the synapses file list
-            sample_name_to_image_versions (dict): map the sample or volume name to a list of versions the same dataset.
-            patch_size (Cartesian, optional): Defaults to Cartesian(256, 256, 256).
+            samples (list): 
+            patch_size (Cartesian, optional): 
 
         Raises:
             ValueError: [description]
         """
-        super().__init__(sample_name_to_image_versions, patch_size=patch_size)
+        super().__init__(samples=samples, patch_size=patch_size)
 
         for syns_path in syns_path_list:
             synapses = Synapses.from_file(syns_path)
@@ -147,7 +148,6 @@ class PostSynapsesDataset(SynapsesDatasetBase):
             print(f'loaded {syns_path}')
             synapses.remove_synapses_without_post()
 
-            # bbox = BoundingBox.from_string(syns_path)
             bbox = synapses.pre_bounding_box
             bbox.adjust(self.patch_size_before_transform // 2)
 
@@ -158,37 +158,11 @@ class PostSynapsesDataset(SynapsesDatasetBase):
             )
             self.samples.append(sample)
 
-        # shuffle the volume list and then split it to training and test
-        # random.shuffle(volumes)
-        self.compute_sample_weights()
-        self.setup_iteration_range()
-
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            #DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-        ])
-
-
 if __name__ == '__main__':
     
     from torch.utils.data import DataLoader
+    from neutorch.dataset.patch import collate_batch
 
-    from neutorch.data.patch import collate_batch
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",
@@ -218,7 +192,6 @@ if __name__ == '__main__':
         target = target.cpu()
         print(f'generating a patch takes {round(time()-ping, 3)} seconds.')
         print('number of nonzero voxels: ', np.count_nonzero(target>0.5))
-        # assert np.any(target > 0.5)
         assert torch.any(target > 0.5)
 
         log_tensor(writer, 'train/image', image, n)

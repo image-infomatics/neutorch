@@ -1,23 +1,20 @@
-from abc import ABC, abstractmethod
 import random
+from abc import ABC, abstractmethod
 from functools import cached_property
 
-
-from chunkflow.lib.cartesian_coordinate import Cartesian
-# from copy import deepcopy
-
-import numpy as np
-
-from scipy.ndimage.filters import gaussian_filter
-# from scipy.ndimage import affine_transform
-
 import cv2
-
-from skimage.util import random_noise
+import numpy as np
+from chunkflow.lib.cartesian_coordinate import Cartesian
+from scipy.ndimage.filters import gaussian_filter
 from skimage.transform import swirl
+from skimage.util import random_noise
 
 from .patch import Patch
 
+# from copy import deepcopy
+
+
+# from scipy.ndimage import affine_transform
 
 DEFAULT_PROBABILITY = .5
 DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
