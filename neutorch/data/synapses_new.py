@@ -15,30 +15,28 @@ from .transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
-def vols_dir(sample_name_to_image_versions):
-    vols = {}
-    for dataset_name, dir_list in sample_name_to_image_versions.items():
-        vol_list = []
-        for dir_path in dir_list:
-            vol = Volume.from_cloudvolume_path(
-                'file://' + dir_path,
-                bounded = True,
-                fill_missing = False,
-                parallel=True,
-            )
-            vol_list.append(vol)
-        vols[dataset_name] = vol_list
-    return vols 
-
 class SynapsesDatasetBase(SemanticDataset):
     def __init__(self, 
+            samples: list,
             sample_name_to_image_versions: dict,
             patch_size: Union[int, tuple, Cartesian] = DEFAULT_PATCH_SIZE):
-        super().__init__(patch_size)
+        super().__init__(samples)
 
+        self.patch_size = patch_size
         self.sample_name_to_image_versions = sample_name_to_image_versions
-        self.vols = vols_dir(sample_name_to_image_versions)
-        self.samples = []
+        
+        self.vols = {} 
+        for dataset_name, dir_list in sample_name_to_image_versions.items():
+            vol_list = []
+            for dir_path in dir_list:
+                vol = Volume.from_cloudvolume_path(
+                    'file://' + dir_path,
+                    bounded = True,
+                    fill_missing = False,
+                    parallel=True,
+                )
+                vol_list.append(vol)
+            self.vols[dataset_name] = vol_list
 
     def syns_path_to_images(self, syns_path: str, bbox: BoundingBox):
         images = []
@@ -65,7 +63,7 @@ class PreSynapsesDataset(SynapsesDatasetBase):
         """
 
         if isinstance(patch_size, int):
-            patch_size = Cartesian(patch_size, ) * 3
+            patch_size = Cartesian(patch_size, patch_size, patch_size) 
         else:
             patch_size = Cartesian.from_collection(patch_size)
         super().__init__(sample_name_to_image_versions, patch_size=patch_size)
@@ -102,9 +100,6 @@ class PreSynapsesDataset(SynapsesDatasetBase):
                 patch_size=patch_size_before_transform,
             )
             self.samples.append(sample)
-
-        self.compute_sample_weights()
-        self.setup_iteration_range()
 
     def _prepare_transform(self): #find a way to 
         self.transform = Compose([
@@ -160,9 +155,6 @@ class PostSynapsesDataset(SynapsesDatasetBase):
                 patch_size=self.patch_size_before_transform
             )
             self.samples.append(sample)
-
-        self.compute_sample_weights()
-        self.setup_iteration_range()
 
 if __name__ == '__main__':
     

@@ -39,7 +39,6 @@ class SynapsesDatasetBase(SemanticDataset):
         super().__init__(samples)
 
         self.patch_size = patch_size
-        # self.vols = vols_dir(sample_name_to_image_versions)
 
     def syns_path_to_images(self, syns_path: str, bbox: BoundingBox):
         images = []
@@ -163,7 +162,7 @@ if __name__ == '__main__':
     
     from torch.utils.data import DataLoader
     from neutorch.dataset.patch import collate_batch
-    
+
     dataset = Dataset(
         "/mnt/ceph/users/neuro/wasp_em/jwu/14_post_synapse_net/post.toml",
         # section_name="validation",
