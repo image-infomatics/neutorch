@@ -16,6 +16,8 @@ import cv2
 from skimage.util import random_noise
 from skimage.transform import swirl
 
+from reneu.lib.segmentation import seg_to_affs
+
 from .patch import Patch
 
 
@@ -532,6 +534,22 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
+
+class Label2AffinityMap(SpatialTransform):
+    def __init__(self, probability: float = 1.):
+        """If this transform is used, the probability should always be 1.0."""
+        assert probability == 1.
+        super().__init__(probability)
+    
+    def transform(self, patch: Patch):
+        """transform the label to affinity map."""
+        patch.label = seg_to_affs(patch.label)
+        patch.image = patch.image[1:, 1:, 1:]
+        return patch
+
+    @cached_property
+    def shrink_size(self):
+        return (1,1,1, 0, 0, 0)
 
 class Compose(object):
     def __init__(self, transforms: list):

@@ -1,5 +1,4 @@
 import random
-from typing import Union
 from functools import cached_property
 import math
 
@@ -9,7 +8,7 @@ from yacs.config import CfgNode
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
-
+from neutorch.data.transform import *
 from neutorch.data.sample import SemanticSample
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -220,7 +219,36 @@ class OrganelleDataset(SemanticDataset):
         target = to_tensor(label)
 
         return image, target
+
+
+class AffinityMapDataset(SemanticDataset):
+    def __init__(self, samples: list):
+            #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
+        super().__init__(samples)
     
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            # DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+            # Tranform to affinity map
+            # there is a shrinking, so we put this transformation here
+            # rather than the label2target function.
+            Label2AffinityMap(),
+        ])
 
 if __name__ == '__main__':
 
@@ -231,7 +259,7 @@ if __name__ == '__main__':
         cfg = CfgNode.load_cfg(file)
     cfg.freeze()
 
-    sd = SemanticDataset(
+    sd = AffinityMapDataset(
         path_list=['/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/rna_v1.h5'],
         sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
         patch_size=Cartesian(128, 128, 128),

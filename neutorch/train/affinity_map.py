@@ -34,5 +34,5 @@ class AffinityMapTrainer(TrainerBase):
 def main(config_file: str):
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = SemanticTrainer(cfg)
+    trainer = AffinityMapTrainer(cfg)
     trainer()
