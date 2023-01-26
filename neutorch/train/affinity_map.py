@@ -2,7 +2,6 @@ from functools import cached_property
 
 import click
 from yacs.config import CfgNode
-import torch
 
 from .base import TrainerBase
 from neutorch.data.dataset import SemanticDataset
@@ -21,9 +20,6 @@ class AffinityMapTrainer(TrainerBase):
     @cached_property
     def validation_dataset(self):
         return SemanticDataset.from_config(self.cfg, is_train=False)
-
-    def label_to_target(self, label: torch.Tensor):
-        return (label > 0).float()
 
 @click.command()
 @click.option('--config-file', '-c',
