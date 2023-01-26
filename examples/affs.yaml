@@ -1,5 +1,5 @@
 system:
-  cpus: 6
+  cpus: 1
   gpus: 1
   seed: 1
   

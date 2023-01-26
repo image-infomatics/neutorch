@@ -88,9 +88,11 @@ class TrainerBase(ABC):
             print("Let's use ", gpu_num, " GPUs!")
             # we need to use DistributedDataParallel rather than DataParallel to use multiple GPUs!
             # https://discuss.pytorch.org/t/run-pytorch-on-multiple-gpus/20932/62
+            # device_ids=list(range(torch.cuda.device_count()))
             model = torch.nn.parallel.DistributedDataParallel(
                 model, 
-                device_ids=list(range(torch.cuda.device_count()))
+                device_ids=list(range(torch.cuda.device_count())),
+                output_device=0,
             )
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping 
