@@ -1,5 +1,4 @@
 import random
-from typing import Union
 from functools import cached_property
 import math
 
@@ -9,7 +8,7 @@ from yacs.config import CfgNode
 
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
-
+from neutorch.data.transform import *
 from neutorch.data.sample import SemanticSample
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -43,10 +42,11 @@ def path_to_dataset_name(path: str, dataset_names: list):
 
 def to_tensor(arr):
     if isinstance(arr, np.ndarray):
+        # Pytorch only supports types: float64, float32, float16, complex64, complex128, int64, int32, int16, int8, uint8, and bool.
         if np.issubdtype(arr.dtype, np.uint16):
-            # torch do not support uint16.
-            # The only supported types are: float64, float32, float16, complex64, complex128, int64, int32, int16, int8, uint8, and bool.
             arr = arr.astype(np.int32)
+        elif np.issubdtype(arr.dtype, np.uint64):
+            arr = arr.astype(np.int64)
         arr = torch.tensor(arr)
     if torch.cuda.is_available():
         arr = arr.cuda()
@@ -220,7 +220,36 @@ class OrganelleDataset(SemanticDataset):
         target = to_tensor(label)
 
         return image, target
+
+
+class AffinityMapDataset(SemanticDataset):
+    def __init__(self, samples: list):
+            #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
+        super().__init__(samples)
     
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            # DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+            # Tranform to affinity map
+            # there is a shrinking, so we put this transformation here
+            # rather than the label2target function.
+            Label2AffinityMap(),
+        ])
 
 if __name__ == '__main__':
 
@@ -231,7 +260,7 @@ if __name__ == '__main__':
         cfg = CfgNode.load_cfg(file)
     cfg.freeze()
 
-    sd = SemanticDataset(
+    sd = AffinityMapDataset(
         path_list=['/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/rna_v1.h5'],
         sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
         patch_size=Cartesian(128, 128, 128),
