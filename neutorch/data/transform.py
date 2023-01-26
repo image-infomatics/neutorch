@@ -483,6 +483,8 @@ class Perspective2D(SpatialTransform):
                     )
                 
     def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
+        breakpoint()
+        arr = cv2.Umat(arr)
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
         return dst
 
