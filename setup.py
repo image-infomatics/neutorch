@@ -17,6 +17,7 @@ setup(
         neutrain-pre=neutorch.train.pre_synapses:main
         neutrain-denoise=neutorch.train.denoise:main
         neutrain-post=neutorch.train.post_synapses:main
+        neutrain-affs=neutorch.train.affinity_map:main
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -26,6 +27,6 @@ setup(
         'Topic :: Communications :: Email',
         'Topic :: Software Development :: Bug Tracking',
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
     ],
 )

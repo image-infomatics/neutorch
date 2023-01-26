@@ -68,7 +68,9 @@ class Sample(AbstractSample):
         assert len(images) > 0
         assert images[0].ndim == 3
         assert label.ndim >= 3
-
+        assert isinstance(label, Chunk)
+        assert images[0].shape == label.shape[-3:], f'label voxel offset: {label.start}'
+        
         if isinstance(label, Chunk):
             label = label.array
 
@@ -76,7 +78,6 @@ class Sample(AbstractSample):
         #     print(images[0].shape)
         #     print(label.shape[-3:])
         #     breakpoint()
-        assert images[0].shape == label.shape[-3:]
         self.images = images
         self.label = label
         
