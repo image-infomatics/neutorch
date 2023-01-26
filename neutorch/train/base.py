@@ -181,6 +181,7 @@ class TrainerBase(ABC):
 
             ping = time()
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
+            breakpoint()
             predict = self.model(image)
             # predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)

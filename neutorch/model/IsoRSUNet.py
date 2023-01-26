@@ -1,6 +1,6 @@
 import math
 from itertools import repeat
-import collections
+from collections.abc import Iterable
 
 from torch import nn
 import torch
@@ -13,7 +13,7 @@ def _ntuple(n: int):
     Copied from PyTorch source code
     """
     def parse(x):
-        if isinstance(x, collections.Iterable):
+        if isinstance(x, Iterable):
             return x
         else:
             return tuple(repeat(x, n))

@@ -27,6 +27,6 @@ setup(
         'Topic :: Communications :: Email',
         'Topic :: Software Development :: Bug Tracking',
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
     ],
 )

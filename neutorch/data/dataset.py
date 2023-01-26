@@ -42,10 +42,11 @@ def path_to_dataset_name(path: str, dataset_names: list):
 
 def to_tensor(arr):
     if isinstance(arr, np.ndarray):
+        # Pytorch only supports types: float64, float32, float16, complex64, complex128, int64, int32, int16, int8, uint8, and bool.
         if np.issubdtype(arr.dtype, np.uint16):
-            # torch do not support uint16.
-            # The only supported types are: float64, float32, float16, complex64, complex128, int64, int32, int16, int8, uint8, and bool.
             arr = arr.astype(np.int32)
+        elif np.issubdtype(arr.dtype, np.uint64):
+            arr = arr.astype(np.int64)
         arr = torch.tensor(arr)
     if torch.cuda.is_available():
         arr = arr.cuda()
