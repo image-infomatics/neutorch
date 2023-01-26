@@ -1,0 +1,49 @@
+system:
+  cpus: 6
+  gpus: 1
+  seed: 1
+  
+dataset:
+  training:
+    s1vol01700:
+      #images: ["~/dropbox/40_gt/71_harvard/MitoEM/rat_train_image_30x32x32.h5",]
+      #label: "~/dropbox/40_gt/71_harvard/MitoEM/rat_train_label_30x32x32.h5"
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_01700/img.h5",]
+      label: "~/dropbox/40_gt/13_wasp_sample3/vol_01700/label_v3.h5"
+    s1vol02299:
+      #images: ["~/dropbox/40_gt/71_harvard/MitoEM/rat_train_image_30x32x32.h5",]
+      #label: "~/dropbox/40_gt/71_harvard/MitoEM/rat_train_label_30x32x32.h5"
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02299/img.h5",]
+      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02299/label_v3.h5"
+
+    human:
+      images: ["/mnt/ceph/users/jwu/31_organelle/83_mitoem/human_train_image_30x32x32.h5",]
+      label: "/mnt/ceph/users/jwu/31_organelle/83_mitoem/human_train_label_30x32x32.h5"
+    rat2:
+      images: ["/mnt/ceph/users/jwu/31_organelle/83_mitoem/rat_val_image_30x32x32.h5",]
+      label: "/mnt/ceph/users/jwu/31_organelle/83_mitoem/rat_val_label_30x32x32.h5"
+    epfl:
+      images: ["/mnt/ceph/users/jwu/31_organelle/82_epfl_mitochondria/img_0-165_0-1024_0-768.h5",]
+      label: "/mnt/ceph/users/jwu/31_organelle/82_epfl_mitochondria/mit_0-165_0-1024_0-768.h5"
+  validation:
+    human:
+      images: ["/mnt/ceph/users/jwu/31_organelle/83_mitoem/human_val_image_30x32x32.h5",]
+      label: "/mnt/ceph/users/jwu/31_organelle/83_mitoem/human_val_label_30x32x32.h5"
+model:
+  in_channels: 1
+  out_channels: 1
+
+train:
+  iter_start: 400000
+  iter_stop: 1000000
+  class_rebalance: false
+  # batch size per GPU
+  # The dataprovider should provide nGPU*batch_size batches!
+  batch_size: 1
+  output_dir: "./"
+  patch_size: [64, 128, 128]
+  learning_rate: 0.001
+  training_interval: 200
+  validation_interval: 2000
+    #training_interval: 2
+    #validation_interval: 4
