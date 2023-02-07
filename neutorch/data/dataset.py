@@ -70,10 +70,22 @@ class DatasetBase(torch.utils.data.IterableDataset):
     
     @cached_property
     def sample_weights(self):
-        # use the number of candidate patches as volume sampling weight
+        """use the number of candidate patches as volume sampling weight
+        if there is None, replace it with average value
+        """
         sample_weights = []
         for sample in self.samples:
             sample_weights.append(sample.sampling_weight)
+
+        # replace None weight with average weight 
+        ws = []
+        for x in sample_weights:
+            if x is not None:
+                ws.append(x)
+        average_weight = np.mean(ws)
+        for idx, w in enumerate(sample_weights):
+            if w is None:
+                sample_weights[idx] = average_weight 
         return sample_weights
 
     @property
@@ -248,7 +260,7 @@ class AffinityMapDataset(SemanticDataset):
             # Tranform to affinity map
             # there is a shrinking, so we put this transformation here
             # rather than the label2target function.
-            Label2AffinityMap(),
+            Label2AffinityMap(probability=1.),
         ])
 
 if __name__ == '__main__':

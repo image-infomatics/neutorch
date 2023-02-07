@@ -447,6 +447,19 @@ class OrganelleSample(SemanticSample):
             # MissAlignment(),
         ])
 
+class VolumeSample(AbstractSample):
+    def __init__(self, output_patch_size: Cartesian):
+        super().__init__(output_patch_size)
+
+    @property
+    def random_patch(self):
+        return super().random_patch
+
+    @property
+    def sampling_weight(self) -> int:
+        """None sampling weight will be replaced with average weight."""
+        return None
+
 if __name__ == '__main__':
     import os
     from tqdm import tqdm

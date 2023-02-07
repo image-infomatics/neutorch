@@ -30,6 +30,9 @@ class AbstractTransform(ABC):
         assert probability > 0.
         assert probability <= 1.
         self.probability = probability
+    
+    def __str__(self) -> str:
+        return 'AbstractTransform'
 
     @property
     def name(self):
@@ -66,6 +69,9 @@ class SpatialTransform(AbstractTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
 
+    def __str__(self) -> str:
+        return 'SpatialTransform'
+
     @abstractmethod
     def transform(self, patch: Patch):
         """transform the image and label together
@@ -90,6 +96,9 @@ class IntensityTransform(AbstractTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
 
+    def __str__(self) -> str:
+        return 'IntensityTransform'
+
     @abstractmethod
     def transform(self, patch: Patch):
         pass
@@ -99,6 +108,9 @@ class SectionTransform(AbstractTransform):
     """change a random section only."""
     def __init__(self, probability: float = DEFAULT_PROBABILITY ):
         super().__init__(probability=probability)
+
+    def __str__(self) -> str:
+        return 'SectionTransform'
 
     def transform(self, patch: Patch):
         self.selected_axis = random.randrange(3)
@@ -119,6 +131,9 @@ class OneOf(AbstractTransform):
         super().__init__(probability=probability)
         assert len(transforms) > 1
         self.transforms = transforms
+
+    def __str__(self) -> str:
+        return 'OneOf'
 
     @cached_property
     def shrink_size(self):
@@ -170,6 +185,9 @@ class MaskBox(IntensityTransform):
         self.max_box_num = max_box_num
         self.max_density = max_density
 
+    def __str__(self) -> str:
+        return 'MaskBox'
+
     def box_num(self, patch_size: tuple):
         if self.max_box_num is None:
             shape = Cartesian.from_collection(patch_size[-3:])
@@ -196,7 +214,10 @@ class MaskBox(IntensityTransform):
 class NormalizeTo01(IntensityTransform):
     def __init__(self, probability: float = 1.):
         super().__init__(probability=probability)
-        
+    
+    def __str__(self) -> str:
+        return 'NormalizeTo01'
+
     def transform(self, patch: Patch):
         if np.issubdtype(patch.image.dtype, np.uint8):
             patch.image = patch.image.astype(np.float32) / 255.
@@ -224,6 +245,9 @@ class AdjustContrast(IntensityTransform):
         factor_range = np.clip(factor_range, 0., 2.)
         self.factor_range = factor_range
 
+    def __str__(self) -> str:
+        return 'AdjustContrast'
+
     def transform(self, patch: Patch):
         #factor = 1 + random.uniform(-0.5, 0.5) * random.uniform(
         #    self.factor_range[0], self.factor_range[1])
@@ -237,6 +261,9 @@ class Gamma(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
 
+    def __str__(self) -> str:
+        return 'Gamma'
+
     def transform(self, patch: Patch):
         # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
@@ -248,6 +275,9 @@ class GaussianBlur2D(IntensityTransform):
         super().__init__(probability=probability)
         self.sigma = sigma
 
+    def __str__(self) -> str:
+        return 'GaussianBlur2D'
+
     def transform(self, patch: Patch):
         sigma = random.uniform(0.2, self.sigma)
         gaussian_filter(patch.image, sigma=sigma, output=patch.image)
@@ -258,6 +288,9 @@ class GaussianBlur3D(IntensityTransform):
             max_sigma: tuple = (1.5, 1.5, 1.5)):
         super().__init__(probability=probability)
         self.max_sigma = max_sigma
+
+    def __str__(self) -> str:
+        return 'GaussianBlur3D'
 
     def transform(self, patch: Patch):
         sigma = tuple(random.uniform(0.2, s) for s in self.max_sigma)
@@ -271,6 +304,9 @@ class Noise(IntensityTransform):
         self.mode = mode  
         self.max_variance = max_variance
 
+    def __str__(self) -> str:
+        return 'Noise'
+
     def transform(self, patch: Patch):
         variance = random.uniform(0.01, self.max_variance)
         random_noise(patch.image, mode=self.mode, var=variance)
@@ -280,6 +316,9 @@ class Noise(IntensityTransform):
 class Flip(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
+
+    def __str__(self) -> str:
+        return 'Flip'
 
     def transform(self, patch: Patch):
         axis_num = random.randint(1, 3)
@@ -300,6 +339,9 @@ class Flip(SpatialTransform):
 class Transpose(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
+
+    def __str__(self) -> str:
+        return 'Transpose'
 
     def transform(self, patch: Patch):
         # only transform at XY
@@ -333,6 +375,9 @@ class MissAlignment(SpatialTransform):
         assert max_displacement > 0
         assert max_displacement < 8
         self.max_displacement = max_displacement
+
+    def __str__(self) -> str:
+        return 'MissAlignment'
 
     def transform(self, patch: Patch):
         axis = random.randint(2, 4)
@@ -427,6 +472,9 @@ class Perspective2D(SpatialTransform):
         super().__init__(probability=probability)
         self.corner_ratio = corner_ratio
 
+    def __str__(self) -> str:
+        return 'Perspective2D'
+
     def transformation_matrix(self, sy: int, sx: int):
         corner_ratio = random.uniform(0.02, self.corner_ratio)
         # corner_ratio = self.corner_ratio
@@ -483,7 +531,6 @@ class Perspective2D(SpatialTransform):
                     )
                 
     def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
-        arr = cv2.Umat(arr)
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
         return dst
 
@@ -526,7 +573,10 @@ class Swirl(SpatialTransform):
         super().__init__(probability=probability)
         self.max_strength = max_strength
         self.max_rotation = max_rotation
-    
+
+    def __str__(self) -> str:
+        return 'Swirl'
+
     def transform(self, patch: Patch):
         for z in range(patch.shape[-3]):
             patch.image[..., z, :, :] = swirl(
@@ -541,9 +591,13 @@ class Label2AffinityMap(SpatialTransform):
         """If this transform is used, the probability should always be 1.0."""
         assert probability == 1.
         super().__init__(probability)
-    
+
+    def __str__(self) -> str:
+        return 'Label2AffinityMap'
+
     def transform(self, patch: Patch):
         """transform the label to affinity map."""
+        breakpoint()
         patch.label = seg_to_affs(patch.label)
         patch.image = patch.image[1:, 1:, 1:]
         return patch
@@ -561,7 +615,8 @@ class Compose(object):
         """
         self.transforms = transforms
 
-
+    def __str__(self) -> str:
+        return '-->'.join([str(x) for x in self.transforms])
     @cached_property
     def shrink_size(self):
         shrink_size = np.zeros((6,), dtype=np.int64)

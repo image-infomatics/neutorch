@@ -89,10 +89,9 @@ class TrainerBase(ABC):
             # we need to use DistributedDataParallel rather than DataParallel to use multiple GPUs!
             # https://discuss.pytorch.org/t/run-pytorch-on-multiple-gpus/20932/62
             # device_ids=list(range(torch.cuda.device_count()))
-            model = torch.nn.parallel.DistributedDataParallel(
+            model = torch.nn.parallel.DataParallel(
                 model, 
                 device_ids=list(range(torch.cuda.device_count())),
-                output_device=0,
             )
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping 
@@ -174,6 +173,7 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
+            breakpoint()
             target = self.label_to_target(label)
             
             iter_idx += 1
