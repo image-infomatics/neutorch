@@ -4,7 +4,7 @@ import click
 from yacs.config import CfgNode
 
 from .base import TrainerBase
-from neutorch.data.dataset import SemanticDataset
+from neutorch.data.dataset import AffinityMapDataset
 
 
 class AffinityMapTrainer(TrainerBase):
@@ -12,14 +12,15 @@ class AffinityMapTrainer(TrainerBase):
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
         self.cfg = cfg
+        breakpoint()
 
     @cached_property
     def training_dataset(self):
-        return SemanticDataset.from_config(self.cfg, is_train=True)
+        return AffinityMapDataset.from_config(self.cfg, is_train=True)
        
     @cached_property
     def validation_dataset(self):
-        return SemanticDataset.from_config(self.cfg, is_train=False)
+        return AffinityMapDataset.from_config(self.cfg, is_train=False)
 
 @click.command()
 @click.option('--config-file', '-c',
