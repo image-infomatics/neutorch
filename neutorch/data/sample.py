@@ -5,12 +5,14 @@ from functools import cached_property
 
 import numpy as np
 
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian, BoundingBoxes
 from chunkflow.chunk import Chunk, load_chunk
 from chunkflow.lib.synapses import Synapses
 
 from neutorch.data.patch import Patch
 from neutorch.data.transform import *
+
+from cloudvolume import CloudVolume
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 DEFAULT_NUM_CLASSES = 1
@@ -98,7 +100,7 @@ class Sample(AbstractSample):
         
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
-            images[0].shape, forbbiden_distance_to_boundary[-3:]))
+            images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
         for cs, cp in zip(self.center_start, self.center_stop):
             assert cp > cs
 
@@ -144,23 +146,12 @@ class Sample(AbstractSample):
         return self.patch_from_center(center) 
 
     def patch_from_center(self, center: Cartesian):
-        patch_size = self.patch_size_before_transform
-        bz, by, bx = center - patch_size // 2
-        # bz = center[0] - self.output_patch_size[-3] // 2
-        # by = center[1] - self.output_patch_size[-2] // 2
-        # bx = center[2] - self.output_patch_size[-1] // 2
-
-        image = random.choice(self.images).array
-        image_patch = image[...,
-            bz : bz + patch_size[-3],
-            by : by + patch_size[-2],
-            bx : bx + patch_size[-1]
-        ]
-        label_patch = self.label[...,
-            bz : bz + patch_size[-3],
-            by : by + patch_size[-2],
-            bx : bx + patch_size[-1]
-        ]
+        start = center - self.patch_size_before_transform // 2
+        bbox = BoundingBox.from_delta(start, self.patch_size_before_transform)
+        
+        image = random.choice(self.images)
+        image_patch = image.cutout(bbox)
+        label_patch = self.label.cutout(bbox)
 
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2]
@@ -447,18 +438,76 @@ class OrganelleSample(SemanticSample):
             # MissAlignment(),
         ])
 
-class VolumeSample(AbstractSample):
-    def __init__(self, output_patch_size: Cartesian):
-        super().__init__(output_patch_size)
+class PrecomputedVolumeSample(AbstractSample):
+    def __init__(self, 
+            output_patch_size: Union[int, tuple, Cartesian],
+            volume: Union[str, CloudVolume],
+            mask: Chunk = None,
+            forground_weight: int = None):
+        """Neuroglancer Precomputed Volume Dataset
+
+        Args:
+            volume_path (str): cloudvolume precomputed path
+            patch_size (Union[int, tuple], optional): patch size of network input. Defaults to volume block size.
+            mask (Chunk, optional): forground mask. Defaults to None.
+            forground_weight (int, optional): weight of bounding boxes containing forground voxels. Defaults to None.
+        """
+        super.__init__(output_patch_size)
+
+        if isinstance(volume, str):
+            self.vol = CloudVolume(
+                volume, 
+                fill_missing=True, 
+                parallel=False, 
+                progress=False,
+                green_threads = False,
+            )
+        elif isinstance(volume, CloudVolume):
+            self.vol = volume
+        else:
+            raise ValueError("volume should be either an instance of CloudVolume or precomputed volume path.")
+
+        # self.voxel_size = tuple(self.vol.resolution)
+
+        self.bboxes = BoundingBoxes.from_manual_setup(
+            self.output_patch_size,
+            roi_start=(0, 0, 0),
+            roi_stop=self.vol.bounds.maxpt[-3:][::-1],
+            bounded=True,
+        )
+        print(f'found {len(self.bboxes)} bounding boxes in volume: {volume}')
+
+        if mask is not None:
+            # find out bboxes containing forground voxels
+
+            if forground_weight is None:
+                pass
+        
+    def __getitem__(self, idx: int):
+        bbox = self.bboxes[idx]
+        xyz_slices = bbox.to_slices()[::-1]
+        print('xyz slices: ', xyz_slices)
+        image = self.vol[xyz_slices]
+        image = np.asarray(image)
+        image = np.transpose(image)
+        # image = image.astype(np.float32)
+        # image /= 255.
+        # chunk = Chunk(arr, voxel_offset=bbox.minpt, voxel_size=self.voxel_size)
+        # tensor = torch.Tensor(arr)
+        target = deepcopy(image)
+        patch = Patch(image, target)
+        self.transform(patch)
+        patch.to_tensor()
+        patch.normalize()
+        return patch.image, patch.target
 
     @property
     def random_patch(self):
-        return super().random_patch
+        idx = random.randrange(0, len(self.bboxes))
+        return self.__getitem__(idx)
 
-    @property
-    def sampling_weight(self) -> int:
-        """None sampling weight will be replaced with average weight."""
-        return None
+    def __len__(self):
+        return len(self.bboxes)
 
 if __name__ == '__main__':
     import os
