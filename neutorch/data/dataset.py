@@ -123,7 +123,16 @@ class SemanticDataset(DatasetBase):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, is_train: bool):
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+        """Construct a semantic dataset with chunk or volume
+
+        Args:
+            cfg (CfgNode): _description_
+            is_train (bool): _description_
+
+        Returns:
+            _type_: _description_
+        """
         if is_train:
             name2chunks = cfg.dataset.training
         else:
@@ -134,7 +143,8 @@ class SemanticDataset(DatasetBase):
             sample = SemanticSample.from_explicit_dict(
                     name2path, 
                     output_patch_size=cfg.train.patch_size,
-                    num_classes=cfg.model.out_channels)
+                    num_classes=cfg.model.out_channels,
+                    **kwargs)
             samples.append(sample)
 
         return cls( samples )

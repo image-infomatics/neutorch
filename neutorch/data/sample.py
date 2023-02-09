@@ -5,14 +5,14 @@ from functools import cached_property
 
 import numpy as np
 
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian, BoundingBoxes
-from chunkflow.chunk import Chunk, load_chunk
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian 
+from chunkflow.chunk import Chunk
+from chunkflow.chunk.utils import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
 
 from neutorch.data.patch import Patch
 from neutorch.data.transform import *
-
-from cloudvolume import CloudVolume
+from chunkflow.volume import PrecomputedVolume
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 DEFAULT_NUM_CLASSES = 1
@@ -48,7 +48,8 @@ class AbstractSample(ABC):
 
 class Sample(AbstractSample):
     def __init__(self, 
-            images: List[Chunk], label: Union[np.ndarray, Chunk],
+            images: List[Chunk, PrecomputedVolume], 
+            label: Union[Chunk, PrecomputedVolume],
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
@@ -351,13 +352,15 @@ class SemanticSample(Sample):
     def from_explicit_path(cls, 
             image_paths: list, label_path: str, 
             output_patch_size: Cartesian,
-            num_classes: int=DEFAULT_NUM_CLASSES):
-        label = load_chunk(label_path)
+            num_classes: int=DEFAULT_NUM_CLASSES,
+            **kwargs,
+            ):
+        label = load_chunk_or_volume(label_path, **kwargs)
         print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
-            image = load_chunk(image_path)
+            image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
             print(f'image path: {image_path} with size {image.shape}')
         return cls(images, label, output_patch_size, num_classes=num_classes)
@@ -438,76 +441,6 @@ class OrganelleSample(SemanticSample):
             # MissAlignment(),
         ])
 
-class PrecomputedVolumeSample(AbstractSample):
-    def __init__(self, 
-            output_patch_size: Union[int, tuple, Cartesian],
-            volume: Union[str, CloudVolume],
-            mask: Chunk = None,
-            forground_weight: int = None):
-        """Neuroglancer Precomputed Volume Dataset
-
-        Args:
-            volume_path (str): cloudvolume precomputed path
-            patch_size (Union[int, tuple], optional): patch size of network input. Defaults to volume block size.
-            mask (Chunk, optional): forground mask. Defaults to None.
-            forground_weight (int, optional): weight of bounding boxes containing forground voxels. Defaults to None.
-        """
-        super.__init__(output_patch_size)
-
-        if isinstance(volume, str):
-            self.vol = CloudVolume(
-                volume, 
-                fill_missing=True, 
-                parallel=False, 
-                progress=False,
-                green_threads = False,
-            )
-        elif isinstance(volume, CloudVolume):
-            self.vol = volume
-        else:
-            raise ValueError("volume should be either an instance of CloudVolume or precomputed volume path.")
-
-        # self.voxel_size = tuple(self.vol.resolution)
-
-        self.bboxes = BoundingBoxes.from_manual_setup(
-            self.output_patch_size,
-            roi_start=(0, 0, 0),
-            roi_stop=self.vol.bounds.maxpt[-3:][::-1],
-            bounded=True,
-        )
-        print(f'found {len(self.bboxes)} bounding boxes in volume: {volume}')
-
-        if mask is not None:
-            # find out bboxes containing forground voxels
-
-            if forground_weight is None:
-                pass
-        
-    def __getitem__(self, idx: int):
-        bbox = self.bboxes[idx]
-        xyz_slices = bbox.to_slices()[::-1]
-        print('xyz slices: ', xyz_slices)
-        image = self.vol[xyz_slices]
-        image = np.asarray(image)
-        image = np.transpose(image)
-        # image = image.astype(np.float32)
-        # image /= 255.
-        # chunk = Chunk(arr, voxel_offset=bbox.minpt, voxel_size=self.voxel_size)
-        # tensor = torch.Tensor(arr)
-        target = deepcopy(image)
-        patch = Patch(image, target)
-        self.transform(patch)
-        patch.to_tensor()
-        patch.normalize()
-        return patch.image, patch.target
-
-    @property
-    def random_patch(self):
-        idx = random.randrange(0, len(self.bboxes))
-        return self.__getitem__(idx)
-
-    def __len__(self):
-        return len(self.bboxes)
 
 if __name__ == '__main__':
     import os
