@@ -1,0 +1,32 @@
+system:
+  cpus: 1
+  gpus: 1
+  seed: 1
+  
+dataset:
+  training:
+    susumu100:
+      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image:mip=1",]
+      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito:mip=1"
+  validation:
+    susumu100:
+      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image:mip=1",]
+      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito:mip=1"
+model:
+  in_channels: 1
+  out_channels: 3
+
+train:
+  iter_start: 0
+  iter_stop: 1000000
+  class_rebalance: false
+  # batch size per GPU
+  # The dataprovider should provide nGPU*batch_size batches!
+  batch_size: 1
+  output_dir: "./"
+  patch_size: [128, 128, 128]
+  learning_rate: 0.001
+    #training_interval: 200
+    #validation_interval: 2000
+  training_interval: 2
+  validation_interval: 4

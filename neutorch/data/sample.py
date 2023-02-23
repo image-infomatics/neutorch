@@ -5,12 +5,14 @@ from functools import cached_property
 
 import numpy as np
 
-from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian
-from chunkflow.chunk import Chunk, load_chunk
+from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian 
+from chunkflow.chunk import Chunk
+from chunkflow.chunk.utils import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
 
 from neutorch.data.patch import Patch
 from neutorch.data.transform import *
+from chunkflow.volume import PrecomputedVolume
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 DEFAULT_NUM_CLASSES = 1
@@ -46,7 +48,8 @@ class AbstractSample(ABC):
 
 class Sample(AbstractSample):
     def __init__(self, 
-            images: List[Chunk], label: Union[np.ndarray, Chunk],
+            images: List[Chunk, PrecomputedVolume], 
+            label: Union[Chunk, PrecomputedVolume],
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
@@ -98,7 +101,7 @@ class Sample(AbstractSample):
         
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
-            images[0].shape, forbbiden_distance_to_boundary[-3:]))
+            images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
         for cs, cp in zip(self.center_start, self.center_stop):
             assert cp > cs
 
@@ -144,23 +147,12 @@ class Sample(AbstractSample):
         return self.patch_from_center(center) 
 
     def patch_from_center(self, center: Cartesian):
-        patch_size = self.patch_size_before_transform
-        bz, by, bx = center - patch_size // 2
-        # bz = center[0] - self.output_patch_size[-3] // 2
-        # by = center[1] - self.output_patch_size[-2] // 2
-        # bx = center[2] - self.output_patch_size[-1] // 2
-
-        image = random.choice(self.images).array
-        image_patch = image[...,
-            bz : bz + patch_size[-3],
-            by : by + patch_size[-2],
-            bx : bx + patch_size[-1]
-        ]
-        label_patch = self.label[...,
-            bz : bz + patch_size[-3],
-            by : by + patch_size[-2],
-            bx : bx + patch_size[-1]
-        ]
+        start = center - self.patch_size_before_transform // 2
+        bbox = BoundingBox.from_delta(start, self.patch_size_before_transform)
+        
+        image = random.choice(self.images)
+        image_patch = image.cutout(bbox)
+        label_patch = self.label.cutout(bbox)
 
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2]
@@ -360,13 +352,15 @@ class SemanticSample(Sample):
     def from_explicit_path(cls, 
             image_paths: list, label_path: str, 
             output_patch_size: Cartesian,
-            num_classes: int=DEFAULT_NUM_CLASSES):
-        label = load_chunk(label_path)
+            num_classes: int=DEFAULT_NUM_CLASSES,
+            **kwargs,
+            ):
+        label = load_chunk_or_volume(label_path, **kwargs)
         print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
-            image = load_chunk(image_path)
+            image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
             print(f'image path: {image_path} with size {image.shape}')
         return cls(images, label, output_patch_size, num_classes=num_classes)
@@ -446,6 +440,7 @@ class OrganelleSample(SemanticSample):
             Transpose(),
             # MissAlignment(),
         ])
+
 
 if __name__ == '__main__':
     import os
