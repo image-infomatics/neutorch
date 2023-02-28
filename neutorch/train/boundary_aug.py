@@ -8,7 +8,7 @@ from neutorch.data.dataset import AffinityMapDataset
 from .base import TrainerBase
 
 
-class AffinityMapTrainer(TrainerBase):
+class BoundaryAugTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
@@ -32,5 +32,5 @@ class AffinityMapTrainer(TrainerBase):
 def main(config_file: str):
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = AffinityMapTrainer(cfg)
+    trainer = BoundaryAugTrainer(cfg)
     trainer()
