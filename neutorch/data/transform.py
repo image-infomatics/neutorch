@@ -17,11 +17,6 @@ from .patch import Patch
 
 # from scipy.ndimage import affine_transform
 
-
-
-
-
-
 DEFAULT_PROBABILITY = .5
 DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 
