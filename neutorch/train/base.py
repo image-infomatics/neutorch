@@ -1,25 +1,22 @@
+import os
+import random
 from abc import ABC, abstractproperty
 from functools import cached_property
 from glob import glob
-
-import random
-import os
 from time import time
 
-from yacs.config import CfgNode
 import numpy as np
-
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
 import torch
-from torch.utils.tensorboard import SummaryWriter
+from chunkflow.lib.cartesian_coordinate import Cartesian
 from torch.utils.data import DataLoader
-from neutorch.data.patch import collate_batch
+from torch.utils.tensorboard import SummaryWriter
+from yacs.config import CfgNode
 
-from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
-from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.data.dataset import worker_init_fn
+from neutorch.data.patch import collate_batch
+from neutorch.loss import BinomialCrossEntropyWithLogits
+from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
+from neutorch.model.IsoRSUNet import Model
 
 
 class TrainerBase(ABC):

@@ -2,7 +2,6 @@ torch
 torchvision
 yacs
 h5py
-tensorflow
 tensorboard
 opencv-python
 scikit-image
