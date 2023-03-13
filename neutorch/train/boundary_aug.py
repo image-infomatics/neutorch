@@ -1,9 +1,11 @@
 from functools import cached_property
 
 import click
+import numpy as np
+import tensorflow as tf
 from yacs.config import CfgNode
 
-from neutorch.data.dataset import AffinityMapDataset
+from neutorch.data.dataset import BoundaryAugmentationDataset
 
 from .base import TrainerBase
 
@@ -17,11 +19,11 @@ class BoundaryAugTrainer(TrainerBase):
 
     @cached_property
     def training_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, is_train=True)
+        return BoundaryAugmentationDataset.from_config(self.cfg, is_train=True)
        
     @cached_property
     def validation_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, is_train=False)
+        return BoundaryAugmentationDataset.from_config(self.cfg, is_train=False)
 
 @click.command()
 @click.option('--config-file', '-c',
@@ -29,8 +31,13 @@ class BoundaryAugTrainer(TrainerBase):
     default='./config.yaml', 
     help = 'configuration file containing all the parameters.'
 )
+
 def main(config_file: str):
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
     trainer = BoundaryAugTrainer(cfg)
     trainer()
+
+    #Tensorboard configuration
+    #maybe not
+

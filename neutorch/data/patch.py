@@ -1,8 +1,9 @@
 from functools import cached_property
-import numpy as np
 
+import numpy as np
 # from torch import tensor, device
 import torch
+
 # torch.multiprocessing.set_start_method('spawn')
 
 # from chunkflow.lib.cartesian_coordinate import Cartesian
