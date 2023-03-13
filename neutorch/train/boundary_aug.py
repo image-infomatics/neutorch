@@ -2,7 +2,6 @@ from functools import cached_property
 
 import click
 import numpy as np
-import tensorflow as tf
 from yacs.config import CfgNode
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
