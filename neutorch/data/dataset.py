@@ -1,15 +1,14 @@
+import math
 import random
 from functools import cached_property
-import math
 
 import numpy as np
 import torch
+from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
-from neutorch.data.transform import *
 from neutorch.data.sample import SemanticSample
+from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
@@ -273,6 +272,34 @@ class AffinityMapDataset(SemanticDataset):
             Label2AffinityMap(probability=1.),
         ])
 
+class BoundaryAugmentationDataset(SemanticDataset):
+    def __initi__(self, samples: list):
+        super.__init__(samples)
+
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            # DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+            # Tranform to affinity map
+            # there is a shrinking, so we put this transformation here
+            # rather than the label2target function.
+            Label2AffinityMap(probability=1.),
+        ])
+
 if __name__ == '__main__':
 
     from yacs.config import CfgNode
@@ -289,3 +316,4 @@ if __name__ == '__main__':
     )
     
     # print(sd.samples)
+    
