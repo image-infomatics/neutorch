@@ -3,14 +3,13 @@ from functools import cached_property
 import click
 import numpy as np
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode
 
-from torch.utils.tensorboard import SummaryWriter
-from .base import SemanticTrainer
 from neutorch.data.dataset import BoundaryAugmentationDataset
-
 from neutorch.model.io import log_tensor
-from .base import TrainerBase
+
+from .base import SemanticTrainer, TrainerBase
 
 
 class BoundaryAugTrainer(SemanticTrainer):
