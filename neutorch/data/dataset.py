@@ -272,7 +272,7 @@ class AffinityMapDataset(SemanticDataset):
             Label2AffinityMap(probability=1.),
         ])
 
-class BoundaryAugmentationDataset(SemanticDataset):
+class BoundaryAugmentationDataset(SemanticDataset): #for now
     def __initi__(self, samples: list):
         super.__init__(samples)
 
@@ -309,7 +309,7 @@ if __name__ == '__main__':
         cfg = CfgNode.load_cfg(file)
     cfg.freeze()
 
-    sd = AffinityMapDataset(
+    sd = BoundaryAugmentationDataset(
         path_list=['/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/rna_v1.h5'],
         sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
         patch_size=Cartesian(128, 128, 128),
