@@ -7,7 +7,6 @@ import numpy as np
 
 from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian 
 from chunkflow.chunk import Chunk
-
 from chunkflow.chunk.utils import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
 

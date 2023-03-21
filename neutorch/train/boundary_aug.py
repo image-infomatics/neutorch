@@ -13,7 +13,6 @@ from neutorch.model.io import log_tensor, save_chkpt
 
 from .base import SemanticTrainer, TrainerBase
 
-
 class BoundaryAugTrainer(SemanticTrainer):
     def __init__(self, cfg: CfgNode) -> None:
         assert isinstance(cfg, CfgNode)
@@ -29,6 +28,7 @@ class BoundaryAugTrainer(SemanticTrainer):
     def validation_dataset(self):
         return BoundaryAugmentationDataset.from_config(self.cfg, is_train=False)
 
+    """
     def call(self):
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir) 
         accumulated_loss = 0. #floating point
@@ -82,6 +82,7 @@ class BoundaryAugTrainer(SemanticTrainer):
                     log_tensor(writer, 'validation/label', validation_label, 'segmentation', iter_idx)
 
         writer.close()
+    """
 
 @click.command()
 @click.option('--config-file', '-c',
