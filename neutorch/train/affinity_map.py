@@ -3,8 +3,9 @@ from functools import cached_property
 import click
 from yacs.config import CfgNode
 
-from .base import TrainerBase
 from neutorch.data.dataset import AffinityMapDataset
+
+from .base import TrainerBase
 
 
 class AffinityMapTrainer(TrainerBase):
