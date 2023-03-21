@@ -268,8 +268,7 @@ class AffinityMapDataset(SemanticDataset):
             Label2AffinityMap(probability=1.),
         ])
 
-
-class BoundaryAugmentationDataset(SemanticDataset): #for now
+class BoundaryAugmentationDataset(SemanticDataset): 
     def __initi__(self, samples: list):
         super.__init__(samples)
 
