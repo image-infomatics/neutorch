@@ -266,11 +266,9 @@ class AffinityMapDataset(SemanticDataset):
             Flip(),
             Transpose(),
             MissAlignment(),
-            # Tranform to affinity map
-            # there is a shrinking, so we put this transformation here
-            # rather than the label2target function.
             Label2AffinityMap(probability=1.),
         ])
+
 
 class BoundaryAugmentationDataset(SemanticDataset): #for now
     def __initi__(self, samples: list):
@@ -294,11 +292,13 @@ class BoundaryAugmentationDataset(SemanticDataset): #for now
             Flip(),
             Transpose(),
             MissAlignment(),
-            # Tranform to affinity map
-            # there is a shrinking, so we put this transformation here
-            # rather than the label2target function.
-            Label2AffinityMap(probability=1.),
+            # Label2AffinityMap(probability=1.),
         ])
+    
+    """ binarization of the dataset
+    
+    
+    """
 
 if __name__ == '__main__':
 
@@ -314,6 +314,4 @@ if __name__ == '__main__':
         sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
         patch_size=Cartesian(128, 128, 128),
     )
-    
-    # print(sd.samples)
     

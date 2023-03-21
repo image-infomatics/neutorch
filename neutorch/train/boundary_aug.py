@@ -5,9 +5,10 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode
+from time import time
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
-from neutorch.model.io import log_tensor
+from neutorch.model.io import save_chkpt, log_tensor
 
 from .base import SemanticTrainer, TrainerBase
 
@@ -27,22 +28,17 @@ class BoundaryAugTrainer(SemanticTrainer):
     def validation_dataset(self):
         return BoundaryAugmentationDataset.from_config(self.cfg, is_train=False)
 
-    # def label_to_target(self, label: torch.Tensor):
-    #    return (label > 0).float
+    """ -> binarization/skeletonization
+    def label_to_target(self, label: torch.Tensor):
+        return (label > 0).float
 
-"""
-    @catch_property
-    def loss(self):
-    #loss module for the training 
-"""
-"""
     def call(self):
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir) 
         accumulated_loss = 0. #floating point
 
         for image, label in self.training_data_loader:
-            itder_idx += 1
-            if iter_idx> self.cfg.train.iter_stop:
+            iter_idx += 1
+            if iter_idx > self.cfg.train.iter_stop:
                 print('exeeds maximum iteration:', self.cfg.train.iter_stop)
                 return
             
@@ -51,18 +47,18 @@ class BoundaryAugTrainer(SemanticTrainer):
             loss = self.loss_module(predict, label)
             assert not torch.isnan(loss), 'loss is NaN.'
 
-            self.optimizer #fix
+            self.optimizer #
             loss.backward()
             self.optimizer.step()
             accumulated_loss += loss.tolist()
 
+            #fix
             if iter_idx % self.cfg.train.training_interval == 0 and iter_idx > 0:
                 per_voxel_loss = accumulated_loss / \
                     self.cfg.train.training_interval / \
                     self.voxel_num
 
                 print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds with loss: {per_voxel_loss}')
-                #print(f'training loss {round(per_voxel_loss, 3)}')
                 accumulated_loss = 0.
                 predict = self.post_processing(predict)
                 writer.add_scalar('loss/train', per_voxel_loss, iter_idx)
@@ -84,14 +80,13 @@ class BoundaryAugTrainer(SemanticTrainer):
                     validation_predict = self.post_processing(validation_predict)
                     per_voxel_loss = validation_loss.tolist() / self.voxel_num
                     print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds with loss: {per_voxel_loss}')
-                    # print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
                     writer.add_scalar('loss/validation', per_voxel_loss, iter_idx)
                     log_tensor(writer, 'validation/image', validation_image, 'image', iter_idx)
                     log_tensor(writer, 'validation/prediction', validation_predict, 'image', iter_idx)
                     log_tensor(writer, 'validation/label', validation_label, 'segmentation', iter_idx)
 
         writer.close()
-"""
+    """
 
 @click.command()
 @click.option('--config-file', '-c',
@@ -106,6 +101,4 @@ def main(config_file: str):
     trainer = BoundaryAugTrainer(cfg)
     trainer()
 
-    #Tensorboard configuration
-    #maybe not
 
