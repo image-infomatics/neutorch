@@ -442,6 +442,31 @@ class OrganelleSample(SemanticSample):
         ])
 
 
+class BoundaryAugmentationSample(Sample):
+    def __init__(self, 
+            images: List[Chunk], 
+            label: Union[np.ndarray, Chunk], 
+            output_patch_size: Cartesian, 
+            forbbiden_distance_to_boundary: tuple = None) -> None:
+        super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
+
+    @classmethod
+    def from_explicit_path(cls, 
+            image_paths: list, 
+            output_patch_size: Cartesian,
+            num_classes: int=DEFAULT_NUM_CLASSES,
+            **kwargs,
+            ):
+
+        images = []
+        for image_path in image_paths:
+            image = load_chunk_or_volume(image_path, **kwargs)
+            images.append(image)
+            print(f'image path: {image_path} with size {image.shape}')
+        return cls(images, images[0], output_patch_size, num_classes=num_classes)
+
+
+
 if __name__ == '__main__':
     import os
     from tqdm import tqdm

@@ -11,7 +11,7 @@ from yacs.config import CfgNode
 from neutorch.data.dataset import BoundaryAugmentationDataset
 from neutorch.model.io import log_tensor, save_chkpt
 
-from .base import SemanticTrainer, TrainerBase
+from .base import SemanticTrainer
 
 class BoundaryAugTrainer(SemanticTrainer):
     def __init__(self, cfg: CfgNode) -> None:

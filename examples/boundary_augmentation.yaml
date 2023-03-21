@@ -1,0 +1,47 @@
+system:
+  cpus: 1
+  gpus: 1
+  seed: 1
+  
+dataset:
+  training:
+    s3vol01700:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",]
+    s3vol02299:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
+    s3vol02794:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02794/affs_03_160k",]
+    s3vol03290:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",]
+    s3vol03700:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",]
+    s3vol04900:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",]
+    s3vol05250:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",]
+    s3vol05450:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
+  validation:
+    s3vol02400:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02400/affs_03_160k.h5",]
+    s3vol04000:
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_04000/affs_03_160k.h5",]
+
+model:
+  in_channels: 3
+  out_channels: 3
+
+train:
+  iter_start: 0
+  iter_stop: 1000000
+  class_rebalance: false
+  # batch size per GPU
+  # The dataprovider should provide nGPU*batch_size batches!
+  batch_size: 1
+  output_dir: "./"
+  patch_size: [128, 128, 128]
+  learning_rate: 0.001
+    #training_interval: 200
+    #validation_interval: 2000
+  training_interval: 2
+  validation_interval: 4
