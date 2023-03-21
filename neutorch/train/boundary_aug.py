@@ -1,14 +1,15 @@
+import os
 from functools import cached_property
+from time import time
 
 import click
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode
-from time import time
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
-from neutorch.model.io import save_chkpt, log_tensor
+from neutorch.model.io import log_tensor, save_chkpt
 
 from .base import SemanticTrainer, TrainerBase
 
@@ -27,10 +28,6 @@ class BoundaryAugTrainer(SemanticTrainer):
     @cached_property
     def validation_dataset(self):
         return BoundaryAugmentationDataset.from_config(self.cfg, is_train=False)
-
-    """ -> binarization/skeletonization
-    def label_to_target(self, label: torch.Tensor):
-        return (label > 0).float
 
     def call(self):
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir) 
@@ -52,7 +49,6 @@ class BoundaryAugTrainer(SemanticTrainer):
             self.optimizer.step()
             accumulated_loss += loss.tolist()
 
-            #fix
             if iter_idx % self.cfg.train.training_interval == 0 and iter_idx > 0:
                 per_voxel_loss = accumulated_loss / \
                     self.cfg.train.training_interval / \
@@ -86,7 +82,6 @@ class BoundaryAugTrainer(SemanticTrainer):
                     log_tensor(writer, 'validation/label', validation_label, 'segmentation', iter_idx)
 
         writer.close()
-    """
 
 @click.command()
 @click.option('--config-file', '-c',

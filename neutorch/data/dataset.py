@@ -245,7 +245,6 @@ class OrganelleDataset(SemanticDataset):
 
 class AffinityMapDataset(SemanticDataset):
     def __init__(self, samples: list):
-            #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
         super().__init__(samples)
     
     @cached_property
@@ -292,13 +291,7 @@ class BoundaryAugmentationDataset(SemanticDataset): #for now
             Flip(),
             Transpose(),
             MissAlignment(),
-            # Label2AffinityMap(probability=1.),
         ])
-    
-    """ binarization of the dataset
-    
-    
-    """
 
 if __name__ == '__main__':
 
