@@ -48,7 +48,7 @@ class AbstractSample(ABC):
 
 class Sample(AbstractSample):
     def __init__(self, 
-            images: List[Chunk, PrecomputedVolume], 
+            images: List, 
             label: Union[Chunk, PrecomputedVolume],
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
@@ -69,13 +69,16 @@ class Sample(AbstractSample):
         """
         super().__init__(output_patch_size=output_patch_size)
         assert len(images) > 0
-        assert images[0].ndim == 3
+        assert images[0].ndim >= 3
         assert label.ndim >= 3
         assert isinstance(label, Chunk)
-        assert images[0].shape == label.shape[-3:], f'label voxel offset: {label.start}'
+        for image in images:
+            assert isinstance(image, Chunk)
+        assert images[0].shape[-3:] == label.shape[-3:], f'label voxel offset: {label.start}'
         
-        if isinstance(label, Chunk):
-            label = label.array
+        # if isinstance(label, Chunk):
+            # label = label.array
+
 
         # if images[0].shape != label.shape[-3:]:
         #     print(images[0].shape)
@@ -156,8 +159,8 @@ class Sample(AbstractSample):
 
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2]
-        if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
-            breakpoint()
+        # if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
+        #     breakpoint()
         assert image_patch.shape[-3:] == self.patch_size_before_transform.tuple, \
             f'image patch shape: {image_patch.shape}, patch size before transform: {self.patch_size_before_transform}'
         # if we do not copy here, the augmentation will change our 
@@ -442,7 +445,37 @@ class OrganelleSample(SemanticSample):
         ])
 
 
-class BoundaryAugmentationSample(Sample):
+class AffinityMapSample(Sample):
+    def __init__(self, 
+            images: List[Chunk], 
+            label: Union[np.ndarray, Chunk], 
+            output_patch_size: Cartesian, 
+            forbbiden_distance_to_boundary: tuple = None) -> None:
+        super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
+        # number of classes
+
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustBrightness(),
+            AdjustContrast(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            Perspective2D(),
+            # RotateScale(probability=1.),
+            # DropSection(),
+            Flip(),
+            Transpose(),
+            MissAlignment(),
+            Label2AffinityMap(probability=1.),
+        ])
+
+class SelfSupervisedSample(Sample):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
@@ -451,20 +484,44 @@ class BoundaryAugmentationSample(Sample):
         super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
 
     @classmethod
-    def from_explicit_path(cls, 
+    def from_explicit_paths(cls, 
             image_paths: list, 
             output_patch_size: Cartesian,
-            num_classes: int=DEFAULT_NUM_CLASSES,
             **kwargs,
             ):
+        """Construct self supervised sample from a list of image paths
+        Note that the first image will be used a reference or ground truth.
+
+        Args:
+            image_paths (list): _description_
+            output_patch_size (Cartesian): _description_
+
+        Returns:
+            _type_: _description_
+        """
 
         images = []
         for image_path in image_paths:
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
             print(f'image path: {image_path} with size {image.shape}')
-        return cls(images, images[0], output_patch_size, num_classes=num_classes)
+        return cls(images, images[0], output_patch_size)
 
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            # Flip(),
+            # Transpose(),
+        ])
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ import torch
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from neutorch.data.sample import SemanticSample
+from neutorch.data.sample import SemanticSample, SelfSupervisedSample
 from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -148,25 +148,7 @@ class SemanticDataset(DatasetBase):
 
         return cls( samples )
 
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-        ])
+    
 
 class OrganelleDataset(SemanticDataset):
     def __init__(self, samples: list, 
@@ -247,30 +229,30 @@ class AffinityMapDataset(SemanticDataset):
     def __init__(self, samples: list):
         super().__init__(samples)
     
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-            Label2AffinityMap(probability=1.),
-        ])
 
 class BoundaryAugmentationDataset(SemanticDataset): 
     def __initi__(self, samples: list):
         super.__init__(samples)
+    
+    @classmethod
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+        """Construct a semantic dataset with chunk or volume."""
+        if is_train:
+            name2chunks = cfg.dataset.training
+        else:
+            name2chunks = cfg.dataset.validation
+
+        samples = []
+        for type_name2paths in name2chunks.values():
+            paths = [x for x in type_name2paths.values()][0]
+            sample = SelfSupervisedSample.from_explicit_paths(
+                    paths,
+                    output_patch_size=cfg.train.patch_size,
+                    num_classes=cfg.model.out_channels,
+                    **kwargs)
+            samples.append(sample)
+
+        return cls( samples )
 
     @cached_property
     def transform(self):

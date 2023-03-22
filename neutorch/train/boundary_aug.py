@@ -11,14 +11,13 @@ from yacs.config import CfgNode
 from neutorch.data.dataset import BoundaryAugmentationDataset
 from neutorch.model.io import log_tensor, save_chkpt
 
-from .base import SemanticTrainer
+from .semantic import SemanticTrainer
 
 class BoundaryAugTrainer(SemanticTrainer):
     def __init__(self, cfg: CfgNode) -> None:
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
         self.cfg = cfg
-        breakpoint()
 
     @cached_property
     def training_dataset(self):
