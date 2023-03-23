@@ -127,10 +127,10 @@ class TrainerBase(ABC):
         training_data_loader = DataLoader(
             self.training_dataset,
             #num_workers=self.cfg.system.cpus,
-            num_workers=1,
+            num_workers=0,
             prefetch_factor=2,
             drop_last=False,
-            multiprocessing_context='spawn',
+            # multiprocessing_context='spawn',
             collate_fn=collate_batch,
             worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
@@ -141,10 +141,10 @@ class TrainerBase(ABC):
     def validation_data_loader(self):
         validation_data_loader = DataLoader(
             self.validation_dataset,
-            num_workers=1,
+            num_workers=0,
             prefetch_factor=2,
             drop_last=False,
-            multiprocessing_context='spawn',
+            # multiprocessing_context='spawn',
             collate_fn=collate_batch,
             batch_size=self.batch_size,
         )
@@ -170,7 +170,6 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
-            breakpoint()
             target = self.label_to_target(label)
             
             iter_idx += 1
