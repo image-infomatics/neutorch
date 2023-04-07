@@ -13,7 +13,6 @@ class AffinityMapTrainer(TrainerBase):
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
         self.cfg = cfg
-        breakpoint()
 
     @cached_property
     def training_dataset(self):
