@@ -167,7 +167,6 @@ class Sample(AbstractSample):
         print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
         print(f'patch size after transform: {patch.shape}')
-        breakpoint()
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch

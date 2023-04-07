@@ -594,12 +594,14 @@ class Label2AffinityMap(SpatialTransform):
 
     def transform(self, patch: Patch):
         """transform the label to affinity map."""
+        print(f'patch shape before Label2AffinityMap: {patch.shape}')
         assert patch.label.shape[0] == 1
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
         label = patch.label[0,0,...]
         patch.label = seg_to_affs(label)
         patch.image = patch.image[:,:, 1:, 1:, 1:]
+        assert patch.image.shape[-3:] == patch.label.shape[-3:]
         print(f'patch shape after Label2AffinityMap: {patch.shape}')
 
     @cached_property
