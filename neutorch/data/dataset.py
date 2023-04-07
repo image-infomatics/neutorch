@@ -7,7 +7,7 @@ import torch
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from neutorch.data.sample import SemanticSample, SelfSupervisedSample
+from neutorch.data.sample import SemanticSample, SelfSupervisedSample, AffinityMapSample
 from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -224,11 +224,37 @@ class OrganelleDataset(SemanticDataset):
 
         return image, target
 
-
 class AffinityMapDataset(SemanticDataset):
     def __init__(self, samples: list):
         super().__init__(samples)
     
+    @classmethod
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+        """Construct a semantic dataset with chunk or volume
+
+        Args:
+            cfg (CfgNode): _description_
+            is_train (bool): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        if is_train:
+            name2chunks = cfg.dataset.training
+        else:
+            name2chunks = cfg.dataset.validation
+
+        samples = []
+        for name2path in name2chunks.values():
+            sample = AffinityMapSample.from_explicit_dict(
+                    name2path, 
+                    output_patch_size=cfg.train.patch_size,
+                    num_classes=cfg.model.out_channels,
+                    **kwargs)
+            samples.append(sample)
+
+        return cls( samples )
+
 
 class BoundaryAugmentationDataset(SemanticDataset): 
     def __initi__(self, samples: list):
@@ -254,26 +280,7 @@ class BoundaryAugmentationDataset(SemanticDataset):
 
         return cls( samples )
 
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-        ])
-
+    
 if __name__ == '__main__':
 
     from yacs.config import CfgNode

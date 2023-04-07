@@ -12,6 +12,7 @@ from skimage.util import random_noise
 
 from .patch import Patch
 
+from reneu.lib.segmentation import seg_to_affs
 # from copy import deepcopy
 
 
@@ -593,9 +594,14 @@ class Label2AffinityMap(SpatialTransform):
 
     def transform(self, patch: Patch):
         """transform the label to affinity map."""
+        assert patch.label.shape[0] == 1
+        assert patch.label.shape[1] == 1
+        assert patch.label.ndim == 5
         breakpoint()
-        patch.label = seg_to_affs(patch.label)
-        patch.image = patch.image[1:, 1:, 1:]
+        label = patch.label[0,0,...]
+        patch.label = seg_to_affs(label)
+        patch.image = patch.image[:,:, 1:, 1:, 1:]
+        print(f'patch shape: {patch.shape}')
         return patch
 
     @cached_property
