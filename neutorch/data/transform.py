@@ -597,16 +597,14 @@ class Label2AffinityMap(SpatialTransform):
         assert patch.label.shape[0] == 1
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
-        breakpoint()
         label = patch.label[0,0,...]
         patch.label = seg_to_affs(label)
         patch.image = patch.image[:,:, 1:, 1:, 1:]
-        print(f'patch shape: {patch.shape}')
-        return patch
+        print(f'patch shape after Label2AffinityMap: {patch.shape}')
 
     @cached_property
     def shrink_size(self):
-        return (1,1,1, 0, 0, 0)
+        return (1, 1, 1, 0, 0, 0)
 
 class Compose(object):
     def __init__(self, transforms: list):
@@ -619,6 +617,7 @@ class Compose(object):
 
     def __str__(self) -> str:
         return '-->'.join([str(x) for x in self.transforms])
+
     @cached_property
     def shrink_size(self):
         shrink_size = np.zeros((6,), dtype=np.int64)
@@ -629,10 +628,13 @@ class Compose(object):
 
     def __call__(self, patch: Patch):
         for transform in self.transforms:
+            print(f'patch size before {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
             transform(patch)
+            print(f'patch size after {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
         # after the transformation, the stride of array
         # could be negative, and pytorch could not tranform
         # the array to Tensor. Copy can fix it.
+        print(f'patch shape after Compose call: {patch.shape}')
         patch.image = patch.image.copy()
         patch.label = patch.label.copy()
 

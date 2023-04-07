@@ -224,7 +224,7 @@ class OrganelleDataset(SemanticDataset):
 
         return image, target
 
-class AffinityMapDataset(SemanticDataset):
+class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):
         super().__init__(samples)
     
@@ -256,7 +256,7 @@ class AffinityMapDataset(SemanticDataset):
         return cls( samples )
 
 
-class BoundaryAugmentationDataset(SemanticDataset): 
+class BoundaryAugmentationDataset(DatasetBase): 
     def __initi__(self, samples: list):
         super.__init__(samples)
     

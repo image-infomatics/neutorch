@@ -164,11 +164,9 @@ class Sample(AbstractSample):
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
         
-        # print(f'patch size before transform: {patch.shape}')
+        print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
-        # print(f'patch size after transform: {patch.shape}')
-        # patch.apply_delayed_shrink_size()
-        # print(f'patch size after shrink: {patch.shape}')
+        print(f'patch size after transform: {patch.shape}')
         breakpoint()
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
@@ -575,6 +573,7 @@ class NeuropilMaskSample(Sample):
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
             print(f'image path: {image_path} with size {image.shape}')
+        breakpoint()
         return cls(images, label, output_patch_size)
 
     #@property
