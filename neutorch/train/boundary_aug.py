@@ -1,15 +1,9 @@
-import os
 from functools import cached_property
-from time import time
 
 import click
-import numpy as np
-import torch
-from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
-from neutorch.model.io import log_tensor, save_chkpt
 
 from .semantic import SemanticTrainer
 

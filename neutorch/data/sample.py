@@ -154,6 +154,7 @@ class Sample(AbstractSample):
         bbox = BoundingBox.from_delta(start, self.patch_size_before_transform)
         
         image = random.choice(self.images)
+        bbox += image.bbox.start
         image_patch = image.cutout(bbox)
         label_patch = self.label.cutout(bbox)
 
