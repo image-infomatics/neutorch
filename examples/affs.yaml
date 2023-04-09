@@ -13,10 +13,10 @@ dataset:
         #      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02299/label_v3.h5"
     s3vol02400:
       images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02400/img_zyx_2400-2656_5700-5956_2770-3026.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02400/label_v1_diane.h5"
-    s3vol02794:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02794/img_zyx_2794-3050_5811-6067_8757-9013.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02794/seg_v1_cropped.h5"
+      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02400/label_v1.h5"
+        #s3vol02794:
+        #  images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02794/img_zyx_2794-3050_5811-6067_8757-9013.h5",]
+        #  label: "~/dropbox/40_gt/13_wasp_sample3/vol_02794/seg_v1_cropped.h5"
     s3vol03290:
       images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03290/img_zyx_3290-3546_2375-2631_8450-8706.h5",]
       label: "~/dropbox/40_gt/13_wasp_sample3/vol_03290/label_v1.h5"
@@ -24,8 +24,8 @@ dataset:
       images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03700/img_zyx_3700-3956_5000-5256_4250-4506.h5",]
       label: "~/dropbox/40_gt/13_wasp_sample3/vol_03700/label_v3.h5"
     s3vol03998:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03998/img.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_03998/label_v1.h5"
+      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03998/img_zyx_3998-4254_4280-4536_4035-4291.h5",]
+      label: "~/dropbox/40_gt/13_wasp_sample3/vol_03998/label_v2.h5"
     s3vol04900:
       images: ["~/dropbox/40_gt/13_wasp_sample3/vol_04900/img.h5",]
       label: "~/dropbox/40_gt/13_wasp_sample3/vol_04900/label_v1.h5"

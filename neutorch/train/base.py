@@ -1,25 +1,22 @@
+import os
+import random
 from abc import ABC, abstractproperty
 from functools import cached_property
 from glob import glob
-
-import random
-import os
 from time import time
 
-from yacs.config import CfgNode
 import numpy as np
-
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
 import torch
-from torch.utils.tensorboard import SummaryWriter
+from chunkflow.lib.cartesian_coordinate import Cartesian
 from torch.utils.data import DataLoader
-from neutorch.data.patch import collate_batch
+from torch.utils.tensorboard import SummaryWriter
+from yacs.config import CfgNode
 
-from neutorch.model.IsoRSUNet import Model
-from neutorch.model.io import save_chkpt, load_chkpt, log_tensor
-from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.data.dataset import worker_init_fn
+from neutorch.data.patch import collate_batch
+from neutorch.loss import BinomialCrossEntropyWithLogits
+from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
+from neutorch.model.IsoRSUNet import Model
 
 
 class TrainerBase(ABC):
@@ -130,10 +127,10 @@ class TrainerBase(ABC):
         training_data_loader = DataLoader(
             self.training_dataset,
             #num_workers=self.cfg.system.cpus,
-            num_workers=1,
+            num_workers=0,
             prefetch_factor=2,
             drop_last=False,
-            multiprocessing_context='spawn',
+            # multiprocessing_context='spawn',
             collate_fn=collate_batch,
             worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
@@ -144,10 +141,10 @@ class TrainerBase(ABC):
     def validation_data_loader(self):
         validation_data_loader = DataLoader(
             self.validation_dataset,
-            num_workers=1,
+            num_workers=0,
             prefetch_factor=2,
             drop_last=False,
-            multiprocessing_context='spawn',
+            # multiprocessing_context='spawn',
             collate_fn=collate_batch,
             batch_size=self.batch_size,
         )
@@ -173,7 +170,6 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
-            breakpoint()
             target = self.label_to_target(label)
             
             iter_idx += 1

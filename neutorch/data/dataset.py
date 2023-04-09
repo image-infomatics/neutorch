@@ -1,15 +1,14 @@
+import math
 import random
 from functools import cached_property
-import math
 
 import numpy as np
 import torch
+from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from chunkflow.lib.cartesian_coordinate import Cartesian
-
+from neutorch.data.sample import SemanticSample, SelfSupervisedSample, AffinityMapSample
 from neutorch.data.transform import *
-from neutorch.data.sample import SemanticSample
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
@@ -149,25 +148,7 @@ class SemanticDataset(DatasetBase):
 
         return cls( samples )
 
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-        ])
+    
 
 class OrganelleDataset(SemanticDataset):
     def __init__(self, samples: list, 
@@ -243,36 +224,63 @@ class OrganelleDataset(SemanticDataset):
 
         return image, target
 
-
-class AffinityMapDataset(SemanticDataset):
+class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):
-            #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
         super().__init__(samples)
     
-    @cached_property
-    def transform(self):
-        return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustBrightness(),
-            AdjustContrast(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            MaskBox(),
-            Perspective2D(),
-            # RotateScale(probability=1.),
-            # DropSection(),
-            Flip(),
-            Transpose(),
-            MissAlignment(),
-            # Tranform to affinity map
-            # there is a shrinking, so we put this transformation here
-            # rather than the label2target function.
-            Label2AffinityMap(probability=1.),
-        ])
+    @classmethod
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+        """Construct a semantic dataset with chunk or volume
 
+        Args:
+            cfg (CfgNode): _description_
+            is_train (bool): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        if is_train:
+            name2chunks = cfg.dataset.training
+        else:
+            name2chunks = cfg.dataset.validation
+
+        samples = []
+        for name2path in name2chunks.values():
+            sample = AffinityMapSample.from_explicit_dict(
+                    name2path, 
+                    output_patch_size=cfg.train.patch_size,
+                    num_classes=cfg.model.out_channels,
+                    **kwargs)
+            samples.append(sample)
+
+        return cls( samples )
+
+
+class BoundaryAugmentationDataset(DatasetBase): 
+    def __initi__(self, samples: list):
+        super.__init__(samples)
+    
+    @classmethod
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+        """Construct a semantic dataset with chunk or volume."""
+        if is_train:
+            name2chunks = cfg.dataset.training
+        else:
+            name2chunks = cfg.dataset.validation
+
+        samples = []
+        for type_name2paths in name2chunks.values():
+            paths = [x for x in type_name2paths.values()][0]
+            sample = SelfSupervisedSample.from_explicit_paths(
+                    paths,
+                    output_patch_size=cfg.train.patch_size,
+                    num_classes=cfg.model.out_channels,
+                    **kwargs)
+            samples.append(sample)
+
+        return cls( samples )
+
+    
 if __name__ == '__main__':
 
     from yacs.config import CfgNode
@@ -282,10 +290,9 @@ if __name__ == '__main__':
         cfg = CfgNode.load_cfg(file)
     cfg.freeze()
 
-    sd = AffinityMapDataset(
+    sd = BoundaryAugmentationDataset(
         path_list=['/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/rna_v1.h5'],
         sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
         patch_size=Cartesian(128, 128, 128),
     )
     
-    # print(sd.samples)

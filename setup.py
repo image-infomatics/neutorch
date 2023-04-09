@@ -18,6 +18,7 @@ setup(
         neutrain-denoise=neutorch.train.denoise:main
         neutrain-post=neutorch.train.post_synapses:main
         neutrain-affs=neutorch.train.affinity_map:main
+        neutrain-ba=neutorch.train.boundary_aug:main
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

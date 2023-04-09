@@ -1,4 +1,4 @@
-
+*.chkpt
 *.yaml
 *events.out.tfevents.*
 .secrets.baseline
