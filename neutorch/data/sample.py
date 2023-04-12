@@ -45,11 +45,32 @@ class AbstractSample(ABC):
         """
         return 1 
 
+class CombinedSample(AbstractSample):
+    def __init__(self, output_patch_size: Cartesian):
+        """Combine several label chunks together.
+        Some components, such as image volume, mask, could be shared across individual samples. These samples should be combined together to reduce RAM usage. For example, the mask volume could be pretty big and needs to be loaded to memory.
+        """
+        super().__init__(output_patch_size)
+        self.is_train = None
+    
+    def set_train_mode(self):
+        self.is_train = True
+
+    def set_validation_mode(self):
+        self.is_train = False
+
+    @property
+    def random_patch_for_training(self):
+        pass    
+
+    @property
+    def random_patch(self):
+        return super().random_patch
 
 class Sample(AbstractSample):
     def __init__(self, 
             images: List[Chunk | PrecomputedVolume],
-            label: Union[Chunk, PrecomputedVolume],
+            label: Chunk | PrecomputedVolume,
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Image sample with ground truth annotations
@@ -167,6 +188,7 @@ class Sample(AbstractSample):
     
     @cached_property
     def sampling_weight(self):
+        """voxel number of label"""
         weight = int(np.product(tuple(e-b for b, e in zip(
             self.center_start, self.center_stop))))
         

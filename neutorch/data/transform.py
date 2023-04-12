@@ -7,7 +7,7 @@ import numpy as np
 from chunkflow.lib.cartesian_coordinate import Cartesian
 # from reneu.lib.segmentation import seg_to_affs
 from scipy.ndimage.filters import gaussian_filter
-from skimage.transform import swirl
+# from skimage.transform import swirl
 from skimage.util import random_noise
 
 from .patch import Patch
@@ -156,8 +156,10 @@ class DropSection(SpatialTransform):
 
     def transform(self, patch: Patch):
         z = random.randrange(1, patch.shape[-3])
-        patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
-        patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+        patch.image.array[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
+        patch.label.array[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+        if patch.has_mask:
+            patch.mask.array[..., z:-1, :, :] = patch.mask[..., z+1:, :, :]
         return patch
 
     @cached_property
@@ -227,7 +229,7 @@ class NormalizeTo01(IntensityTransform):
 
     def transform(self, patch: Patch):
         if np.issubdtype(patch.image.dtype, np.uint8):
-            patch.image = patch.image.astype(np.float32) / 255.
+            patch.image.array = patch.image.array.astype(np.float32) / 255.
         return patch
 
 class AdjustBrightness(IntensityTransform):
@@ -244,7 +246,7 @@ class AdjustBrightness(IntensityTransform):
             self.min_factor, self.max_factor)
         if patch.image.mean() + brightness < 0.9:
             patch.image += brightness
-            np.clip(patch.image, 0., 1., out=patch.image)
+            np.clip(patch.image.array, 0., 1., out=patch.image.array)
         return patch
 
 class AdjustContrast(IntensityTransform):
@@ -263,7 +265,7 @@ class AdjustContrast(IntensityTransform):
         factor = random.uniform(self.factor_range[0], self.factor_range[1])
         if np.mean(patch.image) * factor < 0.9:
             patch.image *= factor
-            np.clip(patch.image, 0., 1., out=patch.image)
+            np.clip(patch.image.array, 0., 1., out=patch.image.array)
         return patch
 
 
@@ -291,7 +293,7 @@ class GaussianBlur2D(IntensityTransform):
 
     def transform(self, patch: Patch):
         sigma = random.uniform(0.2, self.sigma)
-        gaussian_filter(patch.image, sigma=sigma, output=patch.image)
+        gaussian_filter(patch.image.array, sigma=sigma, output=patch.image.array)
         return patch
 
 
@@ -306,7 +308,7 @@ class GaussianBlur3D(IntensityTransform):
 
     def transform(self, patch: Patch):
         sigma = tuple(random.uniform(0.2, s) for s in self.max_sigma)
-        gaussian_filter(patch.image, sigma=sigma, output=patch.image)
+        gaussian_filter(patch.image.array, sigma=sigma, output=patch.image.array)
         return patch
 
 
@@ -322,8 +324,8 @@ class Noise(IntensityTransform):
 
     def transform(self, patch: Patch):
         variance = random.uniform(0.01, self.max_variance)
-        random_noise(patch.image, mode=self.mode, var=variance)
-        np.clip(patch.image, 0., 1., out=patch.image)
+        random_noise(patch.image.array, mode=self.mode, var=variance)
+        np.clip(patch.image.array, 0., 1., out=patch.image.array)
         return patch
 
 
@@ -340,8 +342,10 @@ class Flip(SpatialTransform):
         # the image and label is 5d
         # the first two axises are batch and channel
         axis5d = tuple(2+x for x in axis)
-        patch.image = np.flip(patch.image, axis=axis5d)
-        patch.label = np.flip(patch.label, axis=axis5d)
+        patch.image.array = np.flip(patch.image.array, axis=axis5d)
+        patch.label.array = np.flip(patch.label.array, axis=axis5d)
+        if patch.has_mask:
+            patch.mask.array = np.flip(patch.mask.array, axis=axis5d)
 
         # shrink = list(patch.delayed_shrink_size)
         # for ax in axis:
@@ -363,8 +367,10 @@ class Transpose(SpatialTransform):
         axis = [3,4]
         random.shuffle(axis)
         axis5d = (0, 1, 2, *axis,)
-        patch.image = np.transpose(patch.image, axis5d)
-        patch.label = np.transpose(patch.label, axis5d)
+        patch.image.array = np.transpose(patch.image.array, axis5d)
+        patch.label.array = np.transpose(patch.label.array, axis5d)
+        if patch.has_mask:
+            patch.mask.array = np.transpose(patch.mask.array, axis5d)
 
         # shrink = list(patch.delayed_shrink_size)
         # for ax0, ax1 in enumerate(axis):
@@ -405,27 +411,36 @@ class MissAlignment(SpatialTransform):
         if axis == 2:
             # displacement at Z
             zloc = random.randrange(1, sz)
-            patch.image[..., zloc:, 
+            patch.image.array[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
                 self.max_displacement : sx-self.max_displacement,
                 ] = patch.image[..., zloc:, 
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.label[..., zloc:, 
+            patch.label.array[..., zloc:, 
                 self.max_displacement : sy-self.max_displacement,
                 self.max_displacement : sx-self.max_displacement,
                 ] = patch.label[..., zloc:, 
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
+            if patch.has_mask:
+                patch.mask.array[..., zloc:, 
+                    self.max_displacement : sy-self.max_displacement,
+                    self.max_displacement : sx-self.max_displacement,
+                    ] = patch.label[..., zloc:, 
+                        self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                        self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                        ]
+
         elif axis == 3:
             # displacement at Y
             yloc = random.randrange(1, sy)
             
             # print('right side shape: ', patch.image[...,  self.max_displacement+displacement : sz+displacement-self.max_displacement,yloc:,self.max_displacement+displacement : sx+displacement-self.max_displacement,].shape)
 
-            patch.image[..., 
+            patch.image.array[..., 
                 self.max_displacement : sz-self.max_displacement,
                 yloc:, 
                 self.max_displacement : sx-self.max_displacement,
@@ -434,7 +449,7 @@ class MissAlignment(SpatialTransform):
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
-            patch.label[..., 
+            patch.label.array[..., 
                 self.max_displacement : sz-self.max_displacement,
                 yloc:,
                 self.max_displacement : sx-self.max_displacement,
@@ -443,10 +458,21 @@ class MissAlignment(SpatialTransform):
                     yloc:, 
                     self.max_displacement+displacement : sx+displacement-self.max_displacement,
                     ]
+            if patch.has_mask:
+                patch.mask.array[..., 
+                    self.max_displacement : sz-self.max_displacement,
+                    yloc:,
+                    self.max_displacement : sx-self.max_displacement,
+                    ] = patch.mask[..., 
+                        self.max_displacement+displacement : sz+displacement-self.max_displacement,
+                        yloc:, 
+                        self.max_displacement+displacement : sx+displacement-self.max_displacement,
+                        ]
+
         elif axis == 4:
             # displacement at X
             xloc = random.randint(1, sx-1)
-            patch.image[..., 
+            patch.image.array[..., 
                 self.max_displacement : sz-self.max_displacement,
                 self.max_displacement : sy-self.max_displacement,
                 xloc:, 
@@ -455,7 +481,7 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:
                     ]
-            patch.label[..., 
+            patch.label.array[..., 
                 self.max_displacement : sz-self.max_displacement,
                 self.max_displacement : sy-self.max_displacement,
                 xloc:,
@@ -463,7 +489,19 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sz+displacement-self.max_displacement,
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:, 
-                    ] 
+                    ]
+
+            if patch.has_mask:
+                patch.mask.array[..., 
+                    self.max_displacement : sz-self.max_displacement,
+                    self.max_displacement : sy-self.max_displacement,
+                    xloc:,
+                    ] = patch.mask[..., 
+                        self.max_displacement+displacement : sz+displacement-self.max_displacement,
+                        self.max_displacement+displacement : sy+displacement-self.max_displacement,
+                        xloc:, 
+                        ]
+
         return patch
 
     @cached_property
@@ -474,85 +512,85 @@ class MissAlignment(SpatialTransform):
     def shrink(self, patch: Patch):
         patch.shrink(self.shrink_size)
 
-class Perspective2D(SpatialTransform):
-    def __init__(self, probability: float=DEFAULT_PROBABILITY,
-            corner_ratio: float=0.2):
-        """Warp image using Perspective transform
-
-        Args:
-            probability (float, optional): probability of this transformation. Defaults to DEFAULT_PROBABILITY.
-            corner_ratio (float, optional): We split the 2D image to four equal size rectangles.
-                For each axis in rectangle, we further divid it to four rectangles using this ratio.
-                The rectangle containing the image corner was used as a sampling point region.
-                This idea is inspired by this example:
-                https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_geometric_transformations/py_geometric_transformations.html#perspective-transformation
-                Defaults to 0.5.
-        """
-        super().__init__(probability=probability)
-        self.corner_ratio = corner_ratio
-
-    def __str__(self) -> str:
-        return 'Perspective2D'
-
-    def transformation_matrix(self, sy: int, sx: int):
-        corner_ratio = random.uniform(0.02, self.corner_ratio)
-        # corner_ratio = self.corner_ratio
-        upper_left_point = [
-            random.randint(0, round(sy*corner_ratio/2)), 
-            random.randint(0, round(sx*corner_ratio/2))
-        ]
-        upper_right_point = [
-            random.randint(0, round(sy*corner_ratio/2)),
-            random.randint(sx-round(sx*corner_ratio/2), sx-1)
-        ]
-        lower_left_point = [
-            random.randint(sy-round(sy*corner_ratio/2), sy-1),
-            random.randint(0, round(sx*corner_ratio/2))
-        ]
-        lower_right_point = [
-            random.randint(sy-round(sy*corner_ratio/2), sy-1),
-            random.randint(sx-round(sx*corner_ratio/2), sx-1)
-        ]
-        pts1 = [
-            upper_left_point, 
-            upper_right_point, 
-            lower_left_point, 
-            lower_right_point
-        ]
-        # push the list order to get rotation effect
-        # for example, push one position will rotate about 90 degrees
-        # push_index = random.randint(0, 3)
-        # if push_index > 0:
-        #     tmp = deepcopy(pts1)
-        #     pts1[push_index:] = tmp[:4-push_index]
-        #     # the pushed out elements should be reversed
-        #     pts1[:push_index] = tmp[4-push_index:][::-1]
-
-        pts1 = np.asarray(pts1, dtype=np.float32)
-        
-        pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
-        M = cv2.getPerspectiveTransform(pts1, pts2)
-        return M
-
-    def transform(self, patch: Patch):
-        # matrix = np.eye(3)
-        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
-        sy, sx = patch.shape[-2:]
-        M = self.transformation_matrix(sy, sx)
-        for batch in range(patch.shape[0]):
-            for channel in range(patch.shape[1]):
-                for z in range(patch.shape[2]):
-                    patch.image[batch,channel,z,...] = self._transform2d(
-                        patch.image[batch, channel, z, ...], cv2.INTER_LINEAR, M, sy, sx
-                    )
-                    patch.label[batch,channel,z,...] = self._transform2d(
-                        patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
-                    )
-        return patch
-                
-    def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
-        dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
-        return dst
+# class Perspective2D(SpatialTransform):
+    # def __init__(self, probability: float=DEFAULT_PROBABILITY,
+            # corner_ratio: float=0.2):
+        # """Warp image using Perspective transform
+# 
+        # Args:
+            # probability (float, optional): probability of this transformation. Defaults to DEFAULT_PROBABILITY.
+            # corner_ratio (float, optional): We split the 2D image to four equal size rectangles.
+                # For each axis in rectangle, we further divid it to four rectangles using this ratio.
+                # The rectangle containing the image corner was used as a sampling point region.
+                # This idea is inspired by this example:
+                # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_geometric_transformations/py_geometric_transformations.html#perspective-transformation
+                # Defaults to 0.5.
+        # """
+        # super().__init__(probability=probability)
+        # self.corner_ratio = corner_ratio
+# 
+    # def __str__(self) -> str:
+        # return 'Perspective2D'
+# 
+    # def transformation_matrix(self, sy: int, sx: int):
+        # corner_ratio = random.uniform(0.02, self.corner_ratio)
+        corner_ratio = self.corner_ratio
+        # upper_left_point = [
+            # random.randint(0, round(sy*corner_ratio/2)), 
+            # random.randint(0, round(sx*corner_ratio/2))
+        # ]
+        # upper_right_point = [
+            # random.randint(0, round(sy*corner_ratio/2)),
+            # random.randint(sx-round(sx*corner_ratio/2), sx-1)
+        # ]
+        # lower_left_point = [
+            # random.randint(sy-round(sy*corner_ratio/2), sy-1),
+            # random.randint(0, round(sx*corner_ratio/2))
+        # ]
+        # lower_right_point = [
+            # random.randint(sy-round(sy*corner_ratio/2), sy-1),
+            # random.randint(sx-round(sx*corner_ratio/2), sx-1)
+        # ]
+        # pts1 = [
+            # upper_left_point, 
+            # upper_right_point, 
+            # lower_left_point, 
+            # lower_right_point
+        # ]
+        push the list order to get rotation effect
+        for example, push one position will rotate about 90 degrees
+        push_index = random.randint(0, 3)
+        if push_index > 0:
+            tmp = deepcopy(pts1)
+            pts1[push_index:] = tmp[:4-push_index]
+            # the pushed out elements should be reversed
+            pts1[:push_index] = tmp[4-push_index:][::-1]
+# 
+        # pts1 = np.asarray(pts1, dtype=np.float32)
+        # 
+        # pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
+        # M = cv2.getPerspectiveTransform(pts1, pts2)
+        # return M
+# 
+    # def transform(self, patch: Patch):
+        matrix = np.eye(3)
+        offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
+        # sy, sx = patch.shape[-2:]
+        # M = self.transformation_matrix(sy, sx)
+        # for batch in range(patch.shape[0]):
+            # for channel in range(patch.shape[1]):
+                # for z in range(patch.shape[2]):
+                    # patch.image[batch,channel,z,...] = self._transform2d(
+                        # patch.image[batch, channel, z, ...], cv2.INTER_LINEAR, M, sy, sx
+                    # )
+                    # patch.label[batch,channel,z,...] = self._transform2d(
+                        # patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
+                    # )
+        # return patch
+                # 
+    # def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
+        # dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
+        # return dst
 
 
 # class RotateScale(SpatialTransform):
@@ -588,24 +626,32 @@ class Perspective2D(SpatialTransform):
 #                     ) 
 
 
-class Swirl(SpatialTransform):
-    def __init__(self, max_rotation: int = 5, max_strength: int = 3, probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability=probability)
-        self.max_strength = max_strength
-        self.max_rotation = max_rotation
-
-    def __str__(self) -> str:
-        return 'Swirl'
-
-    def transform(self, patch: Patch):
-        for z in range(patch.shape[-3]):
-            patch.image[..., z, :, :] = swirl(
-                patch.image[..., z, :, :],
-                rotation=random.randint(1, self.max_rotation),
-                strength=random.randint(1, self.max_strength),
-                radius = (patch.shape[-1] + patch.shape[-2]) // 4,
-            )
-        return patch
+#class Swirl(SpatialTransform):
+#    def __init__(self, max_rotation: int = 5, max_strength: int = 3, probability: float = DEFAULT_PROBABILITY):
+#        super().__init__(probability=probability)
+#        self.max_strength = max_strength
+#        self.max_rotation = max_rotation
+#
+#    def __str__(self) -> str:
+#        return 'Swirl'
+#
+#    def transform(self, patch: Patch):
+#        """todo: transform label as well!
+#
+#        Args:
+#            patch (Patch): _description_
+#
+#        Returns:
+#            _type_: _description_
+#        """
+#        for z in range(patch.shape[-3]):
+#            patch.image[..., z, :, :] = swirl(
+#                patch.image[..., z, :, :],
+#                rotation=random.randint(1, self.max_rotation),
+#                strength=random.randint(1, self.max_strength),
+#                radius = (patch.shape[-1] + patch.shape[-2]) // 4,
+#            )
+#        return patch
 
 class Label2AffinityMap(SpatialTransform):
     def __init__(self, probability: float = 1.):
@@ -621,8 +667,9 @@ class Label2AffinityMap(SpatialTransform):
         assert patch.label.shape[0] == 1
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
-        affs_ref = seg_to_affs(patch.label[0,0,...])
-        patch.label =  np.expand_dims(affs_ref, axis=0)
+        affs_ref = seg_to_affs(patch.label.array[0,0,...])
+        patch.label.array =  np.expand_dims(affs_ref, axis=0)
+        patch.label.voxel_offset += Cartesian(1,1,1)
         # print(f'patch shape after Label2AffinityMap: {patch.shape}')
         return patch
 
@@ -632,7 +679,9 @@ class Label2AffinityMap(SpatialTransform):
     
     def shrink(self, patch: Patch):
         # the label is already shrinked, so we only need to shrink the image
-        patch.image = patch.image[:,:, 1:, 1:, 1:]
+        patch.image.shrink(self.shrink_size)
+        if patch.has_mask:
+            patch.mask.shrink(self.shrink_size)
 
 class Compose(object):
     def __init__(self, transforms: list):
@@ -663,6 +712,8 @@ class Compose(object):
         # could be negative, and pytorch could not tranform
         # the array to Tensor. Copy can fix it.
         # print(f'patch shape after Compose call: {patch.shape}')
-        patch.image = patch.image.copy()
-        patch.label = patch.label.copy()
+        patch.image.array = patch.image.array.copy()
+        patch.label.array = patch.label.array.copy()
+        if patch.has_mask:
+            patch.mask.array = patch.mask.array.copy()
 
