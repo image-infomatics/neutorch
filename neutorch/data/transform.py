@@ -12,7 +12,7 @@ from skimage.util import random_noise
 
 from .patch import Patch
 
-from reneu.lib.segmentation import seg_to_affs
+# from reneu.lib.segmentation import seg_to_affs
 # from copy import deepcopy
 
 

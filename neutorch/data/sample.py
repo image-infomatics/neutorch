@@ -48,7 +48,7 @@ class AbstractSample(ABC):
 
 class Sample(AbstractSample):
     def __init__(self, 
-            images: List[Chunk | PrecomputedVolume],
+            images: List[PrecomputedVolume],
             label: Union[Chunk, PrecomputedVolume],
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
@@ -325,7 +325,7 @@ class PostSynapseReference(AbstractSample):
 
 class SemanticSample(Sample):
     def __init__(self, 
-            images: List[Chunk | AbstractVolume ], 
+            images: List[AbstractVolume ], 
             label: Union[np.ndarray, Chunk], 
             output_patch_size: Cartesian,
             num_classes: int = DEFAULT_NUM_CLASSES,
@@ -541,7 +541,7 @@ class SelfSupervisedSample(Sample):
 
 class NeuropilMaskSample(Sample):
     def __init__(self, 
-            images: List[Chunk | AbstractVolume], 
+            images: List[AbstractVolume], 
             label: Union[Chunk, AbstractVolume], 
             output_patch_size: Cartesian,
             mip: int = 3,
