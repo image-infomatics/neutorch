@@ -82,8 +82,14 @@ class BlockAlignedVolumeSample(AbstractSample):
             output_patch_size: Cartesian,
             forbbiden_distance_to_boundary: tuple = None,
         ):
-        """Combine several label chunks together.
-        Some components, such as image volume, mask, could be shared across individual samples. These samples should be combined together to reduce RAM usage. For example, the mask volume could be pretty big and needs to be loaded to memory.
+        """sample patches inside blocks of volume
+        This will reduce the cost of reading and decompression by avoiding patches cross blocks.
+
+        Args:
+            images (List[AbstractVolume]): image volumes.
+            label (AbstractVolume): the label volume.
+            output_patch_size (Cartesian): output patch size.
+            forbbiden_distance_to_boundary (tuple, optional): minimum distance to boundary. Defaults to None.
         """
         super().__init__(output_patch_size=output_patch_size)
         self.images = images
