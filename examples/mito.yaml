@@ -6,15 +6,15 @@ system:
 dataset:
   training:
     susumu100:
-      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image:mip=1",]
-      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito:mip=1"
+      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image#mip=1;preload=True",]
+      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito#mip=1;preload=True"
   validation:
     susumu100:
-      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image:mip=1",]
-      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito:mip=1"
+      images: ["file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/image#mip=1;preload=True",]
+      label: "file:///mnt/ceph/users/jwu/31_organelle/30_SM-WT1/84_susumu_inference/04_precomputed/mito#mip=1;preload=True"
 model:
   in_channels: 1
-  out_channels: 3
+  out_channels: 1
 
 train:
   iter_start: 0
@@ -24,7 +24,7 @@ train:
   # The dataprovider should provide nGPU*batch_size batches!
   batch_size: 1
   output_dir: "./"
-  patch_size: [128, 128, 128]
+  patch_size: [16, 256, 256]
   learning_rate: 0.001
     #training_interval: 200
     #validation_interval: 2000

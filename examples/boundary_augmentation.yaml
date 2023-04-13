@@ -8,7 +8,6 @@ dataset:
     s3vol01700:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",]
     s3vol02299:
-<<<<<<< HEAD
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
     s3vol02794:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02794/affs_03_160k.h5",]
@@ -22,12 +21,8 @@ dataset:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",]
     s3vol05450:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
-      
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
-        #s3vol02794:
-        #  images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02794/affs_03_160k.h5",]
-        #s3vol03290:
-validation:
+
+  validation:
     s3test1:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/aff_zyx_3072-3584_5120-5632_8196-8708.h5",]
     s3test2:
@@ -36,7 +31,7 @@ validation:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/aff_zyx_2560-3072_5632-6144_8704-9216.h5",] 
     s3test4:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",]
-
+  
 model:
   in_channels: 3
   out_channels: 3
@@ -53,5 +48,5 @@ train:
   learning_rate: 0.001
     #training_interval: 200
     #validation_interval: 2000
-  training_interval: 12
-  validation_interval: 14
+  training_interval: 2
+  validation_interval: 4

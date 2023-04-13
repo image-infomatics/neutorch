@@ -12,7 +12,10 @@ from skimage.util import random_noise
 
 from .patch import Patch
 
-# from reneu.lib.segmentation import seg_to_affs
+try:
+    from reneu.lib.segmentation import seg_to_affs
+except ImportError:
+    pass
 # from copy import deepcopy
 
 
@@ -20,6 +23,7 @@ from .patch import Patch
 
 DEFAULT_PROBABILITY = .5
 DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
+# DEFAULT_SHRINK_SIZE = None
 
 
 class AbstractTransform(ABC):
@@ -40,25 +44,37 @@ class AbstractTransform(ABC):
 
     def __call__(self, patch: Patch):
         if random.random() < self.probability:
-            self.transform(patch)
-        
-        if self.shrink_size is not None:
+            patch = self.transform(patch)
+            # for spatial transform, we need to correct the size
+            # to make sure that the final patch size is correct
+            self.shrink(patch)
+        else:
             patch.shrink(self.shrink_size)
-        # for spatial transform, we need to correct the size
-        # to make sure that the final patch size is correct 
-
-    @property
-    def shrink_size(self):
-        return None
-
+        # return patch
+        
     @abstractmethod
     def transform(self, patch: Patch):
         """perform the real transform of image and label
 
         Args:
             patch (Patch): image and label
+        """ 
+        return patch
+
+    @cached_property
+    def shrink_size(self):
+        """this transform might shrink the patch size.
+        for example, droping a section will shrink the z axis.
+
+        Return:
+            shrink_size (tuple): z0,y0,x0,z1,y1,x1
         """
-        pass
+        return DEFAULT_SHRINK_SIZE
+    
+    def shrink(self, patch):
+        if self.shrink_size != DEFAULT_SHRINK_SIZE:
+            patch.shrink(self.shrink_size)
+        # return patch
 
     
 class SpatialTransform(AbstractTransform):
@@ -76,18 +92,8 @@ class SpatialTransform(AbstractTransform):
         Args:
             patch (tuple): image and label pair
         """
-        pass
-
-    @cached_property
-    def shrink_size(self):
-        """this transform might shrink the patch size.
-        for example, droping a section will shrink the z axis.
-
-        Return:
-            shrink_size (tuple): z0,y0,x0,z1,y1,x1
-        """
-        return DEFAULT_SHRINK_SIZE
-
+        return patch
+    
 class IntensityTransform(AbstractTransform):
     """change image intensity only"""
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
@@ -98,7 +104,7 @@ class IntensityTransform(AbstractTransform):
 
     @abstractmethod
     def transform(self, patch: Patch):
-        pass
+        return patch        
 
 
 class SectionTransform(AbstractTransform):
@@ -142,8 +148,9 @@ class OneOf(AbstractTransform):
 
     def transform(self, patch: Patch):
         # select one of the transforms
-        transform = random.choice(self.transforms)
-        transform(patch)
+        transform_class = random.choice(self.transforms)
+        patch = transform_class(patch)
+        return patch
 
 
 class DropSection(SpatialTransform):
@@ -154,10 +161,15 @@ class DropSection(SpatialTransform):
         z = random.randrange(1, patch.shape[-3])
         patch.image[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
         patch.label[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+        return patch
 
     @cached_property
     def shrink_size(self):
         return (0, 0, 0, 1, 0, 0)
+    
+    def shrink(self, patch):
+        # the section is already dropped and the patch is shrinked
+        pass
 
 class MaskBox(IntensityTransform):
     def __init__(self,
@@ -207,6 +219,7 @@ class MaskBox(IntensityTransform):
                 start[1] : start[1] + box_size[1],
                 start[2] : start[2] + box_size[2],
             ] = box
+        return patch
 
 class NormalizeTo01(IntensityTransform):
     def __init__(self, probability: float = 1.):
@@ -218,6 +231,7 @@ class NormalizeTo01(IntensityTransform):
     def transform(self, patch: Patch):
         if np.issubdtype(patch.image.dtype, np.uint8):
             patch.image = patch.image.astype(np.float32) / 255.
+        return patch
 
 class AdjustBrightness(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
@@ -234,6 +248,7 @@ class AdjustBrightness(IntensityTransform):
         if patch.image.mean() + brightness < 0.9:
             patch.image += brightness
             np.clip(patch.image, 0., 1., out=patch.image)
+        return patch
 
 class AdjustContrast(IntensityTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY,
@@ -252,6 +267,7 @@ class AdjustContrast(IntensityTransform):
         if np.mean(patch.image) * factor < 0.9:
             patch.image *= factor
             np.clip(patch.image, 0., 1., out=patch.image)
+        return patch
 
 
 class Gamma(IntensityTransform):
@@ -265,6 +281,7 @@ class Gamma(IntensityTransform):
         # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
         patch.image **= 2.** gamma
+        return patch
 
 class GaussianBlur2D(IntensityTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY, 
@@ -278,6 +295,7 @@ class GaussianBlur2D(IntensityTransform):
     def transform(self, patch: Patch):
         sigma = random.uniform(0.2, self.sigma)
         gaussian_filter(patch.image, sigma=sigma, output=patch.image)
+        return patch
 
 
 class GaussianBlur3D(IntensityTransform):
@@ -292,6 +310,7 @@ class GaussianBlur3D(IntensityTransform):
     def transform(self, patch: Patch):
         sigma = tuple(random.uniform(0.2, s) for s in self.max_sigma)
         gaussian_filter(patch.image, sigma=sigma, output=patch.image)
+        return patch
 
 
 class Noise(IntensityTransform):
@@ -308,6 +327,7 @@ class Noise(IntensityTransform):
         variance = random.uniform(0.01, self.max_variance)
         random_noise(patch.image, mode=self.mode, var=variance)
         np.clip(patch.image, 0., 1., out=patch.image)
+        return patch
 
 
 class Flip(SpatialTransform):
@@ -331,6 +351,7 @@ class Flip(SpatialTransform):
         #     # swap the axis to be shrinked
         #     shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
         # patch.delayed_shrink_size = tuple(shrink)
+        return patch
 
 
 class Transpose(SpatialTransform):
@@ -355,6 +376,7 @@ class Transpose(SpatialTransform):
         #     shrink[ax0] = patch.delayed_shrink_size[ax1]
         #     shrink[3+ax0] = patch.delayed_shrink_size[3+ax1]
         # patch.delayed_shrink_size = tuple(shrink) 
+        return patch
 
     
 class MissAlignment(SpatialTransform):
@@ -445,12 +467,15 @@ class MissAlignment(SpatialTransform):
                     self.max_displacement+displacement : sy+displacement-self.max_displacement,
                     xloc:, 
                     ] 
+        return patch
 
     @cached_property
     def shrink_size(self):
         # return (0, 0, 0, 0, 0, self.max_displacement)
         return (self.max_displacement,) * 6
 
+    def shrink(self, patch: Patch):
+        patch.shrink(self.shrink_size)
 
 class Perspective2D(SpatialTransform):
     def __init__(self, probability: float=DEFAULT_PROBABILITY,
@@ -526,6 +551,7 @@ class Perspective2D(SpatialTransform):
                     patch.label[batch,channel,z,...] = self._transform2d(
                         patch.label[batch, channel, z, ...], cv2.INTER_NEAREST, M, sy, sx
                     )
+        return patch
                 
     def _transform2d(self, arr: np.ndarray, interpolation: int, M: np.ndarray, sy: int, sx: int):
         dst = cv2.warpPerspective(arr, M, (sy, sx), flags=interpolation)
@@ -582,6 +608,7 @@ class Swirl(SpatialTransform):
                 strength=random.randint(1, self.max_strength),
                 radius = (patch.shape[-1] + patch.shape[-2]) // 4,
             )
+        return patch
 
 class Label2AffinityMap(SpatialTransform):
     def __init__(self, probability: float = 1.):
@@ -594,19 +621,21 @@ class Label2AffinityMap(SpatialTransform):
 
     def transform(self, patch: Patch):
         """transform the label to affinity map."""
-        print(f'patch shape before Label2AffinityMap: {patch.shape}')
         assert patch.label.shape[0] == 1
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
-        label = patch.label[0,0,...]
-        patch.label = seg_to_affs(label)
-        patch.image = patch.image[:,:, 1:, 1:, 1:]
-        assert patch.image.shape[-3:] == patch.label.shape[-3:]
-        print(f'patch shape after Label2AffinityMap: {patch.shape}')
+        affs_ref = seg_to_affs(patch.label[0,0,...])
+        patch.label =  np.expand_dims(affs_ref, axis=0)
+        # print(f'patch shape after Label2AffinityMap: {patch.shape}')
+        return patch
 
     @cached_property
     def shrink_size(self):
         return (1, 1, 1, 0, 0, 0)
+    
+    def shrink(self, patch: Patch):
+        # the label is already shrinked, so we only need to shrink the image
+        patch.image = patch.image[:,:, 1:, 1:, 1:]
 
 class Compose(object):
     def __init__(self, transforms: list):
@@ -630,13 +659,13 @@ class Compose(object):
 
     def __call__(self, patch: Patch):
         for transform in self.transforms:
-            print(f'patch size before {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
+            # print(f'patch size before {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
             transform(patch)
-            print(f'patch size after {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
+            # print(f'patch size after {transform} with shrink size of {transform.shrink_size}: {patch.shape}')
         # after the transformation, the stride of array
         # could be negative, and pytorch could not tranform
         # the array to Tensor. Copy can fix it.
-        print(f'patch shape after Compose call: {patch.shape}')
+        # print(f'patch shape after Compose call: {patch.shape}')
         patch.image = patch.image.copy()
         patch.label = patch.label.copy()
 

@@ -69,8 +69,8 @@ class Sample(AbstractSample):
         """
         super().__init__(output_patch_size=output_patch_size)
         assert len(images) > 0
-        assert images[0].ndim >= 3
-        assert label.ndim >= 3
+        # assert images[0].ndim >= 3
+        # assert label.ndim >= 3
         assert isinstance(label, Chunk)
         for image in images:
             assert isinstance(image, Chunk)
@@ -78,19 +78,13 @@ class Sample(AbstractSample):
         
         # if isinstance(label, Chunk):
             # label = label.array
-
-
-        # if images[0].shape != label.shape[-3:]:
-        #     print(images[0].shape)
-        #     print(label.shape[-3:])
-        #     breakpoint()
+        
         self.images = images
         self.label = label
         
-        # print(f'output patch size: {self.output_patch_size}')
         assert isinstance(self.output_patch_size, Cartesian)
         for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
-            assert ls >= ps
+            assert ls >= ps, f'output patch size: {self.output_patch_size}, label shape: {label.shape}'
 
         if forbbiden_distance_to_boundary is None:
             forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
@@ -106,12 +100,8 @@ class Sample(AbstractSample):
         self.center_stop = tuple(s - d for s, d in zip(
             images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
         for cs, cp in zip(self.center_start, self.center_stop):
-            assert cp > cs
-
-        # print(f'center start: {self.center_start}')
-        # print(f'center stop: {self.center_stop}')
-        # print(f'forbbiden distance to boundary: {forbbiden_distance_to_boundary}')
-        # breakpoint()
+            assert cp > cs, \
+                f'center start: {self.center_start}, center stop: {self.center_stop}'
 
     # @classmethod
     # def from_json(cls, json_file: str, patch_size: Cartesian = DEFAULT_PATCH_SIZE):
@@ -147,11 +137,12 @@ class Sample(AbstractSample):
         bbox += image.bbox.start
         image_patch = image.cutout(bbox)
         label_patch = self.label.cutout(bbox)
-
+        
+        if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
+            print(f'center: {center}, start: {start}, bbox: {bbox}')
+            breakpoint()
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
-        assert image_patch.shape[-1] == image_patch.shape[-2]
-        # if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
-        #     breakpoint()
+        assert image_patch.shape[-1] == image_patch.shape[-2], f'image patch shape: {image_patch.shape}'
         assert image_patch.shape[-3:] == self.patch_size_before_transform.tuple, \
             f'image patch shape: {image_patch.shape}, patch size before transform: {self.patch_size_before_transform}'
         # if we do not copy here, the augmentation will change our 
@@ -163,10 +154,12 @@ class Sample(AbstractSample):
     @property
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
-        
-        print(f'patch size before transform: {patch.shape}')
+
+        # print(f'transforms: {self.transform}') 
+        # print(f'patch size before transform: {patch.shape}')
         self.transform(patch)
-        print(f'patch size after transform: {patch.shape}')
+        # print(f'patch size after transform: {patch.shape}')
+        # breakpoint()
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
@@ -325,7 +318,7 @@ class PostSynapseReference(AbstractSample):
 
 class SemanticSample(Sample):
     def __init__(self, 
-            images: List[AbstractVolume ], 
+            images: List[Chunk | AbstractVolume ], 
             label: Union[np.ndarray, Chunk], 
             output_patch_size: Cartesian,
             num_classes: int = DEFAULT_NUM_CLASSES,
@@ -342,13 +335,13 @@ class SemanticSample(Sample):
             **kwargs,
             ):
         label = load_chunk_or_volume(label_path, **kwargs)
-        print(f'label path: {label_path} with size {label.shape}')
+        # print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
-            print(f'image path: {image_path} with size {image.shape}')
+            # print(f'image path: {image_path} with size {image.shape}')
         return cls(images, label, output_patch_size, num_classes=num_classes)
 
     @classmethod
@@ -383,6 +376,28 @@ class SemanticSample(Sample):
     @cached_property
     def class_counts(self):
         return np.bincount(self.label.flatten(), minlength=self.num_classes)
+    
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            # AdjustContrast(factor_range = (0.95, 1.8)),
+            # AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            # Perspective2D(),
+            # RotateScale(probability=1.),
+            DropSection(probability=1.),
+            Flip(),
+            Transpose(),
+            # MissAlignment(),
+        ])
 
 
 class OrganelleSample(SemanticSample):
@@ -450,13 +465,13 @@ class AffinityMapSample(SemanticSample):
             **kwargs,
             ):
         label = load_chunk_or_volume(label_path, **kwargs)
-        print(f'label path: {label_path} with size {label.shape}')
+        # print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
-            print(f'image path: {image_path} with size {image.shape}')
+            # print(f'image path: {image_path} with size {image.shape}')
         return cls(images, label, output_patch_size, num_classes=num_classes)
     
     @classmethod
@@ -481,7 +496,7 @@ class AffinityMapSample(SemanticSample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            Perspective2D(),
+            # Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),
             Flip(),
@@ -519,7 +534,7 @@ class SelfSupervisedSample(Sample):
         for image_path in image_paths:
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
-            print(f'image path: {image_path} with size {image.shape}')
+            # print(f'image path: {image_path} with size {image.shape}')
         return cls(images, images[0], output_patch_size)
 
     @cached_property
@@ -565,14 +580,11 @@ class NeuropilMaskSample(Sample):
             **kwargs,
             ):
         label = load_chunk_or_volume(label_path, mip = mip, **kwargs)
-        print(f'label path: {label_path} with size {label.shape}')
 
         images = []
         for image_path in image_paths:
             image = load_chunk_or_volume(image_path, **kwargs)
             images.append(image)
-            print(f'image path: {image_path} with size {image.shape}')
-        breakpoint()
         return cls(images, label, output_patch_size)
 
     #@property
@@ -591,7 +603,7 @@ class NeuropilMaskSample(Sample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            Perspective2D(),
+            # Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),
             Flip(),
