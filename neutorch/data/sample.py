@@ -11,7 +11,9 @@ from chunkflow.chunk.utils import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import PrecomputedVolume, AbstractVolume
 
+
 from neutorch.data.patch import Patch
+from .patch_bounding_box_generator import PatchBoundingBoxGenerator, PatchBoundingBoxGeneratorInsideMask
 from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -45,27 +47,65 @@ class AbstractSample(ABC):
         """
         return 1 
 
-class CombinedSample(AbstractSample):
-    def __init__(self, output_patch_size: Cartesian):
+    @cached_property
+    def transform(self):
+        return Compose([
+            NormalizeTo01(probability=1.),
+            # AdjustContrast(factor_range = (0.95, 1.8)),
+            # AdjustBrightness(min_factor = 0.05, max_factor = 0.2),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
+            MaskBox(),
+            # Perspective2D(),
+            # RotateScale(probability=1.),
+            DropSection(probability=1.),
+            Flip(),
+            Transpose(),
+            # MissAlignment(),
+        ])
+
+    @cached_property
+    def patch_size_before_transform(self):
+        return self.output_patch_size + \
+            self.transform.shrink_size[:3] + \
+            self.transform.shrink_size[-3:]
+
+class BlockAlignedVolumeSample(AbstractSample):
+    def __init__(self, 
+            images: List[AbstractVolume],
+            label: AbstractVolume,
+            output_patch_size: Cartesian,
+            forbbiden_distance_to_boundary: tuple = None,
+        ):
         """Combine several label chunks together.
         Some components, such as image volume, mask, could be shared across individual samples. These samples should be combined together to reduce RAM usage. For example, the mask volume could be pretty big and needs to be loaded to memory.
         """
-        super().__init__(output_patch_size)
-        self.is_train = None
-    
-    def set_train_mode(self):
-        self.is_train = True
+        super().__init__(output_patch_size=output_patch_size)
+        self.images = images
+        self.label = label
 
-    def set_validation_mode(self):
-        self.is_train = False
-
-    @property
-    def random_patch_for_training(self):
-        pass    
+        self.patch_bbox_generator = PatchBoundingBoxGenerator(
+            self.patch_size_before_transform,
+            self.images[0].bounding_box,
+            forbbiden_distance_to_boundary=forbbiden_distance_to_boundary,
+        )
 
     @property
     def random_patch(self):
-        return super().random_patch
+        bbox = self.patch_bbox_generator.random_patch_bbox
+        image_volume = random.choice(self.images)
+        patch_image = image_volume.cutout(bbox)
+        patch_label = self.label.cutout(bbox)
+        return Patch(patch_image, patch_label)
+
+
+class BlockAlignedVolumeSampleWithMask(BlockAlignedVolumeSample):
+    pass
 
 class Sample(AbstractSample):
     def __init__(self, 
@@ -197,16 +237,6 @@ class Sample(AbstractSample):
         #     weight /= 10.
 
         return weight
-
-    @cached_property
-    def patch_size_before_transform(self):
-        return self.output_patch_size + \
-            self.transform.shrink_size[:3] + \
-            self.transform.shrink_size[-3:]
-
-    @abstractproperty
-    def transform(self):
-        pass
 
 class SampleWithPointAnnotation(Sample):
     def __init__(self, 
@@ -634,6 +664,7 @@ class NeuropilMaskSample(Sample):
             MissAlignment(),
             Label2AffinityMap(probability=1.),
         ])
+
 
 
 if __name__ == '__main__':

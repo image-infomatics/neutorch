@@ -10,7 +10,7 @@ from chunkflow.lib.cartesian_coordinate import Cartesian, BoundingBox
 from chunkflow.volume import AbstractVolume
 
 
-class AbstractPatchLocationGenerator(ABC):
+class AbstractPatchBoundingBoxGenerator(ABC):
     def __init__(self, 
             patch_size: Cartesian, 
             volume_bbox: BoundingBox,
@@ -32,7 +32,7 @@ class AbstractPatchLocationGenerator(ABC):
         pass
 
 
-class PatchLocationGeneratorInChunk(AbstractPatchLocationGenerator):
+class PatchBoundingBoxGeneratorInChunk(AbstractPatchBoundingBoxGenerator):
     def __init__(self, 
             patch_size: Cartesian, 
             volume_bbox: BoundingBox,
@@ -82,7 +82,7 @@ class PatchLocationGeneratorInChunk(AbstractPatchLocationGenerator):
         return bbox
 
 
-class PatchLocationGeneratorInsideMask(PatchLocationGeneratorInChunk):
+class PatchBoundingBoxGeneratorInsideMask(PatchLocationGeneratorInChunk):
     def __init__(self, 
             patch_size: Cartesian, image_volume: AbstractVolume, 
             mask_volume: AbstractVolume,
