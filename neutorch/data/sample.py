@@ -529,13 +529,10 @@ class SelfSupervisedSample(Sample):
         Returns:
             _type_: _description_
         """
-
-        images = []
-        for image_path in image_paths:
-            image = load_chunk_or_volume(image_path, **kwargs)
-            images.append(image)
+        assert len(image_paths) == 1
+        image = load_chunk_or_volume(image_paths[0], **kwargs)
             # print(f'image path: {image_path} with size {image.shape}')
-        return cls(images, images[0], output_patch_size)
+        return cls([image], image, output_patch_size)
 
     @cached_property
     def transform(self):
