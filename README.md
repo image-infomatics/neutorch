@@ -24,6 +24,7 @@ We provide command line tool after installation. Check out the options provided:
     neutrain-XXX --help
 
 For example, to perform boundary detection training, we can use the following command:
+    
     neutrain-affs -c config.yaml
 
 # Acknowledgements
