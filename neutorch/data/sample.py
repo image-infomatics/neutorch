@@ -1,9 +1,11 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod, abstractproperty
 import random
 from typing import List, Union
 from functools import cached_property
 
 import numpy as np
+from yacs.config import CfgNode
 
 from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian 
 from chunkflow.chunk import Chunk
@@ -184,6 +186,55 @@ class Sample(AbstractSample):
     @abstractproperty
     def transform(self):
         pass
+
+class SampleWithMask(Sample):
+    def __init__(self, 
+            images: List[PrecomputedVolume],
+            label: Union[Chunk, PrecomputedVolume],
+            output_patch_size: Cartesian,
+            mask: Chunk | PrecomputedVolume, 
+            forbbiden_distance_to_boundary: tuple = None) -> None:
+        """Image sample with ground truth annotations
+
+        Args:
+            images (List[Chunk]): different versions of image chunks normalized to 0-1
+            label (np.ndarray): training label
+            output_patch_size (Cartesian): output patch size. this should be the patch_size before transform. 
+                the patch is expected to be shrinked to be the output patch size.
+            mask (Chunk | PrecomputedVolume): neuropil mask that indicates inside of neuropil.
+            forbbiden_distance_to_boundary (Union[tuple, int]): 
+                the distance from patch center to sample boundary that is not allowed to sample 
+                the order is z,y,x,-z,-y,-x
+                if this is an integer, then all dimension is the same.
+                if this is a tuple of three integers, the positive and negative is the same
+                if this is a tuple of six integers, the positive and negative 
+                direction is defined separately. 
+        """
+        super().__init__(images, label, output_patch_size=output_patch_size, 
+            forbbiden_distance_to_boundary=forbbiden_distance_to_boundary)
+
+        self.mask = mask
+
+    @classmethod
+    def from_config(cls, config: CfgNode) -> SampleWithMask:
+        raise NotImplementedError('to be done.')
+
+    @cached_property
+    def voxel_size_factors(self) -> Cartesian:
+        return self.mask.voxel_size // self.images[0].voxel_size 
+
+    @property
+    def random_block_pair(self) -> BoundingBox:
+        image_volume = random.choice(self.images)
+        mask_block_bbox = random.choice(self.mask.nonzero_block_bounding_boxes)
+        image_block_bbox = mask_block_bbox * self.voxel_size_factors
+        image_block = image_volume.cutout(image_block_bbox)
+        label_block = self.label.cutout(image_block_bbox)
+        return (image_block, label_block)
+
+    def random_patch(self):
+        pass
+    
 
 class SampleWithPointAnnotation(Sample):
     def __init__(self, 
