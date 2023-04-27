@@ -2,17 +2,20 @@ import random
 from abc import ABC, abstractmethod
 from functools import cached_property
 
-import cv2
+# import cv2
 import numpy as np
 from chunkflow.lib.cartesian_coordinate import Cartesian
-# from reneu.lib.segmentation import seg_to_affs
+from reneu.lib.segmentation import seg_to_affs
 from scipy.ndimage.filters import gaussian_filter
 # from skimage.transform import swirl
 from skimage.util import random_noise
 
 from .patch import Patch
 
-from reneu.lib.segmentation import seg_to_affs
+try:
+    from reneu.lib.segmentation import seg_to_affs
+except ImportError:
+    pass
 # from copy import deepcopy
 
 
@@ -244,8 +247,8 @@ class AdjustBrightness(IntensityTransform):
     def transform(self, patch: Patch):
         brightness = random.uniform(-0.5, 0.5) * random.uniform(
             self.min_factor, self.max_factor)
-        if patch.image.mean() + brightness < 0.9:
-            patch.image += brightness
+        if patch.image.array.mean() + brightness < 0.9:
+            patch.image.array += brightness
             np.clip(patch.image.array, 0., 1., out=patch.image.array)
         return patch
 
@@ -534,7 +537,7 @@ class MissAlignment(SpatialTransform):
 # 
     # def transformation_matrix(self, sy: int, sx: int):
         # corner_ratio = random.uniform(0.02, self.corner_ratio)
-        corner_ratio = self.corner_ratio
+        # corner_ratio = self.corner_ratio
         # upper_left_point = [
             # random.randint(0, round(sy*corner_ratio/2)), 
             # random.randint(0, round(sx*corner_ratio/2))
@@ -557,15 +560,15 @@ class MissAlignment(SpatialTransform):
             # lower_left_point, 
             # lower_right_point
         # ]
-        push the list order to get rotation effect
-        for example, push one position will rotate about 90 degrees
-        push_index = random.randint(0, 3)
-        if push_index > 0:
-            tmp = deepcopy(pts1)
-            pts1[push_index:] = tmp[:4-push_index]
-            # the pushed out elements should be reversed
-            pts1[:push_index] = tmp[4-push_index:][::-1]
-# 
+        # push the list order to get rotation effect
+        # for example, push one position will rotate about 90 degrees
+#         push_index = random.randint(0, 3)
+#         if push_index > 0:
+#             tmp = deepcopy(pts1)
+#             pts1[push_index:] = tmp[:4-push_index]
+#             # the pushed out elements should be reversed
+#             pts1[:push_index] = tmp[4-push_index:][::-1]
+# # 
         # pts1 = np.asarray(pts1, dtype=np.float32)
         # 
         # pts2 =np.float32([[0, 0], [0, sx], [sy, 0], [sy, sx]])
@@ -573,8 +576,8 @@ class MissAlignment(SpatialTransform):
         # return M
 # 
     # def transform(self, patch: Patch):
-        matrix = np.eye(3)
-        offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
+        # matrix = np.eye(3)
+        # offset = tuple(-ps // 2 for ps in patch.shape[-3:] )
         # sy, sx = patch.shape[-2:]
         # M = self.transformation_matrix(sy, sx)
         # for batch in range(patch.shape[0]):

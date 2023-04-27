@@ -3,12 +3,12 @@ from functools import cached_property
 import click
 from yacs.config import CfgNode
 
-from neutorch.data.dataset import AffinityMapDataset
+from neutorch.data.dataset import AffinityMapVolumeWithMask
 
 from .base import TrainerBase
 
 
-class AffinityMapTrainer(TrainerBase):
+class WholeBrainAffinityMapTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
@@ -16,11 +16,12 @@ class AffinityMapTrainer(TrainerBase):
 
     @cached_property
     def training_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, is_train=True)
+        return AffinityMapVolumeWithMask.from_config(self.cfg, is_train=True)
        
     @cached_property
     def validation_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, is_train=False)
+        return AffinityMapVolumeWithMask.from_config(self.cfg, is_train=False)
+
 
 @click.command()
 @click.option('--config-file', '-c',
@@ -31,5 +32,5 @@ class AffinityMapTrainer(TrainerBase):
 def main(config_file: str):
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = AffinityMapTrainer(cfg)
+    trainer = WholeBrainAffinityMapTrainer(cfg)
     trainer()

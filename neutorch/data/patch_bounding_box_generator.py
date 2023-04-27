@@ -82,7 +82,7 @@ class PatchBoundingBoxGeneratorInChunk(AbstractPatchBoundingBoxGenerator):
         return bbox
 
 
-class PatchBoundingBoxGeneratorInsideMask(PatchLocationGeneratorInChunk):
+class PatchBoundingBoxGeneratorInsideMask(PatchBoundingBoxGeneratorInChunk):
     def __init__(self, 
             patch_size: Cartesian, image_volume: AbstractVolume, 
             mask_volume: AbstractVolume,

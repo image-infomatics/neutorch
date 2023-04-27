@@ -2,12 +2,12 @@ from functools import cached_property
 
 import click
 from yacs.config import CfgNode
+import torch
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
+from .base import TrainerBase
 
-from .semantic import SemanticTrainer
-
-class BoundaryAugTrainer(SemanticTrainer):
+class BoundaryAugTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg)
@@ -20,6 +20,9 @@ class BoundaryAugTrainer(SemanticTrainer):
     @cached_property
     def validation_dataset(self):
         return BoundaryAugmentationDataset.from_config(self.cfg, is_train=False)
+    
+    def label_to_target(self, label: torch.Tensor):
+        return label
 
     """
     def call(self):

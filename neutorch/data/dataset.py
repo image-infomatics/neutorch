@@ -7,7 +7,7 @@ import torch
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from neutorch.data.sample import SemanticSample, SelfSupervisedSample, AffinityMapSample
+from neutorch.data.sample import *
 from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
@@ -101,9 +101,10 @@ class DatasetBase(torch.utils.data.IterableDataset):
         return patch.image, patch.label
    
     def __next__(self):
-        image, label = self.random_patch
-        image = to_tensor(image)
-        label = to_tensor(label)
+        image_chunk, label_chunk = self.random_patch
+        image = to_tensor(image_chunk.array)
+        label = to_tensor(label_chunk.array)
+
         return image, label
 
     def __iter__(self):
@@ -223,6 +224,24 @@ class OrganelleDataset(SemanticDataset):
         target = to_tensor(label)
 
         return image, target
+
+class AffinityMapVolumeWithMask(DatasetBase):
+    def __init__(self, samples: list):
+        super().__init__(samples)
+    
+    @classmethod
+    def from_config(cls, cfg: CfgNode, **kwargs):
+        output_patch_size = Cartesian.from_collection(
+            cfg.train.patch_size)
+        
+        samples = []
+        for sample_name in cfg.samples:
+            sample_cfg = cfg.samples[sample_name]
+            sample_class = eval(sample_cfg.type)
+            sample = sample_class.from_config(
+                sample_cfg, output_patch_size)
+            samples.append(sample)
+        return cls(samples)
 
 class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):
