@@ -171,11 +171,12 @@ class TrainerBase(ABC):
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
             target = self.label_to_target(label)
-            
+
             iter_idx += 1
             if iter_idx> self.cfg.train.iter_stop:
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
                 return
+                
 
             ping = time()
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
@@ -204,7 +205,11 @@ class TrainerBase(ABC):
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
                 fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
                 print(f'save model to {fname}')
-                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
+
+                if iter_idx >= self.cfg.train.start_saving:
+                    save_chkpt(self.model, self.cfg.train.output_dir, 
+                        iter_idx, self.optimizer
+                    )
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(self.validation_data_iter)
