@@ -2,7 +2,6 @@ import os
 import random
 from abc import ABC, abstractproperty
 from functools import cached_property
-from glob import glob
 from time import time
 
 import numpy as np
@@ -20,7 +19,9 @@ from neutorch.model.IsoRSUNet import Model
 
 
 class TrainerBase(ABC):
-    def __init__(self, cfg: CfgNode) -> None:
+    def __init__(self, cfg: CfgNode, 
+            device: torch.DeviceObjType = None,
+            local_rank: int = os.getenv('LOCAL_RANK', -1)) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
             with open(cfg) as file:
                 cfg = CfgNode.load_cfg(file)
@@ -30,13 +31,17 @@ class TrainerBase(ABC):
             random.seed(cfg.system.seed)
         
         self.cfg = cfg
+        self.device = device
+        self.local_rank = local_rank
+        if cfg.system.gpus < 0:
+            self.num_gpus = torch.cuda.device_count()
+        else:
+            self.num_gpus = cfg.system.gpus
         self.patch_size=Cartesian.from_collection(cfg.train.patch_size)
-
-        # self._split_path_list()
 
     @cached_property
     def batch_size(self):
-        return self.cfg.system.gpus * self.cfg.train.batch_size
+        return self.num_gpus * self.cfg.train.batch_size
 
     # @cached_property
     # def path_list(self):
@@ -72,32 +77,22 @@ class TrainerBase(ABC):
     #     self.training_path_list = training_path_list
     #     self.validation_path_list = validation_path_list
 
-    # @cached_property
-    # def device(self):
-    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #     return device
-
     @cached_property
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
-        if torch.cuda.is_available():
-            gpu_num = torch.cuda.device_count()
-            print("Let's use ", gpu_num, " GPUs!")
-            # we need to use DistributedDataParallel rather than DataParallel to use multiple GPUs!
-            # https://discuss.pytorch.org/t/run-pytorch-on-multiple-gpus/20932/62
-            # device_ids=list(range(torch.cuda.device_count()))
-            model = torch.nn.parallel.DataParallel(
-                model, 
-                device_ids=list(range(torch.cuda.device_count())),
-            )
+        model.to(self.device)
+        if self.num_gpus > 1:
+            print(f'use {self.num_gpus} gpus!')
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[self.local_rank],
+                output_device=self.local_rank)
+            
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping 
         model = load_chkpt(
             model, 
             self.cfg.train.output_dir, 
             self.cfg.train.iter_start)
-        # print('send model to device: ', self.device)
-        # model = model.to(self.device)
         return model
 
     @cached_property
