@@ -5,7 +5,6 @@ from functools import cached_property
 # import cv2
 import numpy as np
 from chunkflow.lib.cartesian_coordinate import Cartesian
-from reneu.lib.segmentation import seg_to_affs
 from scipy.ndimage.filters import gaussian_filter
 # from skimage.transform import swirl
 from skimage.util import random_noise
@@ -13,7 +12,7 @@ from skimage.util import random_noise
 from .patch import Patch
 
 try:
-    from reneu.lib.segmentation import seg_to_affs
+    from reneu.lib.segmentation import seg_to_affs, remove_contact
 except ImportError:
     pass
 # from copy import deepcopy
@@ -670,7 +669,9 @@ class Label2AffinityMap(SpatialTransform):
         assert patch.label.shape[0] == 1
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
-        affs_ref = seg_to_affs(patch.label.array[0,0,...])
+        seg = patch.label.array[0,0,...]
+        seg = remove_contact(seg)
+        affs_ref = seg_to_affs(seg)
         patch.label.array =  np.expand_dims(affs_ref, axis=0)
         patch.label.voxel_offset += Cartesian(1,1,1)
         # print(f'patch shape after Label2AffinityMap: {patch.shape}')
