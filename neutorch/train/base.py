@@ -5,11 +5,12 @@ from functools import cached_property
 from time import time
 
 import numpy as np
-import torch
+from yacs.config import CfgNode
 from chunkflow.lib.cartesian_coordinate import Cartesian
+
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from yacs.config import CfgNode
 
 from neutorch.data.dataset import worker_init_fn
 from neutorch.data.patch import collate_batch
@@ -17,11 +18,17 @@ from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
 
+def setup():
+    torch.dist.init_process_group('nccl')
+
+def cleanup():
+    torch.dist.destroy_process_group()
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
             device: torch.DeviceObjType = None,
-            local_rank: int = os.getenv('LOCAL_RANK', -1)) -> None:
+            local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
+            ) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
             with open(cfg) as file:
                 cfg = CfgNode.load_cfg(file)
@@ -119,31 +126,25 @@ class TrainerBase(ABC):
         
     @cached_property
     def training_data_loader(self):
-        training_data_loader = DataLoader(
-            self.training_dataset,
-            #num_workers=self.cfg.system.cpus,
-            num_workers=0,
-            prefetch_factor=2,
-            drop_last=False,
-            # multiprocessing_context='spawn',
-            collate_fn=collate_batch,
-            worker_init_fn=worker_init_fn,
-            batch_size=self.batch_size,
+        sampler = torch.dist.DistributedSampler(
+            self.training_dataset
         )
-        return training_data_loader
+        dataloader = DataLoader(
+            self.training_dataset, 
+            sampler=sampler
+        )
+        return dataloader
     
     @cached_property
     def validation_data_loader(self):
-        validation_data_loader = DataLoader(
-            self.validation_dataset,
-            num_workers=0,
-            prefetch_factor=2,
-            drop_last=False,
-            # multiprocessing_context='spawn',
-            collate_fn=collate_batch,
-            batch_size=self.batch_size,
+        sampler = torch.dist.DistributedSampler(
+            self.validation_dataset
         )
-        return validation_data_loader
+        dataloader = DataLoader(
+            self.validation_dataset, 
+            sampler=sampler
+        )
+        return dataloader
 
     @cached_property
     def validation_data_iter(self):
