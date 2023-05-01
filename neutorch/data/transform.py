@@ -12,7 +12,7 @@ from skimage.util import random_noise
 from .patch import Patch
 
 try:
-    from reneu.lib.segmentation import seg_to_affs, remove_contact
+    from reneu.lib.segmentation import seg_to_affs, remove_contact_xy
 except ImportError:
     pass
 # from copy import deepcopy
@@ -670,7 +670,9 @@ class Label2AffinityMap(SpatialTransform):
         assert patch.label.shape[1] == 1
         assert patch.label.ndim == 5
         seg = patch.label.array[0,0,...]
-        seg = remove_contact(seg)
+        seg = seg.astype(np.uint64)
+        remove_contact_xy(seg)
+        seg = seg.astype(np.uint64)
         affs_ref = seg_to_affs(seg)
         patch.label.array =  np.expand_dims(affs_ref, axis=0)
         patch.label.voxel_offset += Cartesian(1,1,1)
