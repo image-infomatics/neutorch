@@ -54,7 +54,7 @@ def to_tensor(arr):
 
 class DatasetBase(torch.utils.data.IterableDataset):
     def __init__(self,
-            samples: list, 
+            samples: List[AbstractSample], 
         ):
         """
         Parameters:
@@ -152,7 +152,7 @@ class SemanticDataset(DatasetBase):
     
 
 class OrganelleDataset(SemanticDataset):
-    def __init__(self, samples: list, 
+    def __init__(self, samples: List[AbstractSample], 
             num_classes: int = 1,
             skip_classes: list = None,
             selected_classes: list = None):
@@ -226,7 +226,7 @@ class OrganelleDataset(SemanticDataset):
         return image, target
 
 class AffinityMapVolumeWithMask(DatasetBase):
-    def __init__(self, samples: list):
+    def __init__(self, samples: List[AbstractSample]):
         super().__init__(samples)
     
     @classmethod
@@ -242,6 +242,16 @@ class AffinityMapVolumeWithMask(DatasetBase):
                 sample_cfg, output_patch_size)
             samples.append(sample)
         return cls(samples)
+
+    def __len__(self):
+        # num = 0
+        # for sample in self.samples:
+        #     num += sample.
+        # return num
+        # return self.sample_num * cfg.system.gpus * cfg.train.batch_size * 16
+        # our patches are randomly sampled from chunk or volume and is close to unlimited.
+        # return a big enough number to make distributed sampler work
+        return 1024
 
 class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):

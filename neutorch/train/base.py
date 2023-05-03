@@ -9,7 +9,6 @@ from yacs.config import CfgNode
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from neutorch.data.dataset import worker_init_fn
@@ -19,10 +18,10 @@ from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
 
 def setup():
-    torch.dist.init_process_group('nccl')
+    torch.distributed.init_process_group('nccl')
 
 def cleanup():
-    torch.dist.destroy_process_group()
+    torch.distributed.destroy_process_group()
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
@@ -126,11 +125,18 @@ class TrainerBase(ABC):
         
     @cached_property
     def training_data_loader(self):
-        sampler = torch.dist.DistributedSampler(
+        sampler = torch.utils.data.distributed.DistributedSampler(
             self.training_dataset
         )
-        dataloader = DataLoader(
-            self.training_dataset, 
+        dataloader = torch.utils.data.DataLoader(
+            self.training_dataset,
+            shuffle=False, 
+            num_workers = self.cfg.system.cpus,
+            prefetch_factor = self.cfg.system.cpus,
+            collate_fn=collate_batch,
+            worker_init_fn=worker_init_fn,
+            batch_size=self.batch_size,
+            pin_memory = True,
             sampler=sampler
         )
         return dataloader
@@ -140,7 +146,7 @@ class TrainerBase(ABC):
         sampler = torch.dist.DistributedSampler(
             self.validation_dataset
         )
-        dataloader = DataLoader(
+        dataloader = torch.utils.data.DataLoader(
             self.validation_dataset, 
             sampler=sampler
         )

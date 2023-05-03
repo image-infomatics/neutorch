@@ -1,3 +1,5 @@
+#/bin/env python
+
 import os
 from functools import cached_property
 
@@ -38,11 +40,12 @@ class WholeBrainAffinityMapTrainer(TrainerBase):
     help='rank of local process. It is used to assign batches and GPU devices.'
 )
 def main(config_file: str, local_rank: int):
-    setup()
     if local_rank != -1:
         torch.cuda.set_device(local_rank)
         device=torch.device("cuda", local_rank)
         torch.distributed.init_process_group(backend="nccl", init_method='env://')
+    else:
+        setup()
 
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
