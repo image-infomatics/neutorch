@@ -50,6 +50,12 @@ class AbstractSample(ABC):
         """
         return 1 
 
+    def __len__(self):
+        """number of patches
+        we simplly return a number as default value to make it work with distributed sampler.
+        """
+        return 64
+
     @cached_property
     def transform(self):
         return Compose([
@@ -195,6 +201,10 @@ class Sample(AbstractSample):
         cx = random.randrange(center_start[2], center_stop[2])
         center = Cartesian(cz, cy, cx)
         return center
+
+    def __len__(self):
+        patch_num = np.prod(self.center_stop - self.center_start + 1)
+        return patch_num
 
     def patch_from_center(self, center: Cartesian):
         start = center - self.patch_size_before_transform // 2
@@ -343,7 +353,11 @@ class SampleWithMask(Sample):
         block_num = len(self.nonzero_block_bounding_boxes)
         block_size = self.label.block_size * self.voxel_size_factors
         return np.product(block_size) * block_num
-    
+
+    def __len__(self):
+        patch_num = len(self.nonzero_block_bounding_boxes) * \
+            np.prod(self.label.block_size - self.patch_size_before_transform + 1)
+        return patch_num
 
 
 class SampleWithPointAnnotation(Sample):
@@ -475,6 +489,9 @@ class PostSynapseReference(AbstractSample):
         assert np.any(label > 0.5)
 
         return Patch(image, label)
+
+    def __len__(self):
+        return self.synapses.pre_num
 
 
 class SemanticSample(Sample):

@@ -52,7 +52,7 @@ def to_tensor(arr):
     return arr
 
 
-class DatasetBase(torch.utils.data.IterableDataset):
+class DatasetBase(torch.utils.data.Dataset):
     def __init__(self,
             samples: List[AbstractSample], 
         ):
@@ -99,23 +99,25 @@ class DatasetBase(torch.utils.data.IterableDataset):
         patch = sample.random_patch
         # patch.to_tensor()
         return patch.image, patch.label
-   
-    def __next__(self):
+    
+    def __len__(self):
+        patch_num = 0
+        for sample in self.samples:
+            patch_num += len(sample)
+        return patch_num
+
+    def __getitem__(self, index: int):
+        """return a random patch from a random sample
+        the exact index does not matter!
+
+        Args:
+            index (int): index of the patch
+        """
         image_chunk, label_chunk = self.random_patch
         image = to_tensor(image_chunk.array)
         label = to_tensor(label_chunk.array)
 
         return image, label
-
-    def __iter__(self):
-        """generate random patches from samples
-
-        Yields:
-            tuple[tensor, tensor]: image and label tensors
-        """
-        while True:
-            yield next(self)
-
 
 class SemanticDataset(DatasetBase):
     def __init__(self, samples: list):
@@ -230,10 +232,23 @@ class AffinityMapVolumeWithMask(DatasetBase):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, **kwargs):
+    def from_config(cls, cfg: CfgNode, mode: str = 'train', **kwargs):
+        """construct affinity map volume with mask dataset
+
+        Args:
+            cfg (CfgNode): the configuration node
+            mode (str, optional): ['train', 'val', 'test']. Defaults to 'train'.
+        """
         output_patch_size = Cartesian.from_collection(
             cfg.train.patch_size)
         
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            # single process data loading
+            iter_start = 0
+            iter_stop = len(cfg.samples)
+
+
         samples = []
         for sample_name in cfg.samples:
             sample_cfg = cfg.samples[sample_name]

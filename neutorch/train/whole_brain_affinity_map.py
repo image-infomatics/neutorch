@@ -20,12 +20,11 @@ class WholeBrainAffinityMapTrainer(TrainerBase):
 
     @cached_property
     def training_dataset(self):
-        return AffinityMapVolumeWithMask.from_config(self.cfg, is_train=True)
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='train')
        
     @cached_property
     def validation_dataset(self):
-        return AffinityMapVolumeWithMask.from_config(self.cfg, is_train=False)
-
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='val')
 
 
 
