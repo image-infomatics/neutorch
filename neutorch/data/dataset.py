@@ -19,20 +19,20 @@ def load_cfg(cfg_file: str, freeze: bool = True):
         cfg.freeze()
     return cfg
 
-def worker_init_fn(worker_id: int):
-    worker_info = torch.utils.data.get_worker_info()
+# def worker_init_fn(worker_id: int):
+#     worker_info = torch.utils.data.get_worker_info()
     
-    # the dataset copy in this worker process
-    dataset = worker_info.dataset
-    overall_start = 0
-    overall_end = dataset.sample_num
+#     # the dataset copy in this worker process
+#     dataset = worker_info.dataset
+#     overall_start = 0
+#     overall_end = dataset.sample_num
 
-    # configure the dataset to only process the split workload
-    per_worker = int(math.ceil(
-        (overall_end - overall_start) / float(worker_info.num_workers)))
-    worker_id = worker_info.id
-    dataset.start = overall_start + worker_id * per_worker
-    dataset.end = min(dataset.start + per_worker, overall_end)
+#     # configure the dataset to only process the split workload
+#     per_worker = int(math.ceil(
+#         (overall_end - overall_start) / float(worker_info.num_workers)))
+#     worker_id = worker_info.id
+#     dataset.start = overall_start + worker_id * per_worker
+#     dataset.end = min(dataset.start + per_worker, overall_end)
 
 def path_to_dataset_name(path: str, dataset_names: list):
     for dataset_name in dataset_names:
@@ -232,25 +232,36 @@ class AffinityMapVolumeWithMask(DatasetBase):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, mode: str = 'train', **kwargs):
+    def from_config(cls, cfg: CfgNode, mode: str = 'training', **kwargs):
         """construct affinity map volume with mask dataset
 
         Args:
             cfg (CfgNode): the configuration node
-            mode (str, optional): ['train', 'val', 'test']. Defaults to 'train'.
+            mode (str, optional): ['training', 'validation', 'test']. Defaults to 'train'.
         """
         output_patch_size = Cartesian.from_collection(
             cfg.train.patch_size)
         
         worker_info = torch.utils.data.get_worker_info()
-        if worker_info is None:
-            # single process data loading
-            iter_start = 0
-            iter_stop = len(cfg.samples)
-
+        sample_names = cfg.dataset[mode]
+        
+        # single process data loading
+        iter_start = 0
+        iter_stop = len(sample_names)
+        if worker_info is not None:
+            # multiple processing for data loading, split workload
+            worker_id = worker_info.id
+            if len(sample_names) > worker_info.num_workers:
+                per_worker = int(math.ceil(
+                    (iter_end - iter_start) / float(worker_info.num_workers)))
+                iter_start = iter_start + worker_id * per_worker
+                iter_end = min(iter_start + per_worker, iter_end)
+            else:
+                iter_start = worker_id % len(sample_names)
+                iter_stop = iter_start + 1
 
         samples = []
-        for sample_name in cfg.samples:
+        for sample_name in sample_names[iter_start : iter_stop]:
             sample_cfg = cfg.samples[sample_name]
             sample_class = eval(sample_cfg.type)
             sample = sample_class.from_config(

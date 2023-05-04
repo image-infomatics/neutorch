@@ -9,19 +9,19 @@ from yacs.config import CfgNode
 from chunkflow.lib.cartesian_coordinate import Cartesian
 
 import torch
+import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
-from neutorch.data.dataset import worker_init_fn
 from neutorch.data.patch import collate_batch
 from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
 
 def setup():
-    torch.distributed.init_process_group('nccl')
+    dist.init_process_group('nccl')
 
 def cleanup():
-    torch.distributed.destroy_process_group()
+    dist.destroy_process_group()
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
@@ -47,7 +47,9 @@ class TrainerBase(ABC):
 
     @cached_property
     def batch_size(self):
-        return self.num_gpus * self.cfg.train.batch_size
+        # return self.num_gpus * self.cfg.train.batch_size
+        # this batch size is for a single GPU rather than the total number!
+        return self.cfg.train.batch_size
 
     # @cached_property
     # def path_list(self):
@@ -86,19 +88,21 @@ class TrainerBase(ABC):
     @cached_property
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
-        model.to(self.device)
-        if self.num_gpus > 1:
-            print(f'use {self.num_gpus} gpus!')
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[self.local_rank],
-                output_device=self.local_rank)
-            
+                    
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping 
         model = load_chkpt(
             model, 
             self.cfg.train.output_dir, 
             self.cfg.train.iter_start)
+        
+        model.to('cuda')
+        if self.num_gpus > 1:
+            print(f'use {self.num_gpus} gpus!')
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[self.local_rank],
+                output_device=self.local_rank)
+
         return model
 
     @cached_property
@@ -122,7 +126,11 @@ class TrainerBase(ABC):
     @abstractproperty
     def validation_dataset(self):
         pass
-        
+    
+    @cached_property
+    def LOCAL_RANK(self):
+        return int(os.getenv('LOCAL_RANK', -1))
+       
     @cached_property
     def training_data_loader(self):
         sampler = torch.utils.data.distributed.DistributedSampler(
@@ -134,12 +142,14 @@ class TrainerBase(ABC):
             num_workers = self.cfg.system.cpus,
             prefetch_factor = self.cfg.system.cpus,
             collate_fn=collate_batch,
-            worker_init_fn=worker_init_fn,
+            # worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
-            pin_memory = True,
+            multiprocessing_context='spawn',
+            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
             sampler=sampler
         )
         return dataloader
+
     
     @cached_property
     def validation_data_loader(self):
@@ -147,7 +157,14 @@ class TrainerBase(ABC):
             self.validation_dataset
         )
         dataloader = torch.utils.data.DataLoader(
-            self.validation_dataset, 
+            self.validation_dataset,
+            shuffle=False, 
+            num_workers = self.cfg.system.cpus,
+            prefetch_factor = self.cfg.system.cpus,
+            collate_fn=collate_batch,
+            batch_size=self.batch_size,
+            multiprocessing_context='spawn',
+            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
             sampler=sampler
         )
         return dataloader
@@ -162,10 +179,13 @@ class TrainerBase(ABC):
         return np.product(self.patch_size) * self.batch_size
 
     def label_to_target(self, label: torch.Tensor):
-        return label
+        return label.cuda()
 
     def post_processing(self, prediction: torch.Tensor):
-        return torch.sigmoid(prediction)
+        if isinstance(self.loss_module, BinomialCrossEntropyWithLogits):
+            return torch.sigmoid(prediction)
+        else:
+            return prediction
 
     def __call__(self) -> None:
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
@@ -182,8 +202,10 @@ class TrainerBase(ABC):
 
             ping = time()
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
+            # image.to(self.device)
+            # self.model.to(self.device)
             predict = self.model(image)
-            # predict = self.post_processing(predict)
+            predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -205,13 +227,17 @@ class TrainerBase(ABC):
                 log_tensor(writer, 'train/target', target, 'image', iter_idx)
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
-                fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
-                print(f'save model to {fname}')
 
-                if iter_idx >= self.cfg.train.start_saving:
-                    save_chkpt(self.model, self.cfg.train.output_dir, 
-                        iter_idx, self.optimizer
-                    )
+                if self.LOCAL_RANK <= 0:
+                    # only save model on master
+                    fname = os.path.join(self.cfg.train.output_dir, \
+                        f'model_{iter_idx}.chkpt')
+                    print(f'save model to {fname}')
+                    if iter_idx >= self.cfg.train.start_saving:
+                        save_chkpt(
+                            self.model, self.cfg.train.output_dir, \
+                            iter_idx, self.optimizer
+                        )
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(self.validation_data_iter)

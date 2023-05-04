@@ -10,21 +10,25 @@ from neutorch.data.dataset import AffinityMapVolumeWithMask
 from neutorch.train.base import TrainerBase, setup, cleanup
 
 import torch
+import torch.distributed as dist
+# torch.multiprocessing.set_start_method('spawn')
+
 
 class WholeBrainAffinityMapTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode, 
             device: torch.DeviceObjType=None,
-            local_rank: int = os.getenv('LOCAL_RANK', -1)) -> None:
+            local_rank: int = int(os.getenv('LOCAL_RANK', -1))
+        ) -> None:
         super().__init__(cfg, device=device, local_rank=local_rank)
         assert isinstance(cfg, CfgNode)
 
     @cached_property
     def training_dataset(self):
-        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='train')
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='training')
        
     @cached_property
     def validation_dataset(self):
-        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='val')
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='validation')
 
 
 
@@ -40,9 +44,10 @@ class WholeBrainAffinityMapTrainer(TrainerBase):
 )
 def main(config_file: str, local_rank: int):
     if local_rank != -1:
+        dist.init_process_group(backend="nccl", init_method='env://')
+        print(f'local rank of processes: {local_rank}')
         torch.cuda.set_device(local_rank)
         device=torch.device("cuda", local_rank)
-        torch.distributed.init_process_group(backend="nccl", init_method='env://')
     else:
         setup()
 
