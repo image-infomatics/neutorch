@@ -1,4 +1,6 @@
-# neutorch
+<img src="https://github.com/flatironinstitute/neutorch/blob/main/data/logo.svg" width="400">
+
+--------------
 Neuron segmentation and synapse detection using PyTorch
 
 > :warning: **This package is still under development, it was customized to process a Electron Microscopy volume although it could be potentially generalizable to other biological image volumes. Use at your own risk.**
