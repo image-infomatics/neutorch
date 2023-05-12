@@ -12,6 +12,25 @@ from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
+def get_iter_range(sample_num: int) -> tuple[int, int]:
+    # multiprocess data loading 
+    worker_info = torch.utils.data.get_worker_info()
+    iter_start = 0
+    iter_stop = sample_num
+    if worker_info is not None:
+        # multiple processing for data loading, split workload
+        worker_id = worker_info.id
+        if sample_num > worker_info.num_workers:
+            per_worker = int(math.ceil(
+                (iter_end - iter_start) / float(worker_info.num_workers)))
+            iter_start = iter_start + worker_id * per_worker
+            iter_end = min(iter_start + per_worker, iter_end)
+        else:
+            iter_start = worker_id % sample_num
+            iter_stop = iter_start + 1
+    
+    return iter_start, iter_stop
+
 def load_cfg(cfg_file: str, freeze: bool = True):
     with open(cfg_file) as file:
         cfg = CfgNode.load_cfg(file)
@@ -62,6 +81,7 @@ class DatasetBase(torch.utils.data.Dataset):
         """
         super().__init__()
         self.samples = samples
+
 
     @cached_property
     def sample_num(self):
@@ -230,7 +250,7 @@ class OrganelleDataset(SemanticDataset):
 class AffinityMapVolumeWithMask(DatasetBase):
     def __init__(self, samples: List[AbstractSample]):
         super().__init__(samples)
-    
+
     @classmethod
     def from_config(cls, cfg: CfgNode, mode: str = 'training', **kwargs):
         """construct affinity map volume with mask dataset
@@ -242,23 +262,9 @@ class AffinityMapVolumeWithMask(DatasetBase):
         output_patch_size = Cartesian.from_collection(
             cfg.train.patch_size)
         
-        worker_info = torch.utils.data.get_worker_info()
         sample_names = cfg.dataset[mode]
-        
-        # single process data loading
-        iter_start = 0
-        iter_stop = len(sample_names)
-        if worker_info is not None:
-            # multiple processing for data loading, split workload
-            worker_id = worker_info.id
-            if len(sample_names) > worker_info.num_workers:
-                per_worker = int(math.ceil(
-                    (iter_end - iter_start) / float(worker_info.num_workers)))
-                iter_start = iter_start + worker_id * per_worker
-                iter_end = min(iter_start + per_worker, iter_end)
-            else:
-                iter_start = worker_id % len(sample_names)
-                iter_stop = iter_start + 1
+
+        iter_start, iter_stop = get_iter_range(sample_names)
 
         samples = []
         for sample_name in sample_names[iter_start : iter_stop]:
@@ -284,28 +290,35 @@ class AffinityMapDataset(DatasetBase):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+    def from_config(cls, cfg: CfgNode, mode: str, **kwargs):
         """Construct a semantic dataset with chunk or volume
 
         Args:
-            cfg (CfgNode): _description_
-            is_train (bool): _description_
-
-        Returns:
-            _type_: _description_
+            cfg (CfgNode): configuration in YAML file 
+            mode (str): training mode or validation mode.
         """
-        if is_train:
-            name2chunks = cfg.dataset.training
-        else:
-            name2chunks = cfg.dataset.validation
+        output_patch_size = Cartesian.from_collection(cfg.train.patch_size)
+        sample_names = cfg.dataset[mode]
+
+        sample_configs = CfgNode()
+        for sample_config_path in cfg.samples:
+            sample_cfg_node = load_cfg(sample_config_path, freeze=False)
+            sample_config_dir = os.path.dirname(sample_config_path)
+            for sample_node in sample_cfg_node.values():
+                sample_node.dir = os.path.join(sample_config_dir, sample_node.dir)
+
+            sample_configs.update(sample_cfg_node)
+
+        sample_num = len(sample_names)
+        iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
-        for name2path in name2chunks.values():
-            sample = AffinityMapSample.from_explicit_dict(
-                    name2path, 
-                    output_patch_size=cfg.train.patch_size,
-                    num_classes=cfg.model.out_channels,
-                    **kwargs)
+        for sample_name in sample_names[iter_start : iter_stop]:
+            sample_node = sample_configs[sample_name]
+            sample = AffinityMapSample.from_config_node(
+                sample_node, output_patch_size,
+                num_classes=cfg.model.out_channels,
+            )
             samples.append(sample)
 
         return cls( samples )

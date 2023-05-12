@@ -88,20 +88,25 @@ class TrainerBase(ABC):
     @cached_property
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
-                    
-        # note that we have to wrap the nn.DataParallel(model) before 
-        # loading the model since the dictionary is changed after the wrapping 
-        model = load_chkpt(
-            model, 
-            self.cfg.train.output_dir, 
-            self.cfg.train.iter_start)
+                           
+        if 'preload' in self.cfg.train:
+            fname = self.cfg.train.preload
+        else:
+            fname = os.path.join(self.cfg.train.output_dir, 
+                f'model_{self.cfg.train.iter_start}.chkpt')
+
+        if os.path.exists(fname) and self.local_rank==0:
+            model = load_chkpt(model, fname)
         
-        model.to('cuda')
+        # note that we have to wrap the nn.DataParallel(model) before 
+        # loading the model since the dictionary is changed after the wrapping
         if self.num_gpus > 1:
             print(f'use {self.num_gpus} gpus!')
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[self.local_rank],
                 output_device=self.local_rank)
+       
+        model.to('cuda')
 
         return model
 
@@ -153,7 +158,7 @@ class TrainerBase(ABC):
     
     @cached_property
     def validation_data_loader(self):
-        sampler = torch.dist.DistributedSampler(
+        sampler = torch.utils.data.distributed.DistributedSampler(
             self.validation_dataset
         )
         dataloader = torch.utils.data.DataLoader(
@@ -232,8 +237,8 @@ class TrainerBase(ABC):
                     # only save model on master
                     fname = os.path.join(self.cfg.train.output_dir, \
                         f'model_{iter_idx}.chkpt')
-                    print(f'save model to {fname}')
                     if iter_idx >= self.cfg.train.start_saving:
+                        print(f'save model to {fname}')
                         save_chkpt(
                             self.model, self.cfg.train.output_dir, \
                             iter_idx, self.optimizer

@@ -26,10 +26,19 @@ DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 
 
 class AbstractTransform(ABC):
-    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+    def __init__(self, 
+            probability: float = DEFAULT_PROBABILITY,
+            validation: bool = False):
+        """transform the image and label
+
+        Args:
+            probability (float, optional): probability to use this transform. Defaults to DEFAULT_PROBABILITY.
+            validation (bool, optional): use it in the validation mode or not. Defaults to False.
+        """
         assert probability > 0.
         assert probability <= 1.
         self.probability = probability
+        self.valiation = validation
     
     def __str__(self) -> str:
         return 'AbstractTransform'
@@ -78,8 +87,9 @@ class AbstractTransform(ABC):
     
 class SpatialTransform(AbstractTransform):
     """Modify image voxel position and reinterprete."""
-    def __init__(self, probability: float = DEFAULT_PROBABILITY):
-        super().__init__(probability=probability)
+    def __init__(self, probability: float = DEFAULT_PROBABILITY,
+            validation: bool = False):
+        super().__init__(probability=probability, validation=validation)
 
     def __str__(self) -> str:
         return 'SpatialTransform'
@@ -656,10 +666,11 @@ class MissAlignment(SpatialTransform):
 #        return patch
 
 class Label2AffinityMap(SpatialTransform):
-    def __init__(self, probability: float = 1.):
+    def __init__(self, probability: float = 1., 
+            validation: bool=True):
         """If this transform is used, the probability should always be 1.0."""
         assert probability == 1.
-        super().__init__(probability)
+        super().__init__(probability, validation=validation)
 
     def __str__(self) -> str:
         return 'Label2AffinityMap'

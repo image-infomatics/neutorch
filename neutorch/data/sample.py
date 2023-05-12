@@ -24,7 +24,7 @@ DEFAULT_NUM_CLASSES = 1
 
 
 class AbstractSample(ABC):
-    def __init__(self, output_patch_size: Cartesian):
+    def __init__(self, output_patch_size: Cartesian, is_train: bool = True):
 
         if isinstance(output_patch_size, int):
             output_patch_size = (output_patch_size,) * 3
@@ -34,6 +34,7 @@ class AbstractSample(ABC):
         if not isinstance(output_patch_size, Cartesian):
             output_patch_size = Cartesian.from_collection(output_patch_size)
         self.output_patch_size = output_patch_size
+        self.is_train = is_train
 
     @property
     @abstractmethod
@@ -124,7 +125,8 @@ class Sample(AbstractSample):
             images: List[Chunk | PrecomputedVolume],
             label: Chunk | PrecomputedVolume,
             output_patch_size: Cartesian, 
-            forbbiden_distance_to_boundary: tuple = None) -> None:
+            forbbiden_distance_to_boundary: tuple = None,
+            is_train: bool = True) -> None:
         """Image sample with ground truth annotations
 
         Args:
@@ -138,7 +140,8 @@ class Sample(AbstractSample):
                 if this is an integer, then all dimension is the same.
                 if this is a tuple of three integers, the positive and negative is the same
                 if this is a tuple of six integers, the positive and negative 
-                direction is defined separately. 
+                direction is defined separately.
+            is_train (bool): train mode or validation mode. We'll skip the transform in validation mode. 
         """
         super().__init__(output_patch_size=output_patch_size)
         assert len(images) > 0
@@ -172,6 +175,10 @@ class Sample(AbstractSample):
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
             images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
+
+        self.center_start = Cartesian.from_collection(self.center_start)
+        self.center_stop = Cartesian.from_collection(self.center_stop)
+
         # for cs, cp in zip(self.center_start, self.center_stop):
         #     assert cp > cs, \
         #         f'center start: {self.center_start}, center stop: {self.center_stop}'
@@ -224,8 +231,9 @@ class Sample(AbstractSample):
             f'image patch shape: {image_patch.shape}, patch size before transform: {self.patch_size_before_transform}'
         # if we do not copy here, the augmentation will change our 
         # image and label sample!
-        image_patch = self._expand_to_5d(image_patch).copy()
-        label_patch = self._expand_to_5d(label_patch).copy()
+        image_patch.array = self._expand_to_5d(image_patch.array).copy()
+        label_patch.array = self._expand_to_5d(label_patch.array).copy()
+
         return Patch(image_patch, label_patch)
     
     @property
@@ -234,7 +242,9 @@ class Sample(AbstractSample):
 
         # print(f'transforms: {self.transform}') 
         # print(f'patch size before transform: {patch.shape}')
-        self.transform(patch)
+        # skip the transform in validation mode
+        if self.is_train:
+            self.transform(patch)
         # print(f'patch size after transform: {patch.shape}')
         # breakpoint()
         assert patch.shape[-3:] == self.output_patch_size, \
@@ -661,7 +671,26 @@ class AffinityMapSample(SemanticSample):
         label_path = d['label']
         return cls.from_explicit_path(
             image_paths, label_path, output_patch_size, num_classes=num_classes)
-  
+
+    @classmethod
+    def from_config_node(cls, 
+            cfg: CfgNode,
+            output_patch_size: Cartesian,
+            num_classes: int=3,
+            **kwargs,
+        ):
+        label_path = os.path.join(cfg.dir, cfg.label)
+        label = load_chunk_or_volume(label_path, **kwargs)
+
+        images = []
+        for image_fname in cfg.images:
+            image_path = os.path.join(cfg.dir, image_fname)
+            image = load_chunk_or_volume(image_path, **kwargs)
+            images.append(image)
+
+        return cls(images, label, output_patch_size, num_classes=num_classes)
+
+
     @cached_property
     def transform(self):
         return Compose([
