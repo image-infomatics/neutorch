@@ -6,8 +6,10 @@ system:
 samples: [
   "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/samples.yaml",
   "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/samples.yaml",
+  "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/samples.yaml",
   #"/mnt/home/jwu/dropbox/40_gt/11_wasp_sample1/samples.yaml",
   #"/mnt/home/jwu/dropbox/40_gt/12_wasp_sample2/samples.yaml",
+  #"/mnt/home/jwu/dropbox/40_gt/13_wasp_sample3/samples.yaml",
 ]
 
 
@@ -17,18 +19,30 @@ dataset:
     "vol_04831",
     "vol_06431",
     "vol_07580",
-    "vol_07955",
     "vol_09300",
     "vol_12350",
     "vol_13170",
-    "vol_13170_2",
+    "vol_01700",
+    "vol_02400",
+    "vol_02684",
+    "vol_03998",
+    "vol_04000",
+    "vol_04772",
+    "vol_05450",
   ]
   validation: [
     "s1gt2",
     "vol_07800",
     "vol_07338",
+    "vol_02299",
+    "vol_04900",
   ]
-
+  test: [ # not used in training
+    "vol_07955",
+    "vol_13170_2",
+    "vol_03700",
+    "vol_05250",
+  ]
 # dataset:
 #   sample3:
 #     images: [

@@ -16,7 +16,8 @@ class Patch(object):
             image (Chunk): image
             label (Chunk): label
         """
-        assert image.shape == label.shape
+        assert image.shape[-3:] == label.shape[-3:], \
+            f'image shape: {image.shape}, label shape: {label.shape}'
         assert image.voxel_offset == label.voxel_offset
         if mask is not None:
             mask.shape == label.shape

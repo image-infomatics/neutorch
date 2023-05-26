@@ -686,6 +686,10 @@ class AffinityMapSample(SemanticSample):
         for image_fname in cfg.images:
             image_path = os.path.join(cfg.dir, image_fname)
             image = load_chunk_or_volume(image_path, **kwargs)
+            assert image.shape[-3:] == label.shape[-3:], \
+                f'image shape: {image.shape}, label shape: {label.shape}, file name: {image_path}'
+            assert image.voxel_offset == label.voxel_offset, \
+                f'image voxel offset: {image.voxel_offset}, label voxel offset: {label.voxel_offset}, file name: {image_path}'
             images.append(image)
 
         return cls(images, label, output_patch_size, num_classes=num_classes)
