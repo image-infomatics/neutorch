@@ -228,14 +228,14 @@ class Model(nn.Sequential):
     """
     Residule Symmetric U-Net with down/upsampling in/output.
     """
-    def __init__(self, in_channels: int, out_channels: int, width: list=WIDTH):
+    def __init__(self, in_channels: int, out_channels: int, width: list=WIDTH,
+                 io_kernel: tuple = (3, 3, 3)):
         super().__init__()
 
         # assert len(in_spec)==1, "model takes a single input"
         # in_channels = list(in_spec.values()[0][-4])
         # matches the RSUNet output
         # out_channels = width[0] 
-        io_kernel = (3, 3, 3)
 
         self.add_module('in', InputBlock(in_channels, width[0], io_kernel))
         self.add_module('core', IsoRSUNet(width=width))
