@@ -1,0 +1,11 @@
+s1gt1:
+  dir: "s1gt1"
+  images: ["img.h5"]
+  label: "label_v2.h5"
+    #label: "label_v2_remove_contact.h5"
+
+s1gt2:
+  dir: "s1gt2"
+  images: ["img.h5"]
+  label: "label_v2.h5"
+    #label: "label_v2_remove_contact.h5"
