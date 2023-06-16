@@ -155,11 +155,11 @@ class Sample(AbstractSample):
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
 
-        # print(f'transforms: {self.transform}') 
-        # print(f'patch size before transform: {patch.shape}')
+        print(f'transforms: {self.transform}') 
+        print(f'patch size before transform: {patch.shape}')
+        breakpoint()
         self.transform(patch)
-        # print(f'patch size after transform: {patch.shape}')
-        # breakpoint()
+        print(f'patch size after transform: {patch.shape}'}
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
@@ -318,7 +318,7 @@ class PostSynapseReference(AbstractSample):
 
 class SemanticSample(Sample):
     def __init__(self, 
-            images: List[Chunk | AbstractVolume ], 
+            images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
             output_patch_size: Cartesian,
             num_classes: int = DEFAULT_NUM_CLASSES,
