@@ -329,6 +329,27 @@ class Noise(IntensityTransform):
         np.clip(patch.image, 0., 1., out=patch.image)
         return patch
 
+class RandomPixelDropping(IntensityTransform):
+    def __init__(self, 
+        probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+        """Adding Random Pixels to a section"""
+
+    def __str__(self) -> str:
+        return 'RandomPixelDropping'
+
+    def transform(self, patch: Patch):
+        # FIX THIS -> mask out half of them 
+        # adjust percentage of the mask -> mask out all the channels
+        ### Do not mask out the label
+        #create a random array of true/false for random pixel
+        mask = np.random.randint(0, 2, size=patch.shape).astype(bool) #fix
+        r = np.random.rand(*patch.image.shape)*np.max(patch.image)
+        patch[mask] = r[mask]
+        # np.clip(patch.image, 0., 1., out=patch)
+        return patch
+
+#Binary Mask -> rotate boundary map 
 
 class Flip(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
@@ -668,4 +689,6 @@ class Compose(object):
         # print(f'patch shape after Compose call: {patch.shape}')
         patch.image = patch.image.copy()
         patch.label = patch.label.copy()
+
+
 
