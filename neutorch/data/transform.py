@@ -343,6 +343,10 @@ class RandomPixelDropping(IntensityTransform):
         # adjust percentage of the mask -> mask out all the channels
         ### Do not mask out the label
         #create a random array of true/false for random pixel
+
+
+
+        
         mask = np.random.randint(0, 2, size=patch.shape).astype(bool) #fix
         r = np.random.rand(*patch.image.shape)*np.max(patch.image)
         patch[mask] = r[mask]
