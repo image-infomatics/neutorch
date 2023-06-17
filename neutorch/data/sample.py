@@ -7,7 +7,7 @@ import numpy as np
 
 from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian 
 from chunkflow.chunk import Chunk
-from chunkflow.chunk.utils import load_chunk_or_volume
+from chunkflow.volume import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import PrecomputedVolume, AbstractVolume
 
@@ -159,7 +159,7 @@ class Sample(AbstractSample):
         print(f'patch size before transform: {patch.shape}')
         breakpoint()
         self.transform(patch)
-        print(f'patch size after transform: {patch.shape}'}
+        print(f'patch size after transform: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
         return patch
@@ -617,9 +617,9 @@ if __name__ == '__main__':
     from neutorch.data.dataset import load_cfg
     
     PATCH_NUM = 100
-    DEFAULT_PATCH_SIZE=Cartesian(32, 64, 64)
+    DEFAULT_PATCH_SIZE=Cartesian(64, 64, 64)
     OUT_DIR = os.path.expanduser('~/dropbox/patches/')
-    cfg = load_cfg('./config_mito.yaml')
+    cfg = load_cfg('./boundary_augmentation.yaml')
 
     sample = SemanticSample.from_explicit_dict(
         cfg.dataset.validation.human, 
