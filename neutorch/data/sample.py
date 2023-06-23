@@ -157,7 +157,7 @@ class Sample(AbstractSample):
 
         print(f'transforms: {self.transform}') 
         print(f'patch size before transform: {patch.shape}')
-        breakpoint()
+        # breakpoint()
         self.transform(patch)
         print(f'patch size after transform: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \

@@ -128,7 +128,7 @@ class TrainerBase(ABC):
             self.training_dataset,
             #num_workers=self.cfg.system.cpus,
             num_workers=0,
-            prefetch_factor=2,
+            prefetch_factor=None,
             drop_last=False,
             # multiprocessing_context='spawn',
             collate_fn=collate_batch,
@@ -142,7 +142,7 @@ class TrainerBase(ABC):
         validation_data_loader = DataLoader(
             self.validation_dataset,
             num_workers=0,
-            prefetch_factor=2,
+            prefetch_factor=None,
             drop_last=False,
             # multiprocessing_context='spawn',
             collate_fn=collate_batch,
