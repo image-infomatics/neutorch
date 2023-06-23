@@ -343,12 +343,13 @@ class RandomPixelDropping(IntensityTransform):
         # adjust percentage of the mask -> mask out all the channels
         ### Do not mask out the label
         #create a random array of true/false for random pixel
-        print(patch[0])
-
-        mask = np.random.randint(0, 2, size=patch.shape).astype(bool) #fix
+        # print("patch:", patch)
+        # print("pi:", patch.image)
+        # print("pi shape:", patch.image.shape)
+        #print(patch.label)
+        mask = np.random.randint(0, 2, size=patch.image.shape).astype(bool) 
         r = np.random.rand(*patch.image.shape)*np.max(patch.image)
-        patch[mask] = r[mask]
-        # np.clip(patch.image, 0., 1., out=patch)
+        patch.image[mask] = r[mask]
         return patch
 
 #Binary Mask -> rotate boundary map 
