@@ -582,12 +582,26 @@ class Perspective2D(SpatialTransform):
         return dst
 
 
-# class RotateScale(SpatialTransform):
-#     def __init__(self, probability: float=DEFAULT_PROBABILITY,
-#             max_scaling: float=1.3):
-#         super().__init__(probability=probability)
-#         raise NotImplementedError('this augmentation is not working correctly yet. The image and label could have patchy effect.We are not sure why.')
-#         self.max_scaling = max_scaling
+class Rotate2D(SpatialTransform):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY, 
+            max_scaling: float=1.3):
+        super().__init__(probability=probability)
+        self.max_scaling = max_scaling
+
+    def transform(self, patch: Patch):
+        
+        print(patch.image)
+        print(patch.image.size)
+
+        tuple1 = np.random.randint(2, 4, size=None)
+        tuple2 = np.random.randint(2, 4, size=None)
+        while tuple1 == tuple2:
+            tuple2 = np.random.randint(2, 4, size=None)
+
+        patch.image = np.rot90(patch.image, k=1, axes=(tuple1, tuple2))
+
+        return patch 
+        #Bottom rotation is not working (for now) so 2D 90 degree rotation
 
 #     def transform(self, patch: Patch):
 #         # because we do not know the rotation angle
