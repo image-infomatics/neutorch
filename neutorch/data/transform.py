@@ -590,7 +590,7 @@ class Rotate2D(SpatialTransform):
 
     def transform(self, patch: Patch):
         
-        print(patch.image)
+       # print(patch.image)
         print(patch.image.size)
 
         tuple1 = np.random.randint(2, 4, size=None)
