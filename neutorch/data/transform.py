@@ -220,10 +220,11 @@ class MaskBox(IntensityTransform):
                 start[2] : start[2] + box_size[2],
             ] = box
         return patch
+
 class MaskBox2D(IntensityTransform):
     def __init__(self,
             probability: float = DEFAULT_PROBABILITY,
-            max_box_size: Cartesian = Cartesian(24, 24), 
+            max_box_size: Cartesian = Cartesian(0, 24, 24), 
             max_density: float = 0.1,
             max_box_num: int = None):
         """make some black squares in image patch
@@ -234,11 +235,11 @@ class MaskBox2D(IntensityTransform):
             max_box_num (int, optional): maximum number of black boxes. Defaults to 2.
         """
         super().__init__(probability=probability)
-        assert len(max_box_size) == 2
-
+        assert len(max_box_size) == 3 
+         
         if not isinstance(max_box_size, Cartesian):
             max_box_size = Cartesian.from_collection(max_box_size)
-
+        
         self.max_box_size = max_box_size
         self.max_box_num = max_box_num
         self.max_density = max_density
@@ -253,22 +254,26 @@ class MaskBox2D(IntensityTransform):
         
         return random.randint(1, self.max_box_num)
         
-    def transform(self, patch: Patch):
-        for _ in range(self.box_num(patch.shape)): #for each box
+    def transform(self, patch: Patch): 
+        for _ in range(self.box_num(patch.shape)): #for each box 
             box_size = tuple(random.randint(1, s) for s in self.max_box_size) 
+            # print("box", box_size)  
             # randint is inclusive
-
-            #reproduce this somehow -> for 2d arrays
-            start = tuple(random.randrange(1, t-b) for t, b in zip(patch.shape[-3:], box_size))
-            if random.random() > 0.5:
-                box = np.random.rand(*box_size)
-            else:
-                box = np.ones(box_size, dtype = patch.image.dtype) * random.random()
-            patch.image[
-                ...,
-                start[0] : start[0] + box_size[0],
-                start[1] : start[1] + box_size[1],
-            ] = box
+            
+            # reproduce this somehow -> for 2d arrays
+            # start = tuple(random.randrange(1, t-b) for t, b in zip(patch.shape[-3:], box_size))
+            # if random.random() > 0.5:
+                # box = np.random.rand(*box_size)
+            # else:
+                # box = np.ones(box_size, dtype = patch.image.dtype) * random.random()
+            # patch.image[
+                # ...,
+                # start[0] : start[0] + box_size[0],
+                # start[1] : start[1] + box_size[1],
+                # start[2] : start[2] + box_size[2], 
+            # ] = box 
+        
+        print(len(self.max_box_size))  
         return patch
 
 class NormalizeTo01(IntensityTransform):
