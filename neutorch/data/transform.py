@@ -7,6 +7,7 @@ import numpy as np
 from chunkflow.lib.cartesian_coordinate import Cartesian
 # from reneu.lib.segmentation import seg_to_affs
 from scipy.ndimage.filters import gaussian_filter
+from scipy.spatial.transform import Rotation 
 from skimage.transform import swirl
 from skimage.util import random_noise
 
@@ -683,6 +684,24 @@ class Rotate2D(SpatialTransform):
 #                         mat, patch.shape[-2:], flags=cv2.INTER_NEAREST
 #                     ) 
 
+class Rotate3DEuler(SpatialTransform):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY, 
+            max_scaling: float=1.3):
+        super().__init__(probability=probability)
+        self.max_scaling = max_scaling
+
+    def transform(self, patch: Patch):
+        #3d rotation using Euler's
+        coordinates = ["xyz", "xzy", "yxz", "yzx", "zxy", "zyx"]
+        randcoord = random.choice(coordinates)
+        angles = np.random.randint(0, 180, size=(1, 3))
+
+        r = R.from_euler(randcoord, angles, degrees=True)
+        Rot = r.as_matrix()
+
+        patch.image[-3:] = np.dot( r.as_matrix(), patch.image[-3:] )
+
+        return patch 
 
 class Swirl(SpatialTransform):
     def __init__(self, max_rotation: int = 5, max_strength: int = 3, probability: float = DEFAULT_PROBABILITY):

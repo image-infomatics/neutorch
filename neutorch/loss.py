@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 from torch import nn
-import numpy as np
 
 
 def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
@@ -38,6 +38,31 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         super().__init__()
         self.rebalance = rebalance
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
+
+    def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor=None):
+        if mask is None:
+            cost = loss.sum() #/ np.prod(loss.size())
+        else:
+            cost = (loss * mask).sum() #/ mask.sum()
+        return cost
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
+        loss = self.bce(pred, target)
+
+        if mask is not None:
+            rebalance_weight = gunpowder_balance(target, mask=mask)
+            loss *= rebalance_weight
+
+        cost = self._reduce_loss(loss, mask=mask)
+        return cost
+
+class MeanSquareErrorLoss(nn.Module):
+    """
+    A version of MeanSquareLoss with the ability to mask out regions of output
+    """
+    def __init__(self, rebalance: bool = True):
+        self.rebalance = rebalance
+        self.mse = nn.MSELoss(reduction="none")
 
     def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor=None):
         if mask is None:

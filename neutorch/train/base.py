@@ -14,7 +14,7 @@ from yacs.config import CfgNode
 
 from neutorch.data.dataset import worker_init_fn
 from neutorch.data.patch import collate_batch
-from neutorch.loss import BinomialCrossEntropyWithLogits
+from neutorch.loss import BinomialCrossEntropyWithLogits, MeanSquareErrorLoss
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
 
@@ -102,6 +102,7 @@ class TrainerBase(ABC):
 
     @cached_property
     def optimizer(self):
+        #try different one
         return torch.optim.Adam(
             self.model.parameters(), 
             lr=self.cfg.train.learning_rate
@@ -110,7 +111,10 @@ class TrainerBase(ABC):
 
     @cached_property
     def loss_module(self):
-        return BinomialCrossEntropyWithLogits()
+        #try different one
+        # return BinomialCrossEntropyWithLogits()
+        return MeanSquareErrorLoss()
+
 
     @cached_property
     @abstractproperty
