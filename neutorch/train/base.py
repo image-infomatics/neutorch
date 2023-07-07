@@ -102,12 +102,15 @@ class TrainerBase(ABC):
 
     @cached_property
     def optimizer(self):
-        #try different one
         return torch.optim.Adam(
             self.model.parameters(), 
             lr=self.cfg.train.learning_rate
         )
-
+        # Potential optimizers
+        # return torch.optim.SGD(
+            # self.model.parameter(),)
+            # lr=self.cfg.train.learning_rate
+        # )
 
     @cached_property
     def loss_module(self):
