@@ -6,22 +6,15 @@ from functools import cached_property
 import numpy as np
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from scipy.ndimage.filters import gaussian_filter
-<<<<<<< HEAD
 from scipy.spatial.transform import Rotation 
 from skimage.transform import swirl
-=======
 # from skimage.transform import swirl
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
 from skimage.util import random_noise
 
 from .patch import Patch
 
 try:
-<<<<<<< HEAD
-    from reneu.lib.segmentation import seg_to_affs
-=======
     from reneu.lib.segmentation import seg_to_affs, remove_contact_xy
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
 except ImportError:
     pass
 # from copy import deepcopy
