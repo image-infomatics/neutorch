@@ -144,21 +144,8 @@ class TrainerBase(ABC):
        
     @cached_property
     def training_data_loader(self):
-<<<<<<< HEAD
-        training_data_loader = DataLoader(
-            self.training_dataset,
-            #num_workers=self.cfg.system.cpus,
-            num_workers=0,
-            prefetch_factor=None,
-            drop_last=False,
-            # multiprocessing_context='spawn',
-            collate_fn=collate_batch,
-            worker_init_fn=worker_init_fn,
-            batch_size=self.batch_size,
-=======
         sampler = torch.utils.data.distributed.DistributedSampler(
             self.training_dataset
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
         )
         dataloader = torch.utils.data.DataLoader(
             self.training_dataset,
@@ -182,16 +169,9 @@ class TrainerBase(ABC):
         )
         dataloader = torch.utils.data.DataLoader(
             self.validation_dataset,
-<<<<<<< HEAD
-            num_workers=0,
-            prefetch_factor=None,
-            drop_last=False,
-            # multiprocessing_context='spawn',
-=======
             shuffle=False, 
             num_workers = self.cfg.system.cpus,
             prefetch_factor = self.cfg.system.cpus,
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
             collate_fn=collate_batch,
             batch_size=self.batch_size,
             multiprocessing_context='spawn',
