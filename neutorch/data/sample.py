@@ -201,7 +201,7 @@ class SampleWithPointAnnotation(Sample):
                 from sample boundary. Defaults to None.
         """
 
-        assert annotation_points.shape[1] == 3
+        assert annotation_points.shape[1] == 3 #check 
         self.annotation_points = annotation_points
         label = np.zeros_like(images[0].array, dtype=np.float32)
         label = self._points_to_label(label)
