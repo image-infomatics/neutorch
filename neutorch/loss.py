@@ -61,6 +61,7 @@ class MeanSquareErrorLoss(nn.Module):
     A version of MeanSquareLoss with the ability to mask out regions of output
     """
     def __init__(self, rebalance: bool = True):
+        super().__init__() 
         self.rebalance = rebalance
         self.mse = nn.MSELoss(reduction="none")
 
@@ -72,7 +73,7 @@ class MeanSquareErrorLoss(nn.Module):
         return cost
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
-        loss = self.bce(pred, target)
+        loss = self.mse(pred, target)
 
         if mask is not None:
             rebalance_weight = gunpowder_balance(target, mask=mask)

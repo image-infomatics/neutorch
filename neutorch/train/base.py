@@ -108,15 +108,14 @@ class TrainerBase(ABC):
         )
         # Potential optimizers
         # return torch.optim.SGD(
-            # self.model.parameter(),)
+            # self.model.parameters(),
             # lr=self.cfg.train.learning_rate
         # )
 
     @cached_property
     def loss_module(self):
-        #try different one
-        # return BinomialCrossEntropyWithLogits()
-        return MeanSquareErrorLoss()
+        return BinomialCrossEntropyWithLogits()
+        # return MeanSquareErrorLoss()
 
 
     @cached_property
