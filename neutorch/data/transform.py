@@ -403,6 +403,7 @@ class RandomPixelDropping(IntensityTransform):
         # print("pi:", patch.image)
         # print("pi shape:", patch.image.shape)
         #print(patch.label)
+
         mask = np.random.randint(0, 2, size=patch.image.shape).astype(bool) 
         r = np.random.rand(*patch.image.shape)*np.max(patch.image)
         patch.image[mask] = r[mask]
@@ -645,16 +646,15 @@ class Rotate2D(SpatialTransform):
         self.max_scaling = max_scaling
 
     def transform(self, patch: Patch):
+
+        A = np.transpose(patch.image[-3], (2, 1, 0))
         
-       # print(patch.image)
-        print(patch.image.size)
+        axis = np.array([0, 1, 2])
+        tuple_arr = np.random.choice(axis, size=2, replace=False)
+        k = np.random.randint(1, 4)
 
-        tuple1 = np.random.randint(2, 4, size=None)
-        tuple2 = np.random.randint(2, 4, size=None)
-        while tuple1 == tuple2:
-            tuple2 = np.random.randint(2, 4, size=None)
-
-        patch.image = np.rot90(patch.image, k=1, axes=(tuple1, tuple2))
+        A = np.rot90(A, k=k, axes=(tuple_arr[0], tuple_arr[1]))
+        patch.image[-3] = np.transpose(A, (2, 1, 0))
 
         return patch 
         #Bottom rotation is not working (for now) so 2D 90 degree rotation
@@ -691,15 +691,17 @@ class Rotate3DEuler(SpatialTransform):
         self.max_scaling = max_scaling
 
     def transform(self, patch: Patch):
-        #3d rotation using Euler's
-        coordinates = ["xyz", "xzy", "yxz", "yzx", "zxy", "zyx"]
-        randcoord = random.choice(coordinates)
-        angles = np.random.randint(0, 180, size=(1, 3))
+        #patch.shape
+        A = np.transpose(patch.image[-3], (2, 1, 0)) #(z, y, x) -> (x, y, z)
+        C_arr = np.copy(A) 
 
-        r = R.from_euler(randcoord, angles, degrees=True)
-        Rot = r.as_matrix()
-
-        patch.image[-3:] = np.dot( r.as_matrix(), patch.image[-3:] )
+        angles = np.random.randint(0, 360, (3)) * np.pi/180 
+        for i in range(128): #X Coordinate
+            A[i, :, :] = (np.cos(angles[0]) * np.cos(angles[1]) ) * C_arr[i, :, :] + (np.cos(angles[0]) * np.sin(angles[1]) * np.cos(angles[2]) - np.cost(angles[0]) * np.sin(angles[2]) ) * C_arr[i, :, :] + (np.cos(angles[0]) * np.sin(angles[1]) * np.cos(angles[2]) + np.sin(angles[0]) * np.sin(angles[2]) ) * C_arr[i, :, :]
+            A[:, i, :] = (np.cos(angles[1]) * np.sin(angles[2]) ) * C_arr[i, :, :] + ( np.sin(angles[0]) * np.sin(angles[1]) * np.sin(angles[2]) + np.cos(angles[0]) * np.cos(angles[2]) ) * C_arr[:, i, :] + ( np.cos(angles[0]) * np.sin(angles[1]) * np.sin(angles[2]) - np.sin(angles[0]) * np.cos(angles[2]) ) * C_arr[:, :, i]
+            A[:, :, i] = ( -np.sin(angles[1]) ) * C_arr[i, :, :] + ( np.sin(angles[0]) * np.cos(angles[1]) ) * C_arr[:, i, :] + ( np.cos(angles[0]) * np.cos(angles[1]) ) * C_arr[:, :, i]
+        
+        patch.image[-3] = np.transpose(A, (2, 1, 0))
 
         return patch 
 
