@@ -122,13 +122,8 @@ class AbstractSample(ABC):
 
 class Sample(AbstractSample):
     def __init__(self, 
-<<<<<<< HEAD
-            images: List[PrecomputedVolume],
-            label: Union[Chunk, PrecomputedVolume],
-=======
             images: List[Chunk | PrecomputedVolume],
             label: Chunk | PrecomputedVolume,
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None,
             is_train: bool = True) -> None:
@@ -245,17 +240,14 @@ class Sample(AbstractSample):
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
 
-<<<<<<< HEAD
         print(f'transforms: {self.transform}') 
         print(f'patch size before transform: {patch.shape}')
-=======
         # print(f'transforms: {self.transform}') 
         # print(f'patch size before transform: {patch.shape}')
         # skip the transform in validation mode
         if self.is_train:
             self.transform(patch)
         # print(f'patch size after transform: {patch.shape}')
->>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
         # breakpoint()
         self.transform(patch)
         print(f'patch size after transform: {patch.shape}')
