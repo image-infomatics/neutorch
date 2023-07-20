@@ -5,7 +5,7 @@ from yacs.config import CfgNode
 import torch
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
-from .base import TrainerBase
+from .base import TrainerBase, setup, cleanup
 
 class BoundaryAugTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode) -> None:
@@ -92,5 +92,6 @@ def main(config_file: str):
     cfg = load_cfg(config_file)
     trainer = BoundaryAugTrainer(cfg)
     trainer()
+    cleanup()
 
 
