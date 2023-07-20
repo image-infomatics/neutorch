@@ -151,7 +151,7 @@ class PostSynapsesDataset(SynapsesDatasetBase):
 
             # bbox = BoundingBox.from_string(syns_path)
             bbox = synapses.pre_bounding_box
-            bbox.adjust(self.patch_size_before_transform // 2)
+            bbox = bbox.adjust(self.patch_size_before_transform // 2)
 
             images = self.syns_path_to_images(syns_path, bbox)
             sample = PostSynapseReference(

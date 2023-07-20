@@ -1,51 +1,80 @@
 system:
-  cpus: 1
+  cpus: 4
   gpus: 1
   seed: 1
-  
+
+samples: [
+  "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/samples.yaml",
+  "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/samples.yaml",
+  "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/samples.yaml",
+  #"/mnt/home/jwu/dropbox/40_gt/11_wasp_sample1/samples.yaml",
+  #"/mnt/home/jwu/dropbox/40_gt/12_wasp_sample2/samples.yaml",
+  #"/mnt/home/jwu/dropbox/40_gt/13_wasp_sample3/samples.yaml",
+]
+
+
 dataset:
-  training:
-    s3vol01700:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_01700/img.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_01700/label_v3.h5"
-        #    s3vol02299:
-        #      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02299/img.h5",]
-        #      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02299/label_v3.h5"
-    s3vol02400:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02400/img_zyx_2400-2656_5700-5956_2770-3026.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_02400/label_v1.h5"
-        #s3vol02794:
-        #  images: ["~/dropbox/40_gt/13_wasp_sample3/vol_02794/img_zyx_2794-3050_5811-6067_8757-9013.h5",]
-        #  label: "~/dropbox/40_gt/13_wasp_sample3/vol_02794/seg_v1_cropped.h5"
-    s3vol03290:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03290/img_zyx_3290-3546_2375-2631_8450-8706.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_03290/label_v1.h5"
-    s3vol03700:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03700/img_zyx_3700-3956_5000-5256_4250-4506.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_03700/label_v3.h5"
-    s3vol03998:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_03998/img_zyx_3998-4254_4280-4536_4035-4291.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_03998/label_v2.h5"
-    s3vol04900:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_04900/img.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_04900/label_v1.h5"
-    s3vol05250:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_05250/img_zyx_5250-5506_4600-4856_5500-5756.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_05250/label_v3_remove_contact.h5"
-    s3vol05450:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_05450/img_zyx_5450-5706_5350-5606_7000-7256.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_05450/label_v4_chiyip.h5"
-  validation:
-    s3vol04000:
-      images: ["~/dropbox/40_gt/13_wasp_sample3/vol_04000/img_zyx_4000-4256_3400-3656_8150-8406.h5",]
-      label: "~/dropbox/40_gt/13_wasp_sample3/vol_04000/label_v3.h5"
+  training: [
+    "s1gt1",
+    "vol_04831",
+    "vol_06431",
+    "vol_07580",
+    "vol_09300",
+    "vol_12350",
+    "vol_13170",
+    "vol_01700",
+    "vol_02400",
+    "vol_02684",
+    "vol_03998",
+    "vol_04000",
+    "vol_04772",
+    "vol_05450",
+  ]
+  validation: [
+    "s1gt2",
+    "vol_07800",
+    "vol_07338",
+    "vol_02299",
+    "vol_04900",
+  ]
+  test: [ # not used in training
+    "vol_07955",
+    "vol_13170_2",
+    "vol_03700",
+    "vol_05250",
+  ]
+# dataset:
+#   sample3:
+#     images: [
+#       "precomputed://file:///mnt/ceph/users/neuro/wasp_em/jwu/sample3/05_yuri_v3",
+#       "precomputed://file:///mnt/ceph/users/neuro/wasp_em/jwu/sample3/07_yuri_v5",
+#       "precomputed://file:///mnt/ceph/users/neuro/wasp_em/jwu/sample3/04_clahe"
+#     ]
+#     mask: "precomputed://file:///mnt/ceph/users/neuro/wasp_em/jwu/sample3/20_segmentation_mask"
+#     labels:
+#       training: [
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02400/label_v1.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/label_v1.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/label_v3.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03998/label_v2.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/label_v1.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/label_v3_remove_contact.h5",
+#       ]
+#       validation: [
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04000/label_v3.h5",
+#         "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/label_v4_chiyip.h5",
+#       ]
+
 model:
   in_channels: 1
   out_channels: 3
 
 train:
+  preload: "/mnt/ceph/users/neuro/wasp_em/jwu/22_affs_whole_brain/model_135000.chkpt"
   iter_start: 0
-  iter_stop: 1000000
+  iter_stop: 1000
+  start_saving: 100000
   class_rebalance: false
   # batch size per GPU
   # The dataprovider should provide nGPU*batch_size batches!

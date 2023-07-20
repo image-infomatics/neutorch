@@ -1,29 +1,39 @@
 from functools import cached_property
 
 import numpy as np
-# from torch import tensor, device
 import torch
 
-# torch.multiprocessing.set_start_method('spawn')
-
-# from chunkflow.lib.cartesian_coordinate import Cartesian
+from chunkflow.lib.cartesian_coordinate import Cartesian
+from chunkflow.chunk import Chunk
 
 
 class Patch(object):
-    def __init__(self, image: np.ndarray, label: np.ndarray):
+    def __init__(self, image: Chunk, label: Chunk,
+            mask: Chunk = None):
         """A patch of volume containing both image and label
 
         Args:
-            image (np.ndarray): image
-            label (np.ndarray): label
+            image (Chunk): image
+            label (Chunk): label
         """
-        assert image.shape == label.shape
-
-        image = self._expand_to_5d(image)
-        label = self._expand_to_5d(label)
-
+        assert image.shape[-3:] == label.shape[-3:], \
+            f'image shape: {image.shape}, label shape: {label.shape}'
+        assert image.voxel_offset == label.voxel_offset
+        if mask is not None:
+            mask.shape == label.shape
+            assert mask.ndim == 3
+            assert mask.voxel_offset == image.voxel_offset
+        
+        image.array = self._expand_to_5d(image.array)
+        label.array = self._expand_to_5d(label.array)
+        
         self.image = image
         self.label = label
+        self.mask = mask
+
+    @cached_property
+    def has_mask(self):
+        return self.mask is not None
 
     def _expand_to_5d(self, arr: np.ndarray):
         if arr.ndim == 4:
@@ -37,29 +47,18 @@ class Patch(object):
         return arr
 
     def shrink(self, size: tuple):
-        assert len(size) == 6
-        _, _, z, y, x = self.shape
-        self.image = self.image[
-            ...,
-            size[0]:z-size[3],
-            size[1]:y-size[4],
-            size[2]:x-size[5],
-        ]
-        self.label = self.label[
-            ...,
-            size[0]:z-size[3],
-            size[1]:y-size[4],
-            size[2]:x-size[5],
-        ]
-
-
+        self.image.shrink(size)
+        self.label.shrink(size)
+        if self.has_mask:
+            self.mask.shrink(size)
+            
     @property
     def shape(self):
         return self.image.shape
 
     @cached_property
     def center(self):
-        return tuple(ps // 2 for ps in self.shape[-3:])
+        return Cartesian.from_collection(self.shape[-3:]) // 2
 
     def normalize(self):
         def _normalize(arr):
@@ -70,14 +69,11 @@ class Patch(object):
                 arr = arr.type(torch.float32)
                 arr /= 255.
             return arr
-        self.image = _normalize(self.image)
-        self.label = _normalize(self.label)
+        self.image.array = _normalize(self.image.array)
+        self.label.array = _normalize(self.label.array)
 
 def collate_batch(batch):
-   
     patch_list = []
-   
     for patch in batch:
         patch_list.append(patch)
-    
     return patch

@@ -7,10 +7,29 @@ import torch
 from chunkflow.lib.cartesian_coordinate import Cartesian
 from yacs.config import CfgNode
 
-from neutorch.data.sample import SemanticSample, SelfSupervisedSample, AffinityMapSample
+from neutorch.data.sample import *
 from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
+
+def get_iter_range(sample_num: int) -> tuple[int, int]:
+    # multiprocess data loading 
+    worker_info = torch.utils.data.get_worker_info()
+    iter_start = 0
+    iter_stop = sample_num
+    if worker_info is not None:
+        # multiple processing for data loading, split workload
+        worker_id = worker_info.id
+        if sample_num > worker_info.num_workers:
+            per_worker = int(math.ceil(
+                (iter_end - iter_start) / float(worker_info.num_workers)))
+            iter_start = iter_start + worker_id * per_worker
+            iter_end = min(iter_start + per_worker, iter_end)
+        else:
+            iter_start = worker_id % sample_num
+            iter_stop = iter_start + 1
+    
+    return iter_start, iter_stop
 
 def load_cfg(cfg_file: str, freeze: bool = True):
     with open(cfg_file) as file:
@@ -19,20 +38,20 @@ def load_cfg(cfg_file: str, freeze: bool = True):
         cfg.freeze()
     return cfg
 
-def worker_init_fn(worker_id: int):
-    worker_info = torch.utils.data.get_worker_info()
+# def worker_init_fn(worker_id: int):
+#     worker_info = torch.utils.data.get_worker_info()
     
-    # the dataset copy in this worker process
-    dataset = worker_info.dataset
-    overall_start = 0
-    overall_end = dataset.sample_num
+#     # the dataset copy in this worker process
+#     dataset = worker_info.dataset
+#     overall_start = 0
+#     overall_end = dataset.sample_num
 
-    # configure the dataset to only process the split workload
-    per_worker = int(math.ceil(
-        (overall_end - overall_start) / float(worker_info.num_workers)))
-    worker_id = worker_info.id
-    dataset.start = overall_start + worker_id * per_worker
-    dataset.end = min(dataset.start + per_worker, overall_end)
+#     # configure the dataset to only process the split workload
+#     per_worker = int(math.ceil(
+#         (overall_end - overall_start) / float(worker_info.num_workers)))
+#     worker_id = worker_info.id
+#     dataset.start = overall_start + worker_id * per_worker
+#     dataset.end = min(dataset.start + per_worker, overall_end)
 
 def path_to_dataset_name(path: str, dataset_names: list):
     for dataset_name in dataset_names:
@@ -52,9 +71,9 @@ def to_tensor(arr):
     return arr
 
 
-class DatasetBase(torch.utils.data.IterableDataset):
+class DatasetBase(torch.utils.data.Dataset):
     def __init__(self,
-            samples: list, 
+            samples: List[AbstractSample], 
         ):
         """
         Parameters:
@@ -62,6 +81,7 @@ class DatasetBase(torch.utils.data.IterableDataset):
         """
         super().__init__()
         self.samples = samples
+
 
     @cached_property
     def sample_num(self):
@@ -99,22 +119,25 @@ class DatasetBase(torch.utils.data.IterableDataset):
         patch = sample.random_patch
         # patch.to_tensor()
         return patch.image, patch.label
-   
-    def __next__(self):
-        image, label = self.random_patch
-        image = to_tensor(image)
-        label = to_tensor(label)
-        return image, label
+    
+    def __len__(self):
+        patch_num = 0
+        for sample in self.samples:
+            patch_num += len(sample)
+        return patch_num
 
-    def __iter__(self):
-        """generate random patches from samples
+    def __getitem__(self, index: int):
+        """return a random patch from a random sample
+        the exact index does not matter!
 
-        Yields:
-            tuple[tensor, tensor]: image and label tensors
+        Args:
+            index (int): index of the patch
         """
-        while True:
-            yield next(self)
+        image_chunk, label_chunk = self.random_patch
+        image = to_tensor(image_chunk.array)
+        label = to_tensor(label_chunk.array)
 
+        return image, label
 
 class SemanticDataset(DatasetBase):
     def __init__(self, samples: list):
@@ -151,7 +174,7 @@ class SemanticDataset(DatasetBase):
     
 
 class OrganelleDataset(SemanticDataset):
-    def __init__(self, samples: list, 
+    def __init__(self, samples: List[AbstractSample], 
             num_classes: int = 1,
             skip_classes: list = None,
             selected_classes: list = None):
@@ -224,33 +247,78 @@ class OrganelleDataset(SemanticDataset):
 
         return image, target
 
+class AffinityMapVolumeWithMask(DatasetBase):
+    def __init__(self, samples: List[AbstractSample]):
+        super().__init__(samples)
+
+    @classmethod
+    def from_config(cls, cfg: CfgNode, mode: str = 'training', **kwargs):
+        """construct affinity map volume with mask dataset
+
+        Args:
+            cfg (CfgNode): the configuration node
+            mode (str, optional): ['training', 'validation', 'test']. Defaults to 'train'.
+        """
+        output_patch_size = Cartesian.from_collection(
+            cfg.train.patch_size)
+        
+        sample_names = cfg.dataset[mode]
+
+        iter_start, iter_stop = get_iter_range(sample_names)
+
+        samples = []
+        for sample_name in sample_names[iter_start : iter_stop]:
+            sample_cfg = cfg.samples[sample_name]
+            sample_class = eval(sample_cfg.type)
+            sample = sample_class.from_config(
+                sample_cfg, output_patch_size)
+            samples.append(sample)
+        return cls(samples)
+
+    def __len__(self):
+        # num = 0
+        # for sample in self.samples:
+        #     num += sample.
+        # return num
+        # return self.sample_num * cfg.system.gpus * cfg.train.batch_size * 16
+        # our patches are randomly sampled from chunk or volume and is close to unlimited.
+        # return a big enough number to make distributed sampler work
+        return 1024
+
 class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+    def from_config(cls, cfg: CfgNode, mode: str, **kwargs):
         """Construct a semantic dataset with chunk or volume
 
         Args:
-            cfg (CfgNode): _description_
-            is_train (bool): _description_
-
-        Returns:
-            _type_: _description_
+            cfg (CfgNode): configuration in YAML file 
+            mode (str): training mode or validation mode.
         """
-        if is_train:
-            name2chunks = cfg.dataset.training
-        else:
-            name2chunks = cfg.dataset.validation
+        output_patch_size = Cartesian.from_collection(cfg.train.patch_size)
+        sample_names = cfg.dataset[mode]
+
+        sample_configs = CfgNode()
+        for sample_config_path in cfg.samples:
+            sample_cfg_node = load_cfg(sample_config_path, freeze=False)
+            sample_config_dir = os.path.dirname(sample_config_path)
+            for sample_node in sample_cfg_node.values():
+                sample_node.dir = os.path.join(sample_config_dir, sample_node.dir)
+
+            sample_configs.update(sample_cfg_node)
+
+        sample_num = len(sample_names)
+        iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
-        for name2path in name2chunks.values():
-            sample = AffinityMapSample.from_explicit_dict(
-                    name2path, 
-                    output_patch_size=cfg.train.patch_size,
-                    num_classes=cfg.model.out_channels,
-                    **kwargs)
+        for sample_name in sample_names[iter_start : iter_stop]:
+            sample_node = sample_configs[sample_name]
+            sample = AffinityMapSample.from_config_node(
+                sample_node, output_patch_size,
+                num_classes=cfg.model.out_channels,
+            )
             samples.append(sample)
 
         return cls( samples )

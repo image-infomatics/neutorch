@@ -1,34 +1,36 @@
+#/bin/env python
+
 import os
 from functools import cached_property
 
 import click
 from yacs.config import CfgNode
 
-from neutorch.data.dataset import AffinityMapDataset
+from neutorch.data.dataset import AffinityMapVolumeWithMask
 from neutorch.train.base import TrainerBase, setup, cleanup
-
-from .base import TrainerBase
 
 import torch
 import torch.distributed as dist
 # torch.multiprocessing.set_start_method('spawn')
 
 
-class AffinityMapTrainer(TrainerBase):
-    def __init__(self, cfg: CfgNode,
+class WholeBrainAffinityMapTrainer(TrainerBase):
+    def __init__(self, cfg: CfgNode, 
             device: torch.DeviceObjType=None,
             local_rank: int = int(os.getenv('LOCAL_RANK', -1))
         ) -> None:
-        assert isinstance(cfg, CfgNode)
         super().__init__(cfg, device=device, local_rank=local_rank)
+        assert isinstance(cfg, CfgNode)
 
     @cached_property
     def training_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, mode='training')
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='training')
        
     @cached_property
     def validation_dataset(self):
-        return AffinityMapDataset.from_config(self.cfg, mode='validation')
+        return AffinityMapVolumeWithMask.from_config(self.cfg, mode='validation')
+
+
 
 @click.command()
 @click.option('--config-file', '-c',
@@ -51,6 +53,6 @@ def main(config_file: str, local_rank: int):
 
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = AffinityMapTrainer(cfg, device=device)
+    trainer = WholeBrainAffinityMapTrainer(cfg, device=device)
     trainer()
     cleanup()

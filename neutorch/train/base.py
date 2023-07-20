@@ -2,25 +2,32 @@ import os
 import random
 from abc import ABC, abstractproperty
 from functools import cached_property
-from glob import glob
 from time import time
 
 import numpy as np
-import torch
-from chunkflow.lib.cartesian_coordinate import Cartesian
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode
+from chunkflow.lib.cartesian_coordinate import Cartesian
 
-from neutorch.data.dataset import worker_init_fn
+import torch
+import torch.distributed as dist
+from torch.utils.tensorboard import SummaryWriter
+
 from neutorch.data.patch import collate_batch
 from neutorch.loss import BinomialCrossEntropyWithLogits, MeanSquareErrorLoss
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
 
+def setup():
+    dist.init_process_group('nccl')
+
+def cleanup():
+    dist.destroy_process_group()
 
 class TrainerBase(ABC):
-    def __init__(self, cfg: CfgNode) -> None:
+    def __init__(self, cfg: CfgNode, 
+            device: torch.DeviceObjType = None,
+            local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
+            ) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
             with open(cfg) as file:
                 cfg = CfgNode.load_cfg(file)
@@ -30,13 +37,19 @@ class TrainerBase(ABC):
             random.seed(cfg.system.seed)
         
         self.cfg = cfg
+        self.device = device
+        self.local_rank = local_rank
+        if cfg.system.gpus < 0:
+            self.num_gpus = torch.cuda.device_count()
+        else:
+            self.num_gpus = cfg.system.gpus
         self.patch_size=Cartesian.from_collection(cfg.train.patch_size)
-
-        # self._split_path_list()
 
     @cached_property
     def batch_size(self):
-        return self.cfg.system.gpus * self.cfg.train.batch_size
+        # return self.num_gpus * self.cfg.train.batch_size
+        # this batch size is for a single GPU rather than the total number!
+        return self.cfg.train.batch_size
 
     # @cached_property
     # def path_list(self):
@@ -72,32 +85,29 @@ class TrainerBase(ABC):
     #     self.training_path_list = training_path_list
     #     self.validation_path_list = validation_path_list
 
-    # @cached_property
-    # def device(self):
-    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #     return device
-
     @cached_property
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
-        if torch.cuda.is_available():
-            gpu_num = torch.cuda.device_count()
-            print("Let's use ", gpu_num, " GPUs!")
-            # we need to use DistributedDataParallel rather than DataParallel to use multiple GPUs!
-            # https://discuss.pytorch.org/t/run-pytorch-on-multiple-gpus/20932/62
-            # device_ids=list(range(torch.cuda.device_count()))
-            model = torch.nn.parallel.DataParallel(
-                model, 
-                device_ids=list(range(torch.cuda.device_count())),
-            )
+                           
+        if 'preload' in self.cfg.train:
+            fname = self.cfg.train.preload
+        else:
+            fname = os.path.join(self.cfg.train.output_dir, 
+                f'model_{self.cfg.train.iter_start}.chkpt')
+
+        if os.path.exists(fname) and self.local_rank==0:
+            model = load_chkpt(model, fname)
+        
         # note that we have to wrap the nn.DataParallel(model) before 
-        # loading the model since the dictionary is changed after the wrapping 
-        model = load_chkpt(
-            model, 
-            self.cfg.train.output_dir, 
-            self.cfg.train.iter_start)
-        # print('send model to device: ', self.device)
-        # model = model.to(self.device)
+        # loading the model since the dictionary is changed after the wrapping
+        if self.num_gpus > 1:
+            print(f'use {self.num_gpus} gpus!')
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[self.local_rank],
+                output_device=self.local_rank)
+       
+        model.to('cuda')
+
         return model
 
     @cached_property
@@ -127,9 +137,14 @@ class TrainerBase(ABC):
     @abstractproperty
     def validation_dataset(self):
         pass
-        
+    
+    @cached_property
+    def LOCAL_RANK(self):
+        return int(os.getenv('LOCAL_RANK', -1))
+       
     @cached_property
     def training_data_loader(self):
+<<<<<<< HEAD
         training_data_loader = DataLoader(
             self.training_dataset,
             #num_workers=self.cfg.system.cpus,
@@ -140,21 +155,50 @@ class TrainerBase(ABC):
             collate_fn=collate_batch,
             worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
+=======
+        sampler = torch.utils.data.distributed.DistributedSampler(
+            self.training_dataset
+>>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
         )
-        return training_data_loader
+        dataloader = torch.utils.data.DataLoader(
+            self.training_dataset,
+            shuffle=False, 
+            num_workers = self.cfg.system.cpus,
+            prefetch_factor = self.cfg.system.cpus,
+            collate_fn=collate_batch,
+            # worker_init_fn=worker_init_fn,
+            batch_size=self.batch_size,
+            multiprocessing_context='spawn',
+            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
+            sampler=sampler
+        )
+        return dataloader
+
     
     @cached_property
     def validation_data_loader(self):
-        validation_data_loader = DataLoader(
+        sampler = torch.utils.data.distributed.DistributedSampler(
+            self.validation_dataset
+        )
+        dataloader = torch.utils.data.DataLoader(
             self.validation_dataset,
+<<<<<<< HEAD
             num_workers=0,
             prefetch_factor=None,
             drop_last=False,
             # multiprocessing_context='spawn',
+=======
+            shuffle=False, 
+            num_workers = self.cfg.system.cpus,
+            prefetch_factor = self.cfg.system.cpus,
+>>>>>>> d64130dfaf179168a7b57455e08370f0a2c733d9
             collate_fn=collate_batch,
             batch_size=self.batch_size,
+            multiprocessing_context='spawn',
+            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
+            sampler=sampler
         )
-        return validation_data_loader
+        return dataloader
 
     @cached_property
     def validation_data_iter(self):
@@ -166,10 +210,13 @@ class TrainerBase(ABC):
         return np.product(self.patch_size) * self.batch_size
 
     def label_to_target(self, label: torch.Tensor):
-        return label
+        return label.cuda()
 
     def post_processing(self, prediction: torch.Tensor):
-        return torch.sigmoid(prediction)
+        if isinstance(self.loss_module, BinomialCrossEntropyWithLogits):
+            return torch.sigmoid(prediction)
+        else:
+            return prediction
 
     def __call__(self) -> None:
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
@@ -177,16 +224,19 @@ class TrainerBase(ABC):
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
             target = self.label_to_target(label)
-            
+
             iter_idx += 1
             if iter_idx> self.cfg.train.iter_stop:
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
                 return
+                
 
             ping = time()
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
+            # image.to(self.device)
+            # self.model.to(self.device)
             predict = self.model(image)
-            # predict = self.post_processing(predict)
+            predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -208,9 +258,17 @@ class TrainerBase(ABC):
                 log_tensor(writer, 'train/target', target, 'image', iter_idx)
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
-                fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
-                print(f'save model to {fname}')
-                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
+
+                if self.LOCAL_RANK <= 0:
+                    # only save model on master
+                    fname = os.path.join(self.cfg.train.output_dir, \
+                        f'model_{iter_idx}.chkpt')
+                    if iter_idx >= self.cfg.train.start_saving:
+                        print(f'save model to {fname}')
+                        save_chkpt(
+                            self.model, self.cfg.train.output_dir, \
+                            iter_idx, self.optimizer
+                        )
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(self.validation_data_iter)
