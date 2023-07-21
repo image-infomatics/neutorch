@@ -416,9 +416,14 @@ class RandomPixelDropping(IntensityTransform):
         # print("pi shape:", patch.image.shape)
         #print(patch.label)
 
-        mask = np.random.randint(0, 2, size=patch.image.shape).astype(bool) 
-        r = np.random.rand(*patch.image.shape)*np.max(patch.image)
-        patch.image[mask] = r[mask]
+        #mask = np.random.randint(0, 2, size=patch.image.shape).astype(bool) 
+        #r = np.random.rand(*patch.image.shape)*np.max(patch.image)
+        #patch.image[mask] = r[mask]
+        
+        values = np.array([0, 0.5, 2])
+        mask = np.random.choice(values, size=patch.size[-3:])
+        patch[-3:] *= mask
+
         return patch
 
 #Binary Mask -> rotate boundary map 

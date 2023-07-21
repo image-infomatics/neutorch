@@ -200,14 +200,17 @@ class Sample(AbstractSample):
             raise ValueError('only support 3 to 5 dimensional array.')
    
     @property
-    def random_patch_center(self):
+    def random_patch_center(self): 
         center_start = self.center_start
         center_stop = self.center_stop
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
-        center = Cartesian(cz, cy, cx)
-        return center
+        if cx > 7198: #For good regions
+            pass
+        else:
+            center = Cartesian(cz, cy, cx)
+            return center
 
     def __len__(self):
         patch_num = np.prod(self.center_stop - self.center_start + 1)
@@ -792,7 +795,7 @@ class SelfSupervisedSample(Sample):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            RandomPixelDropping(), 
+            # RandomPixelDropping(), 
             MaskBox(),
             # MaskBox2D(), 
             # Rotate2D(probability=1.)
