@@ -38,20 +38,20 @@ def load_cfg(cfg_file: str, freeze: bool = True):
         cfg.freeze()
     return cfg
 
-# def worker_init_fn(worker_id: int):
-#     worker_info = torch.utils.data.get_worker_info()
+def worker_init_fn(worker_id: int):
+     worker_info = torch.utils.data.get_worker_info()
     
-#     # the dataset copy in this worker process
-#     dataset = worker_info.dataset
-#     overall_start = 0
-#     overall_end = dataset.sample_num
+     # the dataset copy in this worker process
+     dataset = worker_info.dataset
+     overall_start = 0
+     overall_end = dataset.sample_num
 
-#     # configure the dataset to only process the split workload
-#     per_worker = int(math.ceil(
-#         (overall_end - overall_start) / float(worker_info.num_workers)))
-#     worker_id = worker_info.id
-#     dataset.start = overall_start + worker_id * per_worker
-#     dataset.end = min(dataset.start + per_worker, overall_end)
+     # configure the dataset to only process the split workload
+     per_worker = int(math.ceil(
+         (overall_end - overall_start) / float(worker_info.num_workers)))
+     worker_id = worker_info.id
+     dataset.start = overall_start + worker_id * per_worker
+     dataset.end = min(dataset.start + per_worker, overall_end)
 
 def path_to_dataset_name(path: str, dataset_names: list):
     for dataset_name in dataset_names:
