@@ -92,6 +92,5 @@ def main(config_file: str):
     cfg = load_cfg(config_file)
     trainer = BoundaryAugTrainer(cfg)
     trainer()
-    cleanup()
 
 
