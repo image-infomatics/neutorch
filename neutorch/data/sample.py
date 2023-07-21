@@ -264,12 +264,12 @@ class Sample(AbstractSample):
         return weight
     
 
-class SampleWithMask(Sample):
+class VolumeSampleWithMask(Sample):
     def __init__(self, 
             images: List[PrecomputedVolume],
             label: Union[Chunk, PrecomputedVolume],
             output_patch_size: Cartesian,
-            mask: Chunk | PrecomputedVolume, 
+            mask: Chunk | PrecomputedVolume = None, 
             forbbiden_distance_to_boundary: tuple = None,
             patches_in_block: int = 8,
             nonzero_bounding_boxes_path: str = './nonzero_bounding_boxes.npy',
@@ -305,7 +305,7 @@ class SampleWithMask(Sample):
 
     @classmethod
     def from_config(cls, config: CfgNode, 
-            output_patch_size: Cartesian) -> SampleWithMask:
+            output_patch_size: Cartesian) -> VolumeSampleWithMask:
         images = []
         for image_path in config.images:
             image_vol = PrecomputedVolume.from_cloudvolume_path(image_path)
@@ -313,7 +313,7 @@ class SampleWithMask(Sample):
         
         label = PrecomputedVolume.from_cloudvolume_path(config.label)
         mask = PrecomputedVolume.from_cloudvolume_path(config.mask)
-        return cls(images, label, output_patch_size, mask)
+        return cls(images, label, output_patch_size, mask = mask)
 
     @cached_property
     def voxel_size_factors(self) -> Cartesian:
@@ -324,11 +324,13 @@ class SampleWithMask(Sample):
         if os.path.exists(self.nonzero_bounding_boxes_path):
             print(f'loading existing nonzero bounding boxes file: {self.nonzero_bounding_boxes_path}')
             bboxes = BoundingBoxes.from_file(self.nonzero_bounding_boxes_path)
-        else:
+        elif self.mask is not None:
             bboxes = self.mask.get_nonzero_block_bounding_boxes_with_different_voxel_size(
                 self.label.voxel_size
             )
             bboxes.to_file(self.nonzero_bounding_boxes_path)
+        else:
+            bboxes = self.images[0].block_bounding_boxes
         return bboxes 
 
     @property
@@ -717,7 +719,7 @@ class AffinityMapSample(SemanticSample):
         ])
 
 
-class AffinityMapSampleWithMask(SampleWithMask):
+class AffinityMapVolumeSampleWithMask(VolumeSampleWithMask):
     def __init__(self, images: List[PrecomputedVolume], label: Union[Chunk, PrecomputedVolume], output_patch_size: Cartesian, mask: Chunk | PrecomputedVolume, forbbiden_distance_to_boundary: tuple = None, patches_in_block: int = 8, nonzero_bounding_boxes_path: str = './nonzero_bounding_boxes.npy') -> None:
         super().__init__(images, label, output_patch_size, mask, forbbiden_distance_to_boundary, patches_in_block, nonzero_bounding_boxes_path)
     
@@ -788,12 +790,11 @@ class SelfSupervisedSample(Sample):
         ])
 
 
-class NeuropilMaskSample(Sample):
+class SemanticVolumeSample(VolumeSampleWithMask):
     def __init__(self, 
             images: List[AbstractVolume], 
             label: Union[Chunk, AbstractVolume], 
             output_patch_size: Cartesian,
-            mip: int = 3,
             forbbiden_distance_to_boundary: tuple = None) -> None:
         """Train a model to predict neuropil mask.
         The patch sampling is biased to neuropil mask boundary.
