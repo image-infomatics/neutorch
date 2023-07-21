@@ -1,21 +1,22 @@
 from functools import cached_property
 
-import os
+#import os
 import click
 from yacs.config import CfgNode
 import torch
 import torch.distributed as dist
 
 from neutorch.data.dataset import BoundaryAugmentationDataset
-from neutorch.train.base import TrainerBase, setup, cleanup
+from .base import TrainerBase, setup, cleanup
 
 class BoundaryAugTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode #, 
             #device: torch.DeviceObjType=None,
             #local_rank: int = int(os.getenv('LOCAL_RANK', -1))
         ) -> None:
+        assert isinstance(cfg, CfgNode) 
         super().__init__(cfg) #, device=device, local_rank=local_rank)
-        assert isinstance(cfg, CfgNode)
+        #assert isinstance(cfg, CfgNode)
         self.cfg = cfg
 
     @cached_property

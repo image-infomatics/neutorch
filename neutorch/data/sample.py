@@ -206,9 +206,11 @@ class Sample(AbstractSample):
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
-        #if cx <= 7198: 
-        #   center = Cartesian(cz, cy, cx)
-        #   return center
+        if cx > 7198: #For good regions
+            pass
+        else:
+            center = Cartesian(cz, cy, cx)
+            return center
 
     def __len__(self):
         patch_num = np.prod(self.center_stop - self.center_start + 1)

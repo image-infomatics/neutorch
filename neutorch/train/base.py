@@ -52,7 +52,7 @@ class TrainerBase(ABC):
     def batch_size(self):
         # return self.num_gpus * self.cfg.train.batch_size
         # this batch size is for a single GPU rather than the total number!
-        return self.cfg.train.batch_size
+        return self.cfg.train.batch_size * self.cfg.train.batch_size
 
     # @cached_property
     # def path_list(self):
@@ -153,9 +153,9 @@ class TrainerBase(ABC):
     def validation_dataset(self):
         pass
     
-    @cached_property
-    def LOCAL_RANK(self):
-        return int(os.getenv('LOCAL_RANK', -1))
+    #@cached_property
+    #def LOCAL_RANK(self):
+        #return int(os.getenv('LOCAL_RANK', -1))
        
     @cached_property
     def training_data_loader(self):
@@ -177,14 +177,14 @@ class TrainerBase(ABC):
         training_data_loader = DataLoader(
             self.training_dataset,
             num_workers=0,
-            prefetch_factor=2,
+            prefetch_factor=None,
             drop_last=False,
             # multiprocessing_context='spawn', 
             collate_fn=collate_batch,
             worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
         ) 
-        return dataloader
+        return training_data_loader
 
     
     @cached_property
@@ -206,12 +206,12 @@ class TrainerBase(ABC):
         validation_data_loader = DataLoader(
             self.validation_dataset,
             num_workers=0,
-            prefetch_factor=2,
+            prefetch_factor=None,
             drop_last=False,
             collate_fn=collate_batch,
             batch_size=self.batch_size,
         ) 
-        return dataloader
+        return validation_data_loader
 
     @cached_property
     def validation_data_iter(self):
@@ -239,7 +239,7 @@ class TrainerBase(ABC):
             target = self.label_to_target(label)
 
             iter_idx += 1
-            if iter_idx> self.cfg.train.iter_stop:
+            if iter_idx > self.cfg.train.iter_stop:
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
                 return
                 
@@ -249,7 +249,7 @@ class TrainerBase(ABC):
             # image.to(self.device)
             # self.model.to(self.device)
             predict = self.model(image)
-            predict = self.post_processing(predict)
+            #predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -272,16 +272,11 @@ class TrainerBase(ABC):
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
 
-                if self.LOCAL_RANK <= 0:
+                    #if self.LOCAL_RANK <= 0:
                     # only save model on master
-                    fname = os.path.join(self.cfg.train.output_dir, \
-                        f'model_{iter_idx}.chkpt')
-                    if iter_idx >= self.cfg.train.start_saving:
-                        print(f'save model to {fname}')
-                        save_chkpt(
-                            self.model, self.cfg.train.output_dir, \
-                            iter_idx, self.optimizer
-                        )
+                fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
+                print(f'save model to {fname}')
+                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(self.validation_data_iter)
