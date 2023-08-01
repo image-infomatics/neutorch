@@ -411,18 +411,14 @@ class RandomPixelDropping(IntensityTransform):
         # adjust percentage of the mask -> mask out all the channels
         ### Do not mask out the label
         #create a random array of true/false for random pixel
-        # print("patch:", patch)
-        # print("pi:", patch.image)
-        # print("pi shape:", patch.image.shape)
-        #print(patch.label)
-
+        
         #mask = np.random.randint(0, 2, size=patch.image.shape).astype(bool) 
         #r = np.random.rand(*patch.image.shape)*np.max(patch.image)
         #patch.image[mask] = r[mask]
         
         values = np.array([0, 0.5, 2])
-        mask = np.random.choice(values, size=patch.size[-3:])
-        patch[-3:] *= mask
+        mask = np.random.choice(values, size=patch.image.shape)
+        patch.image *= mask
 
         return patch
 
@@ -699,16 +695,20 @@ class Rotate2D(SpatialTransform):
         self.max_scaling = max_scaling
 
     def transform(self, patch: Patch):
-
-        A = np.transpose(patch.image[-3], (2, 1, 0))
         
         axis = np.array([0, 1, 2])
         tuple_arr = np.random.choice(axis, size=2, replace=False)
-        k = np.random.randint(1, 4)
-
-        A = np.rot90(A, k=k, axes=(tuple_arr[0], tuple_arr[1]))
-        patch.image[-3] = np.transpose(A, (2, 1, 0))
-
+        k = np.random.randint(0, 4)
+        
+        for batch in range(patch.image.shape[0]):
+            for channel in range(patch.image.shape[1]):
+                # print(patch_image[batch, channel].shape)
+                copy_patchimage = np.copy(patch.image[batch, channel])
+                trans_patchimage = np.transpose(copy_patchimage, (2, 1, 0))
+                rot_patchimage = np.rot90(trans_patchimage, k=k, axes=(tuple_arr[0], tuple_arr[1]))
+                copy_patchimage = np.transpose(rot_patchimage, (2, 1, 0))
+                patch.image[batch, channel] = np.copy(copy_patchimage)
+        # breakpoint() 
         return patch 
         #Bottom rotation is not working (for now) so 2D 90 degree rotation
 
