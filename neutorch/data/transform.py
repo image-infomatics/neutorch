@@ -698,7 +698,7 @@ class Rotate2D(SpatialTransform):
         
         axis = np.array([0, 1, 2])
         tuple_arr = np.random.choice(axis, size=2, replace=False)
-        k = np.random.randint(1, 4)
+        k = np.random.randint(0, 4)
         
         for batch in range(patch.image.shape[0]):
             for channel in range(patch.image.shape[1]):

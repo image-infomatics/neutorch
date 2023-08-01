@@ -795,10 +795,10 @@ class SelfSupervisedSample(Sample):
                 Noise(),
                 GaussianBlur2D(),
             ]),
-            RandomPixelDropping(), 
+            #RandomPixelDropping(), 
             MaskBox(),
             # MaskBox2D(), 
-            #Rotate2D()
+            Rotate2D()
             # Flip(),
             # Transpose(),
         ])

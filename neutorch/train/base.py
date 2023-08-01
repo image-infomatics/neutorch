@@ -139,8 +139,8 @@ class TrainerBase(ABC):
 
     @cached_property
     def loss_module(self):
-        return BinomialCrossEntropyWithLogits()
-        # return MeanSquareErrorLoss()
+        #return BinomialCrossEntropyWithLogits()
+        return MeanSquareErrorLoss()
 
 
     @cached_property
@@ -223,7 +223,7 @@ class TrainerBase(ABC):
         return np.product(self.patch_size) * self.batch_size
 
     def label_to_target(self, label: torch.Tensor):
-        return label #.cuda()
+        return label
 
     def post_processing(self, prediction: torch.Tensor):
         if isinstance(self.loss_module, BinomialCrossEntropyWithLogits):
@@ -232,7 +232,7 @@ class TrainerBase(ABC):
             return prediction
 
     def __call__(self) -> None:
-        writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
+        writer = SummaryWriter(log_dir=self.cfg.train.output_dir) 
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         for image, label in self.training_data_loader:
@@ -240,6 +240,7 @@ class TrainerBase(ABC):
 
             iter_idx += 1
             if iter_idx > self.cfg.train.iter_stop:
+                writer.close() 
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
                 return
                 
@@ -248,8 +249,8 @@ class TrainerBase(ABC):
             # print(f'preparing patch takes {round(time()-ping, 3)} seconds')
             # image.to(self.device)
             # self.model.to(self.device)
+            #            predict = self.model(image)
             predict = self.model(image)
-            #predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -292,5 +293,5 @@ class TrainerBase(ABC):
                     log_tensor(writer, 'evaluate/image', validation_image, 'image', iter_idx)
                     log_tensor(writer, 'evaluate/prediction', validation_predict, 'image', iter_idx)
                     log_tensor(writer, 'evaluate/target', validation_target, 'image', iter_idx)
-
         writer.close()
+
