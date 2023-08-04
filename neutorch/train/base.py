@@ -139,8 +139,8 @@ class TrainerBase(ABC):
 
     @cached_property
     def loss_module(self):
-        #return BinomialCrossEntropyWithLogits()
-        return MeanSquareErrorLoss()
+        return BinomialCrossEntropyWithLogits()
+        #return MeanSquareErrorLoss()
 
 
     @cached_property
@@ -240,7 +240,6 @@ class TrainerBase(ABC):
 
             iter_idx += 1
             if iter_idx > self.cfg.train.iter_stop:
-                writer.close() 
                 print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
                 return
                 
