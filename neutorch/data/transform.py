@@ -699,16 +699,20 @@ class Rotate2D(SpatialTransform):
         axis = np.array([0, 1, 2])
         tuple_arr = np.random.choice(axis, size=2, replace=False)
         k = np.random.randint(0, 4)
+
         
-        for batch in range(patch.image.shape[0]):
-            for channel in range(patch.image.shape[1]):
+        
+        #for batch in range(patch.image.shape[0]):
+            #for channel in range(patch.image.shape[1]):
                 # print(patch_image[batch, channel].shape)
-                copy_patchimage = np.copy(patch.image[batch, channel])
-                trans_patchimage = np.transpose(copy_patchimage, (2, 1, 0))
-                rot_patchimage = np.rot90(trans_patchimage, k=k, axes=(tuple_arr[0], tuple_arr[1]))
-                copy_patchimage = np.transpose(rot_patchimage, (2, 1, 0))
-                patch.image[batch, channel] = np.copy(copy_patchimage)
+                #copy_patchimage = np.copy(patch.image[batch, channel])
+                #trans_patchimage = np.transpose(copy_patchimage, (2, 1, 0))
+                #rot_patchimage = np.rot90(trans_patchimage, k=k, axes=(tuple_arr[0], tuple_arr[1]))
+                #copy_patchimage = np.transpose(rot_patchimage, (2, 1, 0))
+                #patch.image[batch, channel] = np.copy(copy_patchimage)
         # breakpoint() 
+
+
         return patch 
         #Bottom rotation is not working (for now) so 2D 90 degree rotation
 
