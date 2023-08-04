@@ -416,7 +416,7 @@ class RandomPixelDropping(IntensityTransform):
         #r = np.random.rand(*patch.image.shape)*np.max(patch.image)
         #patch.image[mask] = r[mask]
         
-        values = np.array([0, 0.5, 2])
+        values = np.array([0, 0.5, 1])
         mask = np.random.choice(values, size=patch.image.shape)
         patch.image *= mask
 
@@ -433,7 +433,10 @@ class Flip(SpatialTransform):
 
     def transform(self, patch: Patch):
         axis_num = random.randint(1, 3)
+        # patch.delayed_shrink_size = tuple(shrink)
+        # patch.delayed_shrink_size = tuple(shrink)
         axis = random.sample(range(3), axis_num)
+        
         # the image and label is 5d
         # the first two axises are batch and channel
         axis5d = tuple(2+x for x in axis)
@@ -441,12 +444,8 @@ class Flip(SpatialTransform):
         patch.label.array = np.flip(patch.label.array, axis=axis5d)
         if patch.has_mask:
             patch.mask.array = np.flip(patch.mask.array, axis=axis5d)
-
-        # shrink = list(patch.delayed_shrink_size)
-        # for ax in axis:
-        #     # swap the axis to be shrinked
-        #     shrink[3+ax], shrink[ax] = shrink[ax], shrink[3+ax]
-        # patch.delayed_shrink_size = tuple(shrink)
+        
+        #breakpoint()
         return patch
 
 
@@ -689,21 +688,31 @@ class MissAlignment(SpatialTransform):
 
 
 class Rotate2D(SpatialTransform):
-    def __init__(self, probability: float=DEFAULT_PROBABILITY, 
-            max_scaling: float=1.3):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
-        self.max_scaling = max_scaling
+    
+    def __str__(self) -> str:
+        return 'Rotate2D'
 
     def transform(self, patch: Patch):
         
-        axis = np.array([0, 1, 2])
-        tuple_arr = np.random.choice(axis, size=2, replace=False)
+        axis = np.array([2, 3, 4])
+        axes5d  = np.random.choice(axis, size=2, replace=False)
         k = np.random.randint(0, 4)
 
         
+<<<<<<< HEAD
         
         #for batch in range(patch.image.shape[0]):
             #for channel in range(patch.image.shape[1]):
+=======
+        patch.image.array = np.rot90(patch.image.array, k=k, axes=(axes5d[0], axes5d[1]))
+        patch.label.array = np.rot90(patch.label.array, k=k, axes=(axes5d[0], axes5d[1]))
+        if patch.has_mask:
+            patch.mask.array = np.rot90(patch.mask.array, k=k, axis=axes5d)
+        # for batch in range(patch.image.shape[0]):
+            # for channel in range(patch.image.shape[1]):
+>>>>>>> 0c44e42f9caa58fefa504fa2d045658ba97263aa
                 # print(patch_image[batch, channel].shape)
                 #copy_patchimage = np.copy(patch.image[batch, channel])
                 #trans_patchimage = np.transpose(copy_patchimage, (2, 1, 0))
@@ -742,10 +751,8 @@ class Rotate2D(SpatialTransform):
 #                     ) 
 
 class Rotate3DEuler(SpatialTransform):
-    def __init__(self, probability: float=DEFAULT_PROBABILITY, 
-            max_scaling: float=1.3):
+    def __init__(self, probability: float=DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
-        self.max_scaling = max_scaling
 
     def transform(self, patch: Patch):
         #patch.shape
