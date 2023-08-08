@@ -701,18 +701,12 @@ class Rotate2D(SpatialTransform):
         k = np.random.randint(0, 4)
 
         
-<<<<<<< HEAD
-        
-        #for batch in range(patch.image.shape[0]):
-            #for channel in range(patch.image.shape[1]):
-=======
         patch.image.array = np.rot90(patch.image.array, k=k, axes=(axes5d[0], axes5d[1]))
         patch.label.array = np.rot90(patch.label.array, k=k, axes=(axes5d[0], axes5d[1]))
         if patch.has_mask:
             patch.mask.array = np.rot90(patch.mask.array, k=k, axis=axes5d)
         # for batch in range(patch.image.shape[0]):
             # for channel in range(patch.image.shape[1]):
->>>>>>> 0c44e42f9caa58fefa504fa2d045658ba97263aa
                 # print(patch_image[batch, channel].shape)
                 #copy_patchimage = np.copy(patch.image[batch, channel])
                 #trans_patchimage = np.transpose(copy_patchimage, (2, 1, 0))
