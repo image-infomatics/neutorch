@@ -227,6 +227,7 @@ class TrainerBase(ABC):
 
     def post_processing(self, prediction: torch.Tensor):
         if isinstance(self.loss_module, BinomialCrossEntropyWithLogits):
+        #if isinstance(self.loss_module, MeanSquareErrorLoss): 
             return torch.sigmoid(prediction)
         else:
             return prediction

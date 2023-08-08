@@ -38,15 +38,15 @@ model:
 
 train:
   iter_start: 0
-  iter_stop: 100
-  class_rebalance: false
+  iter_stop: 100000
+  class_rebalance: True
   # batch size per GPU
   # The dataprovider should provide nGPU*batch_size batches!
   batch_size: 1
   output_dir: "./"
   patch_size: [128, 128, 128]
   learning_rate: 0.001
-  # training_interval: 2000
+  #training_interval: 2000
   #validation_interval: 4000 
   training_interval: 2
   validation_interval: 4

@@ -787,20 +787,22 @@ class SelfSupervisedSample(Sample):
     @cached_property
     def transform(self):
         return Compose([
-            NormalizeTo01(probability=1.),
-            AdjustContrast(),
-            AdjustBrightness(),
-            Gamma(),
-            OneOf([
-                Noise(),
-                GaussianBlur2D(),
-            ]),
-            RandomPixelDropping(), 
-            MaskBox(),
-            # MaskBox2D(), 
-            Rotate2D(),
-            Flip(),
-            # Transpose(),
+            #NormalizeTo01(probability=1.),
+            #AdjustContrast(),
+            #AdjustBrightness(),
+            #Gamma(),
+            #OneOf([
+                #Noise(),
+                #GaussianBlur2D(),
+            #]),
+            # RandomPixelDropping(), 
+            #MaskBox(),
+            #MaskBox2D(), 
+            #Rotate2D(),
+            #Flip(),
+            FlipAffMap(),
+            RotateAffMap(),
+            #Transpose(),
         ])
 
 
@@ -853,11 +855,12 @@ class NeuropilMaskSample(Sample):
                 GaussianBlur2D(),
             ]),
             MaskBox(),
-            # MaskBox2D(), 
-            # Perspective2D(),
-            # Rotate2D(probability=1.),
-            # DropSection(),
+            MaskBox2D(), 
+            Perspective2D(),
+            Rotate2D(probability=1.),
+            DropSection(),
             Flip(),
+            FlipAffMap(), 
             Transpose(),
             MissAlignment(),
             Label2AffinityMap(probability=1.),
