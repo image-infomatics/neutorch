@@ -9,6 +9,7 @@ def threshold(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
 
 
 def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
+    breakpoint() 
     if not torch.any(target):
         return None
 
@@ -32,7 +33,6 @@ def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: flo
 
     wpos = 1. / (2. * fpos)
     wneg = 1. / (2. * fneg)
-    #breakpoint()
     return (lpos * wpos + lneg * wneg).type(torch.float32)
 
 
@@ -47,7 +47,6 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
 
     def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor=None):
-    
         if mask is None:
             cost = loss.sum() #/ np.prod(loss.size())
         else:
@@ -57,6 +56,7 @@ class BinomialCrossEntropyWithLogits(nn.Module):
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
         loss = self.bce(pred, target)
         if mask is not None:
+            breakpoint() 
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
         cost = self._reduce_loss(loss, mask=mask)

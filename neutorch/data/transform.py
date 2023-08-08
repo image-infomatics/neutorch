@@ -448,6 +448,40 @@ class Flip(SpatialTransform):
         #breakpoint()
         return patch
 
+class FlipAffMap(SpatialTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    def __str__(self) -> str:
+        return 'FlipAffMap'
+    
+    def transform(self, patch: Patch):
+        axis_num = random.randint(1, 3)
+        axis = random.sample(range(3), axis_num)
+        axis5d = tuple(2+x for x in axis)
+
+        inAff = patch.image.array.copy()
+        one_minus_inAff = 1 - np.flip(inAff, axis=axis5d)
+        patch.image.array = np.maximum(inAff, one_minus_inAff)
+        return patch
+
+class RotateAffMap(SpatialTransform):
+    def __init__(self, probability: float = DEFAULT_PROBABILITY):
+        super().__init__(probability=probability)
+
+    def __str__(self) -> str:
+        return 'RotateAffMap'
+
+    def transform(self, patch: Patch):
+        axis = np.array([2, 3, 4])
+        axes5d  = np.random.choice(axis, size=2, replace=False)
+        rot_iter  = [1, 3]
+        k = np.random.choice(rot_iter)
+        
+        inAff = patch.image.array.copy()
+        one_minus_inAff = 1 - np.rot90(inAff, k=k, axes=(axes5d[0], axes5d[1]))
+        patch.image.array = np.maximum(inAff, one_minus_inAff)
+        return patch
 
 class Transpose(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
@@ -698,8 +732,9 @@ class Rotate2D(SpatialTransform):
         
         axis = np.array([2, 3, 4])
         axes5d  = np.random.choice(axis, size=2, replace=False)
-        k = np.random.randint(0, 4)
-
+        
+        rot_iter  = [0, 1, 3]
+        k = np.random.choice(rot_iter)
         
         patch.image.array = np.rot90(patch.image.array, k=k, axes=(axes5d[0], axes5d[1]))
         patch.label.array = np.rot90(patch.label.array, k=k, axes=(axes5d[0], axes5d[1]))
