@@ -49,7 +49,7 @@ class BinomialCrossEntropyWithLogits(nn.Module):
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
         loss = self.bce(pred, target)
 
-        if mask is not None:
+        if self.rebalance:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
 
@@ -88,7 +88,7 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
             alpha_t = self.alpha * target + (1. - self.alpha) * (1. - target)
             loss = alpha_t * loss
         
-        if mask is not None:
+        if self.rebalance:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
    
