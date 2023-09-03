@@ -2,14 +2,8 @@ import numpy as np
 import torch
 from torch import nn
 
-def threshold(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
-    breakpoint()
-    target = nn.Threshold(thresh, 1.).type(torch.float)
-    return target
-
-
-def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.):
-    breakpoint() 
+def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: float=0.5):
+    
     if not torch.any(target):
         return None
 
@@ -21,8 +15,6 @@ def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: flo
         bmsk = torch.ones_like(target, dtype=torch.uint8)
         nmsk = np.prod(bmsk.size())
     
-    # thresholds
-    breakpoint() 
     lpos = (torch.gt(target, thresh) * bmsk).type(torch.float)
     lneg = (torch.le(target, thresh) * bmsk).type(torch.float)
 
@@ -54,10 +46,10 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         return cost
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
+     
         loss = self.bce(pred, target)
-        if mask is not None:
-            breakpoint() 
-            rebalance_weight = gunpowder_balance(target, mask=mask)
+        if self.rebalance: 
+            rebalance_weight = gunpowder_balance(target, mask)
             loss *= rebalance_weight
         cost = self._reduce_loss(loss, mask=mask)
         return cost
@@ -80,9 +72,9 @@ class MeanSquareErrorLoss(nn.Module):
         return cost
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
-        loss = self.mse(pred, target)
 
-        if mask is not None:
+        loss = self.mse(pred, target)
+        if self.rebalance:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
 
