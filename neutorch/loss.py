@@ -54,6 +54,7 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         cost = self._reduce_loss(loss, mask=mask)
         return cost
 
+<<<<<<< HEAD
 class MeanSquareErrorLoss(nn.Module):
     """
     A version of MeanSquareLoss with the ability to mask out regions of output
@@ -74,6 +75,8 @@ class MeanSquareErrorLoss(nn.Module):
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
 
         loss = self.mse(pred, target)
+=======
+>>>>>>> main
         if self.rebalance:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
@@ -113,7 +116,7 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
             alpha_t = self.alpha * target + (1. - self.alpha) * (1. - target)
             loss = alpha_t * loss
         
-        if mask is not None:
+        if self.rebalance:
             rebalance_weight = gunpowder_balance(target, mask=mask)
             loss *= rebalance_weight
    
