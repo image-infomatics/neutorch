@@ -795,13 +795,22 @@ class SelfSupervisedSample(Sample):
                 #Noise(),
                 #GaussianBlur2D(),
             #]),
+<<<<<<< HEAD
             #RandomPixelDropping(), 
+=======
+            # RandomPixelDropping(), 
+>>>>>>> parent of 874d7d6 (changes prior to merging with main)
             #MaskBox(),
             #MaskBox2D(), 
             #Rotate2D(),
             #Flip(),
+<<<<<<< HEAD
             FlipAffMap(probability=1.),
             #RotateAffMap(probability=1.),
+=======
+            FlipAffMap(),
+            RotateAffMap(),
+>>>>>>> parent of 874d7d6 (changes prior to merging with main)
             #Transpose(),
         ])
 
