@@ -46,14 +46,10 @@ train:
   output_dir: "./"
   patch_size: [128, 128, 128]
   learning_rate: 0.001
-<<<<<<< HEAD
   training_interval: 2000
   validation_interval: 5000 
   #training_interval: 2
   #validation_interval: 4
-=======
-  #training_interval: 2000
-  #validation_interval: 4000 
-  training_interval: 2
-  validation_interval: 4
->>>>>>> parent of 874d7d6 (changes prior to merging with main)
+
+
+

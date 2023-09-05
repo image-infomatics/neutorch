@@ -795,22 +795,13 @@ class SelfSupervisedSample(Sample):
                 #Noise(),
                 #GaussianBlur2D(),
             #]),
-<<<<<<< HEAD
             #RandomPixelDropping(), 
-=======
-            # RandomPixelDropping(), 
->>>>>>> parent of 874d7d6 (changes prior to merging with main)
             #MaskBox(),
             #MaskBox2D(), 
             #Rotate2D(),
             #Flip(),
-<<<<<<< HEAD
             FlipAffMap(probability=1.),
             #RotateAffMap(probability=1.),
-=======
-            FlipAffMap(),
-            RotateAffMap(),
->>>>>>> parent of 874d7d6 (changes prior to merging with main)
             #Transpose(),
         ])
 
@@ -865,7 +856,7 @@ class NeuropilMaskSample(Sample):
             ]),
             MaskBox(),
             MaskBox2D(), 
-            Perspective2D(),
+            #Perspective2D(),
             Rotate2D(probability=1.),
             DropSection(),
             Flip(),
@@ -912,5 +903,3 @@ if __name__ == '__main__':
         label *= 255
         lbl = Image.fromarray(label).convert('L')
         lbl.save(os.path.join(OUT_DIR, f'{idx}_label.jpg'))
-
-    
