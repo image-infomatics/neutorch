@@ -803,6 +803,7 @@ class SelfSupervisedSample(Sample):
             FlipAffMap(probability=1.),
             #RotateAffMap(probability=1.),
             #Transpose(),
+            Label2AffinityMap,
         ])
 
 
