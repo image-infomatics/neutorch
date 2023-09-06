@@ -56,6 +56,10 @@ class Patch(object):
     def shape(self):
         return self.image.shape
 
+    @property
+    def ndim(self):
+        return self.image.ndim
+
     @cached_property
     def center(self):
         return Cartesian.from_collection(self.shape[-3:]) // 2
@@ -71,6 +75,8 @@ class Patch(object):
             return arr
         self.image.array = _normalize(self.image.array)
         self.label.array = _normalize(self.label.array)
+
+
 
 def collate_batch(batch):
     patch_list = []

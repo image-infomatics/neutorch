@@ -169,9 +169,14 @@ class DropSection(SpatialTransform):
     def transform(self, patch: Patch):
         z = random.randrange(1, patch.shape[-3])
         patch.image.array[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
+        patch.image.array = patch.image.array[..., :-1, :, :]
+        
         patch.label.array[..., z:-1, :, :] = patch.label[..., z+1:, :, :]
+        patch.label.array = patch.label.array[..., :-1, :, :]
+        
         if patch.has_mask:
             patch.mask.array[..., z:-1, :, :] = patch.mask[..., z+1:, :, :]
+            patch.mask.array = patch.mask.array[..., :-1, :, :]
         return patch
 
     @cached_property
@@ -233,15 +238,24 @@ class MaskBox(IntensityTransform):
         return patch
 
 class NormalizeTo01(IntensityTransform):
-    def __init__(self, probability: float = 1.):
+    def __init__(self, probability: float = 1., 
+            normalize_label: bool=False):
         super().__init__(probability=probability)
+        self.normalize_label = normalize_label
     
     def __str__(self) -> str:
         return 'NormalizeTo01'
 
     def transform(self, patch: Patch):
         if np.issubdtype(patch.image.dtype, np.uint8):
-            patch.image.array = patch.image.array.astype(np.float32) / 255.
+            patch.image.array = patch.image.array.astype(np.float32)
+            patch.image.array = patch.image.array / 255.
+
+        if self.normalize_label and np.issubdtype(
+                patch.label.dtype, np.uint8) :
+            patch.label.array = patch.label.array.astype(np.float32)
+            patch.label.array = patch.label.array / 255.
+
         return patch
 
 class AdjustBrightness(IntensityTransform):

@@ -1,9 +1,10 @@
 from __future__ import annotations
 import os
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod 
 import random
 from typing import List, Union
 from functools import cached_property
+from copy import deepcopy
 
 import numpy as np
 from yacs.config import CfgNode
@@ -12,8 +13,8 @@ from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian, BoundingB
 from chunkflow.chunk import Chunk
 from chunkflow.volume import load_chunk_or_volume
 from chunkflow.lib.synapses import Synapses
-from chunkflow.volume import PrecomputedVolume, AbstractVolume
-
+from chunkflow.volume import PrecomputedVolume, AbstractVolume, \
+    get_candidate_block_bounding_boxes_with_different_voxel_size
 
 from neutorch.data.patch import Patch
 # from .patch_bounding_box_generator import PatchBoundingBoxGeneratorInChunk, PatchBoundingBoxGeneratorInsideMask
@@ -24,7 +25,8 @@ DEFAULT_NUM_CLASSES = 1
 
 
 class AbstractSample(ABC):
-    def __init__(self, output_patch_size: Cartesian, is_train: bool = True):
+    def __init__(self, output_patch_size: Cartesian, 
+            is_train: bool = True):
 
         if isinstance(output_patch_size, int):
             output_patch_size = (output_patch_size,) * 3
@@ -73,7 +75,7 @@ class AbstractSample(ABC):
             MaskBox(),
             # Perspective2D(),
             # RotateScale(probability=1.),
-            DropSection(probability=1.),
+            DropSection(probability=0.5),
             Flip(),
             Transpose(),
             # MissAlignment(),
@@ -84,7 +86,7 @@ class AbstractSample(ABC):
         return self.output_patch_size + \
             self.transform.shrink_size[:3] + \
             self.transform.shrink_size[-3:]
-
+    
 # class BlockAlignedVolumeSample(AbstractSample):
 #     def __init__(self, 
 #             images: List[AbstractVolume],
@@ -143,7 +145,8 @@ class Sample(AbstractSample):
                 direction is defined separately.
             is_train (bool): train mode or validation mode. We'll skip the transform in validation mode. 
         """
-        super().__init__(output_patch_size=output_patch_size)
+        super().__init__(output_patch_size=output_patch_size, 
+            is_train=is_train)
         assert len(images) > 0
         # assert images[0].ndim >= 3
         # assert label.ndim >= 3
@@ -163,8 +166,9 @@ class Sample(AbstractSample):
         #     assert ls >= ps, f'output patch size: {self.output_patch_size}, label shape: {label.shape}'
 
         if forbbiden_distance_to_boundary is None:
-            forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
-        assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
+            forbbiden_distance_to_boundary = self.patch_size_before_transform // 2
+        assert len(forbbiden_distance_to_boundary) == 3 or len(\
+            forbbiden_distance_to_boundary)==6
 
         for idx in range(3):
             # the center of random patch should not be too close to boundary
@@ -188,6 +192,26 @@ class Sample(AbstractSample):
     #     with open(json_file, 'r') as jf:
     #         data = json.load(jf)
     #     return cls.from_dict(data, patch_size=patch_size)
+
+    def load_images(image_paths: List[str]):
+        images = []
+        for image_path in image_paths:
+            image_vol = load_chunk_or_volume(image_path)
+            images.append(image_vol)
+        return images 
+    
+    @classmethod
+    def from_config(cls, cfg: CfgNode, output_patch_size: Cartesian):
+        images = cls.load_images(cfg.images)
+        if 'label' in cfg:
+            if cfg.label == 'self':
+                label = None
+            else:
+                label = load_chunk_or_volume(cfg.label)
+        else:
+            label = None
+
+        return cls(images, label, output_patch_size)
 
     def _expand_to_5d(self, array: np.ndarray):
         if array.ndim == 3:
@@ -220,7 +244,10 @@ class Sample(AbstractSample):
         image = random.choice(self.images)
         bbox += image.bbox.start
         image_patch = image.cutout(bbox)
-        label_patch = self.label.cutout(bbox)
+        if self.label is None:
+            label_patch = deepcopy(image_patch)
+        else:
+            label_patch = self.label.cutout(bbox)
         
         if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
             print(f'center: {center}, start: {start}, bbox: {bbox}')
@@ -234,21 +261,25 @@ class Sample(AbstractSample):
         image_patch.array = self._expand_to_5d(image_patch.array).copy()
         label_patch.array = self._expand_to_5d(label_patch.array).copy()
 
+        assert image_patch.ndim == 5
+        assert label_patch.ndim == 5
+
         return Patch(image_patch, label_patch)
     
     @property
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
 
+        # print(f'computed patch size before transform: {self.patch_size_before_transform}')
         # print(f'transforms: {self.transform}') 
         # print(f'patch size before transform: {patch.shape}')
         # skip the transform in validation mode
         if self.is_train:
             self.transform(patch)
         # print(f'patch size after transform: {patch.shape}')
-        # breakpoint()
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
+        assert patch.ndim == 5
         return patch
     
     @cached_property
@@ -271,8 +302,8 @@ class SampleWithMask(Sample):
             output_patch_size: Cartesian,
             mask: Chunk | PrecomputedVolume, 
             forbbiden_distance_to_boundary: tuple = None,
-            patches_in_block: int = 8,
-            nonzero_bounding_boxes_path: str = './nonzero_bounding_boxes.npy',
+            patches_in_block: int = 32,
+            candidate_bounding_boxes_path: str = './candidate_bounding_boxes.npy',
             ) -> None:
         """Image sample with ground truth annotations
 
@@ -290,7 +321,7 @@ class SampleWithMask(Sample):
                 if this is a tuple of six integers, the positive and negative 
                 direction is defined separately. 
             patches_in_block (int): sample a number of patches in a block.
-            nonzero_bounding_boxes_path (str): 
+            candidate_bounding_boxes_path (str): 
         """
         super().__init__(
             images, label, output_patch_size=output_patch_size, 
@@ -301,34 +332,31 @@ class SampleWithMask(Sample):
         self.patches_in_block = patches_in_block
         self.image_block = None
         self.label_block = None
-        self.nonzero_bounding_boxes_path = nonzero_bounding_boxes_path
+        self.candidate_bounding_boxes_path = candidate_bounding_boxes_path
 
     @classmethod
     def from_config(cls, config: CfgNode, 
             output_patch_size: Cartesian) -> SampleWithMask:
-        images = []
-        for image_path in config.images:
-            image_vol = PrecomputedVolume.from_cloudvolume_path(image_path)
-            images.append(image_vol)
         
-        label = PrecomputedVolume.from_cloudvolume_path(config.label)
-        mask = PrecomputedVolume.from_cloudvolume_path(config.mask)
-        return cls(images, label, output_patch_size, mask)
+        images = cls.load_images(config.images)
+        label_vol = load_chunk_or_volume(config.label)
+        mask_vol = load_chunk_or_volume(config.mask)
+        return cls(images, label_vol, output_patch_size, mask_vol)
 
     @cached_property
     def voxel_size_factors(self) -> Cartesian:
         return self.mask.voxel_size // self.images[0].voxel_size 
 
     @cached_property
-    def nonzero_block_bounding_boxes(self) -> BoundingBoxes:
-        if os.path.exists(self.nonzero_bounding_boxes_path):
-            print(f'loading existing nonzero bounding boxes file: {self.nonzero_bounding_boxes_path}')
-            bboxes = BoundingBoxes.from_file(self.nonzero_bounding_boxes_path)
+    def candidate_block_bounding_boxes(self) -> BoundingBoxes:
+        if os.path.exists(self.candidate_bounding_boxes_path):
+            print(f'loading existing nonzero bounding boxes file: {self.candidate_bounding_boxes_path}')
+            bboxes = BoundingBoxes.from_file(self.candidate_bounding_boxes_path)
         else:
-            bboxes = self.mask.get_nonzero_block_bounding_boxes_with_different_voxel_size(
-                self.label.voxel_size
+            bboxes = get_candidate_block_bounding_boxes_with_different_voxel_size(
+                self.mask, self.label.voxel_size, self.label.block_size
             )
-            bboxes.to_file(self.nonzero_bounding_boxes_path)
+            bboxes.to_file(self.candidate_bounding_boxes_path)
         return bboxes 
 
     @property
@@ -338,7 +366,7 @@ class SampleWithMask(Sample):
         # we should use the image or label mip level to get the block bounding box
         # list in the highest mip level to increase the number of available blocks
         # with all nonzero mask!
-        image_block_bbox = random.choice(self.nonzero_block_bounding_boxes)
+        image_block_bbox = random.choice(self.candidate_block_bounding_boxes)
         image_block = image_volume.cutout(image_block_bbox)
         label_block = self.label.cutout(image_block_bbox)
         assert image_block.shape[-3:] == label_block.shape[-3:]
@@ -360,13 +388,15 @@ class SampleWithMask(Sample):
 
     @cached_property
     def sampling_weight(self) -> int:
-        block_num = len(self.nonzero_block_bounding_boxes)
+        block_num = len(self.candidate_block_bounding_boxes)
         block_size = self.label.block_size * self.voxel_size_factors
         return np.product(block_size) * block_num
 
     def __len__(self):
-        patch_num = len(self.nonzero_block_bounding_boxes) * \
+        # return int(1e100)
+        patch_num = len(self.candidate_block_bounding_boxes) * \
             np.prod(self.label.block_size - self.patch_size_before_transform + 1)
+        print(f'total patch number: {patch_num}')
         return patch_num
 
 
@@ -718,8 +748,8 @@ class AffinityMapSample(SemanticSample):
 
 
 class AffinityMapSampleWithMask(SampleWithMask):
-    def __init__(self, images: List[PrecomputedVolume], label: Union[Chunk, PrecomputedVolume], output_patch_size: Cartesian, mask: Chunk | PrecomputedVolume, forbbiden_distance_to_boundary: tuple = None, patches_in_block: int = 8, nonzero_bounding_boxes_path: str = './nonzero_bounding_boxes.npy') -> None:
-        super().__init__(images, label, output_patch_size, mask, forbbiden_distance_to_boundary, patches_in_block, nonzero_bounding_boxes_path)
+    def __init__(self, images: List[PrecomputedVolume], label: Union[Chunk, PrecomputedVolume], output_patch_size: Cartesian, mask: Chunk | PrecomputedVolume, forbbiden_distance_to_boundary: tuple = None, patches_in_block: int = 8, candidate_bounding_boxes_path: str = './candidate_bounding_boxes.npy') -> None:
+        super().__init__(images, label, output_patch_size, mask, forbbiden_distance_to_boundary, patches_in_block, candidate_bounding_boxes_path)
     
     @cached_property
     def transform(self):
@@ -742,11 +772,12 @@ class AffinityMapSampleWithMask(SampleWithMask):
             Label2AffinityMap(probability=1.),
         ])
 
-class SelfSupervisedSample(Sample):
+class SelfSupervisedSample(SampleWithMask):
     def __init__(self, 
             images: List[Chunk], 
             label: Union[np.ndarray, Chunk], 
-            output_patch_size: Cartesian, 
+            output_patch_size: Cartesian,
+            normalize: bool = False, 
             forbbiden_distance_to_boundary: tuple = None) -> None:
         super().__init__(images, label, output_patch_size, forbbiden_distance_to_boundary)
 

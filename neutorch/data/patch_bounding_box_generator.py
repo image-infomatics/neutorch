@@ -118,7 +118,7 @@ class PatchBoundingBoxGeneratorInsideMask(PatchBoundingBoxGeneratorInChunk):
         return self.mask.voxel_size // self.patch_voxel_size
 
     @cached_property
-    def nonzero_block_bounding_boxes(self) -> List[BoundingBox]:
+    def candidate_block_bounding_boxes(self) -> List[BoundingBox]:
         """find the image bounding boxes that the corresponding mask chunk is all positive.
         Note that the mask volume voxel size might not be the same with the image volume.
         It is normally downsampled recursivly by 2x2 or 2x2x2.
@@ -144,7 +144,7 @@ class PatchBoundingBoxGeneratorInsideMask(PatchBoundingBoxGeneratorInChunk):
     @property 
     def random_patch_bbox(self):
         # select a random block
-        bbox = choice(self.nonzero_block_bounding_boxes)
+        bbox = choice(self.candidate_block_bounding_boxes)
         range_start = bbox.start + Cartesian.from_collection(
             self.forbbiden_distance_to_boundary[:3])
         range_stop = bbox.stop - self.patch_size - \

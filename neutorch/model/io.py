@@ -27,10 +27,10 @@ def save_chkpt(model: nn.Module, fpath: str, chkpt_num: int, optimizer):
     torch.save(state, fname)
 
 def load_chkpt(model: nn.Module, fname: str):
-    model = torch.nn.DataParallel(model, device_ids=[0])
-    assert torch.cuda.is_available()
-    device = torch.device('cuda:0')
-    checkpoint = torch.load(fname, map_location=device) 
+    # model = torch.nn.DataParallel(model, device_ids=[0])
+    # assert torch.cuda.is_available()
+    # device = torch.device('cuda:0')
+    checkpoint = torch.load(fname, map_location='cpu') 
 
     model.load_state_dict(checkpoint['state_dict'])
     return model

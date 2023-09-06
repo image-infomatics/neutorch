@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 import torch
 from torch import nn
 import numpy as np
@@ -29,15 +31,10 @@ def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: flo
     return (lpos * wpos + lneg * wneg).type(torch.float32)
 
 
-class BinomialCrossEntropyWithLogits(nn.Module):
-    """
-    A version of BCE w/ logits with the ability to mask
-    out regions of output.
-    """
-    def __init__(self, rebalance: bool = True):
+class AbstractLoss(nn.Module, ABC):
+    def __init__(self, rebalance: bool = False) -> None:
         super().__init__()
         self.rebalance = rebalance
-        self.bce = nn.BCEWithLogitsLoss(reduction="none")
 
     def _reduce_loss(self, loss: torch.Tensor, mask: torch.Tensor=None):
         if mask is None:
@@ -45,6 +42,21 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         else:
             cost = (loss * mask).sum() #/ mask.sum()
         return cost
+
+    @abstractmethod
+    def forward(self):
+        pass
+
+
+class BinomialCrossEntropyWithLogits(AbstractLoss):
+    """
+    A version of BCE w/ logits with the ability to mask
+    out regions of output.
+    """
+    def __init__(self, rebalance: bool = False):
+        super().__init__(rebalance=rebalance)
+        self.bce = nn.BCEWithLogitsLoss(reduction="none")
+
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask=None):
         loss = self.bce(pred, target)
@@ -57,8 +69,8 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         return cost
 
 
-class FocalLoss(BinomialCrossEntropyWithLogits):
-    def __init__(self, alpha: float = 0.25, gamma: float=2., rebalance: bool=True):
+class FocalLoss(BinomialCrossEntropyWithLogits, AbstractLoss):
+    def __init__(self, alpha: float = 0.25, gamma: float=2., rebalance: bool=False):
         """reweight the loss to focus more on the inaccurate rear spots
 
         Args:
@@ -94,6 +106,23 @@ class FocalLoss(BinomialCrossEntropyWithLogits):
    
         cost = self._reduce_loss(loss, mask=mask)
         return cost
+
+
+class MSELoss(AbstractLoss):
+    def __init__(self, rebalance: bool=False) -> None:
+        super().__init__(rebalance=rebalance)
+        self.loss_func = nn.MSELoss()
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor=None):
+        loss = self.loss_func(pred, target)
+
+        if self.rebalance:
+            rebalance_weight = gunpowder_balance(target, mask=mask)
+            loss *= rebalance_weight
+
+        cost = self._reduce_loss(loss, mask=mask)
+        return cost
+
 
 
 

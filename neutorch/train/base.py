@@ -16,8 +16,10 @@ from neutorch.data.patch import collate_batch
 from neutorch.loss import BinomialCrossEntropyWithLogits
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
 from neutorch.model.IsoRSUNet import Model
+from neutorch.data.dataset import worker_init_fn
 
 def setup():
+    # options: gloo, mpi, nccl
     dist.init_process_group('nccl')
 
 def cleanup():
@@ -95,18 +97,22 @@ class TrainerBase(ABC):
             fname = os.path.join(self.cfg.train.output_dir, 
                 f'model_{self.cfg.train.iter_start}.chkpt')
 
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+
         if os.path.exists(fname) and self.local_rank==0:
             model = load_chkpt(model, fname)
-        
+
+        model.to('cuda')
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping
         if self.num_gpus > 1:
             print(f'use {self.num_gpus} gpus!')
             model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[self.local_rank],
+                model, 
+                device_ids=[self.local_rank],
                 output_device=self.local_rank)
        
-        model.to('cuda')
+        model = model.to('cuda')
 
         return model
 
@@ -135,21 +141,34 @@ class TrainerBase(ABC):
     @cached_property
     def LOCAL_RANK(self):
         return int(os.getenv('LOCAL_RANK', -1))
+    
+    @cached_property
+    def is_main_process(self):
+        return self.LOCAL_RANK <= 0
        
     @cached_property
     def training_data_loader(self):
         sampler = torch.utils.data.distributed.DistributedSampler(
-            self.training_dataset
+            self.training_dataset,
+            shuffle = False,
         )
+        if self.cfg.system.cpus > 0:
+            #prefetch_factor = self.cfg.system.cpus
+            prefetch_factor = None
+            multiprocessing_context='spawn'
+        else:
+            prefetch_factor = None
+            multiprocessing_context=None
+
         dataloader = torch.utils.data.DataLoader(
             self.training_dataset,
             shuffle=False, 
             num_workers = self.cfg.system.cpus,
-            prefetch_factor = self.cfg.system.cpus,
+            prefetch_factor = prefetch_factor,
             collate_fn=collate_batch,
-            # worker_init_fn=worker_init_fn,
+            worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
-            multiprocessing_context='spawn',
+            multiprocessing_context=multiprocessing_context,
             # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
             sampler=sampler
         )
@@ -159,7 +178,8 @@ class TrainerBase(ABC):
     @cached_property
     def validation_data_loader(self):
         sampler = torch.utils.data.distributed.DistributedSampler(
-            self.validation_dataset
+            self.validation_dataset,
+            shuffle = False,
         )
         dataloader = torch.utils.data.DataLoader(
             self.validation_dataset,
@@ -196,13 +216,16 @@ class TrainerBase(ABC):
         writer = SummaryWriter(log_dir=self.cfg.train.output_dir)
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
-        for image, label in self.training_data_loader:
+
+        for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
+            image, label = next(iter(self.training_data_loader))
+        # for image, label in self.training_data_loader:
             target = self.label_to_target(label)
 
-            iter_idx += 1
-            if iter_idx> self.cfg.train.iter_stop:
-                print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
-                return
+            # iter_idx += 1
+            # if iter_idx> self.cfg.train.iter_stop:
+            #     print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
+            #     return
                 
 
             ping = time()
@@ -218,7 +241,7 @@ class TrainerBase(ABC):
             accumulated_loss += loss.tolist()
             print(f'iteration {iter_idx} takes {round(time()-ping, 3)} seconds.')
 
-            if iter_idx % self.cfg.train.training_interval == 0 and iter_idx > 0:
+            if iter_idx % self.cfg.train.training_interval == 0 and self.is_main_process and iter_idx > 0:
                 per_voxel_loss = accumulated_loss / \
                     self.cfg.train.training_interval / \
                     self.voxel_num
@@ -231,21 +254,21 @@ class TrainerBase(ABC):
                 log_tensor(writer, 'train/prediction', predict.detach(), 'image', iter_idx)
                 log_tensor(writer, 'train/target', target, 'image', iter_idx)
 
-            if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
+            if iter_idx % self.cfg.train.validation_interval == 0 and self.is_main_process and \
+                    iter_idx > 0:
 
-                if self.LOCAL_RANK <= 0:
-                    # only save model on master
-                    fname = os.path.join(self.cfg.train.output_dir, \
-                        f'model_{iter_idx}.chkpt')
-                    if iter_idx >= self.cfg.train.start_saving:
-                        print(f'save model to {fname}')
-                        save_chkpt(
-                            self.model, self.cfg.train.output_dir, \
-                            iter_idx, self.optimizer
-                        )
+                # only save model on master
+                fname = os.path.join(self.cfg.train.output_dir, \
+                    f'model_{iter_idx}.chkpt')
+                if iter_idx >= self.cfg.train.start_saving:
+                    print(f'save model to {fname}')
+                    save_chkpt(
+                        self.model, self.cfg.train.output_dir, \
+                        iter_idx, self.optimizer
+                    )
 
                 print('evaluate prediction: ')
-                validation_image, validation_label = next(self.validation_data_iter)
+                validation_image, validation_label = next(iter(self.validation_data_iter))
                 validation_target = self.label_to_target(validation_label)
 
                 with torch.no_grad():
@@ -260,3 +283,4 @@ class TrainerBase(ABC):
                     log_tensor(writer, 'evaluate/target', validation_target, 'image', iter_idx)
 
         writer.close()
+        cleanup()

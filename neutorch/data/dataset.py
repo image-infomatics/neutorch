@@ -38,20 +38,20 @@ def load_cfg(cfg_file: str, freeze: bool = True):
         cfg.freeze()
     return cfg
 
-# def worker_init_fn(worker_id: int):
-#     worker_info = torch.utils.data.get_worker_info()
+def worker_init_fn(worker_id: int):
+    worker_info = torch.utils.data.get_worker_info()
     
-#     # the dataset copy in this worker process
-#     dataset = worker_info.dataset
-#     overall_start = 0
-#     overall_end = dataset.sample_num
+    # the dataset copy in this worker process
+    dataset = worker_info.dataset
+    overall_start = 0
+    overall_end = dataset.sample_num
 
-#     # configure the dataset to only process the split workload
-#     per_worker = int(math.ceil(
-#         (overall_end - overall_start) / float(worker_info.num_workers)))
-#     worker_id = worker_info.id
-#     dataset.start = overall_start + worker_id * per_worker
-#     dataset.end = min(dataset.start + per_worker, overall_end)
+    # configure the dataset to only process the split workload
+    per_worker = int(math.ceil(
+        (overall_end - overall_start) / float(worker_info.num_workers)))
+    worker_id = worker_info.id
+    dataset.start = overall_start + worker_id * per_worker
+    dataset.end = min(dataset.start + per_worker, overall_end)
 
 def path_to_dataset_name(path: str, dataset_names: list):
     for dataset_name in dataset_names:
@@ -136,6 +136,8 @@ class DatasetBase(torch.utils.data.Dataset):
         image_chunk, label_chunk = self.random_patch
         image = to_tensor(image_chunk.array)
         label = to_tensor(label_chunk.array)
+
+        assert image.ndim == 5
 
         return image, label
 
@@ -247,13 +249,13 @@ class OrganelleDataset(SemanticDataset):
 
         return image, target
 
-class AffinityMapVolumeWithMask(DatasetBase):
+class VolumeWithMask(DatasetBase):
     def __init__(self, samples: List[AbstractSample]):
         super().__init__(samples)
 
     @classmethod
     def from_config(cls, cfg: CfgNode, mode: str = 'training', **kwargs):
-        """construct affinity map volume with mask dataset
+        """construct volume with mask dataset
 
         Args:
             cfg (CfgNode): the configuration node
@@ -264,7 +266,7 @@ class AffinityMapVolumeWithMask(DatasetBase):
         
         sample_names = cfg.dataset[mode]
 
-        iter_start, iter_stop = get_iter_range(sample_names)
+        iter_start, iter_stop = get_iter_range(len(sample_names))
 
         samples = []
         for sample_name in sample_names[iter_start : iter_stop]:
@@ -283,7 +285,9 @@ class AffinityMapVolumeWithMask(DatasetBase):
         # return self.sample_num * cfg.system.gpus * cfg.train.batch_size * 16
         # our patches are randomly sampled from chunk or volume and is close to unlimited.
         # return a big enough number to make distributed sampler work
-        return 1024
+        return 10240
+        # return int(1e10)
+        # return 10
 
 class AffinityMapDataset(DatasetBase):
     def __init__(self, samples: list):
@@ -352,15 +356,56 @@ class BoundaryAugmentationDataset(DatasetBase):
 if __name__ == '__main__':
 
     from yacs.config import CfgNode
+    from neutorch.data.patch import collate_batch
+    batch_size = 1
+    patch_num = 0
 
-    cfg_file = '/mnt/home/jwu/wasp/jwu/15_rna_granule_net/11/config.yaml'
+    # cfg_file = '/mnt/home/jwu/wasp/jwu/15_rna_granule_net/11/config.yaml'
+    cfg_file = '/mnt/ceph/users/jwu/31_organelle/09_susumu_image/whole_brain_image.yaml'
     with open(cfg_file) as file:
         cfg = CfgNode.load_cfg(file)
     cfg.freeze()
 
-    sd = BoundaryAugmentationDataset(
-        path_list=['/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/rna_v1.h5'],
-        sample_name_to_image_versions=cfg.dataset.sample_name_to_image_versions,
-        patch_size=Cartesian(128, 128, 128),
+    from neutorch.train.base import setup
+    setup()
+
+    training_dataset = VolumeWithMask.from_config(cfg, mode='training')
+
+
+    sampler = torch.utils.data.distributed.DistributedSampler(
+        training_dataset,
+        shuffle=False,
     )
-    
+    if cfg.system.cpus > 0:
+        #prefetch_factor = cfg.system.cpus
+        prefetch_factor = None
+        multiprocessing_context='spawn'
+    else:
+        prefetch_factor = None
+        multiprocessing_context=None
+
+
+    dataloader = torch.utils.data.DataLoader(
+        training_dataset,
+        shuffle=False, 
+        num_workers = cfg.system.cpus,
+        prefetch_factor = prefetch_factor,
+        collate_fn=collate_batch,
+        worker_init_fn=worker_init_fn,
+        batch_size=batch_size,
+        multiprocessing_context=multiprocessing_context,
+        # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
+        # sampler=sampler
+    )
+
+    # from tqdm import tqdm
+    # for idx in tqdm(range(1000)):
+    #     image, label = training_dataset.random_patch
+
+    patch_idx = 0
+    while True:
+        image, label = next(iter(dataloader))
+    # for image, label in dataloader:
+        patch_idx += 1
+        print(f'patch {patch_idx} with size {image.shape} and {label.shape}')
+        # breakpoint()
