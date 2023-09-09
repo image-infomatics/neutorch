@@ -242,7 +242,7 @@ class Sample(AbstractSample):
     @property
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
-
+        breakpoint()
         print(f'transforms: {self.transform}') 
         print(f'patch size before transform: {patch.shape}')
         # print(f'transforms: {self.transform}') 
@@ -800,10 +800,10 @@ class SelfSupervisedSample(Sample):
             #MaskBox2D(), 
             #Rotate2D(),
             #Flip(),
-            FlipAffMap(probability=1.),
+            #FlipAffMap(probability=1.),
             #RotateAffMap(probability=1.),
             #Transpose(),
-            Label2AffinityMap,
+            Label2AffinityMap(),
         ])
 
 
@@ -878,7 +878,7 @@ if __name__ == '__main__':
     PATCH_NUM = 100
     DEFAULT_PATCH_SIZE=Cartesian(64, 64, 64)
     OUT_DIR = os.path.expanduser('~/dropbox/patches/')
-    cfg = load_cfg('./boundary_augmentation.yaml')
+    cfg = load_cfg('./seg_affs_baug.yaml')
 
     sample = SemanticSample.from_explicit_dict(
         cfg.dataset.validation.human, 

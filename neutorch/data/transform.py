@@ -13,10 +13,10 @@ from skimage.util import random_noise
 
 from .patch import Patch
 
-try:
-    from reneu.lib.segmentation import seg_to_affs, remove_contact_xy
-except ImportError:
-    pass
+#try:
+from reneu.lib.segmentation import seg_to_affs, remove_contact_xy
+#except ImportError:
+    #pass
 # from copy import deepcopy
 
 
@@ -25,7 +25,6 @@ except ImportError:
 DEFAULT_PROBABILITY = .5
 DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 # DEFAULT_SHRINK_SIZE = None
-
 
 class AbstractTransform(ABC):
     def __init__(self, 
@@ -837,14 +836,17 @@ class Label2AffinityMap(SpatialTransform):
 
     def transform(self, patch: Patch):
         """transform the label to affinity map."""
-        assert patch.label.shape[0] == 1
-        assert patch.label.shape[1] == 1
+         
+        assert patch.label.shape[0] == 1 
+        #assert patch.label.shape[1] == 1 
         assert patch.label.ndim == 5
+        
         seg = patch.label.array[0,0,...]
         seg = seg.astype(np.uint64)
         remove_contact_xy(seg)
         seg = seg.astype(np.uint64)
         affs_ref = seg_to_affs(seg)
+        #breakpoint() 
         patch.label.array =  np.expand_dims(affs_ref, axis=0)
         patch.label.voxel_offset += Cartesian(1,1,1)
         # print(f'patch shape after Label2AffinityMap: {patch.shape}')
