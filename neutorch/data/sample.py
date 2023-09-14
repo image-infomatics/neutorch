@@ -16,6 +16,7 @@ from chunkflow.lib.synapses import Synapses
 from chunkflow.volume import PrecomputedVolume, AbstractVolume, \
     get_candidate_block_bounding_boxes_with_different_voxel_size
 
+from .patch import expand_to_4d
 from neutorch.data.patch import Patch
 # from .patch_bounding_box_generator import PatchBoundingBoxGeneratorInChunk, PatchBoundingBoxGeneratorInsideMask
 from neutorch.data.transform import *
@@ -213,16 +214,6 @@ class Sample(AbstractSample):
 
         return cls(images, label, output_patch_size)
 
-    def _expand_to_5d(self, array: np.ndarray):
-        if array.ndim == 3:
-            return np.expand_dims(array, axis=(0, 1))
-        elif array.ndim == 4:
-            return np.expand_dims(array, axis=0)
-        elif array.ndim == 5:
-            return array
-        else:
-            raise ValueError('only support 3 to 5 dimensional array.')
-   
     @property
     def random_patch_center(self):
         center_start = self.center_start
@@ -258,11 +249,11 @@ class Sample(AbstractSample):
             f'image patch shape: {image_patch.shape}, patch size before transform: {self.patch_size_before_transform}'
         # if we do not copy here, the augmentation will change our 
         # image and label sample!
-        image_patch.array = self._expand_to_5d(image_patch.array).copy()
-        label_patch.array = self._expand_to_5d(label_patch.array).copy()
+        image_patch.array = expand_to_4d(image_patch.array).copy()
+        label_patch.array = expand_to_4d(label_patch.array).copy()
 
-        assert image_patch.ndim == 5
-        assert label_patch.ndim == 5
+        assert image_patch.ndim == 4
+        assert label_patch.ndim == 4
 
         return Patch(image_patch, label_patch)
     
@@ -279,7 +270,7 @@ class Sample(AbstractSample):
         # print(f'patch size after transform: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
-        assert patch.ndim == 5
+        assert patch.ndim == 4
         return patch
     
     @cached_property

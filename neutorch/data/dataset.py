@@ -66,8 +66,8 @@ def to_tensor(arr):
         elif np.issubdtype(arr.dtype, np.uint64):
             arr = arr.astype(np.int64)
         arr = torch.tensor(arr)
-    if torch.cuda.is_available():
-        arr = arr.cuda()
+    # if torch.cuda.is_available():
+    #     arr = arr.cuda()
     return arr
 
 
@@ -137,7 +137,7 @@ class DatasetBase(torch.utils.data.Dataset):
         image = to_tensor(image_chunk.array)
         label = to_tensor(label_chunk.array)
 
-        assert image.ndim == 5
+        assert image.ndim == 4
 
         return image, label
 
@@ -238,10 +238,6 @@ class OrganelleDataset(SemanticDataset):
     def __next__(self):
         # get numpy arrays of image and label
         image, label = self.random_patch
-        # if label.ndim == 5:
-        #     # the CrossEntropyLoss do not require channel axis
-        #     label = np.squeeze(label, axis=1)
-        
         # transform to PyTorch Tensor
         # transfer to device, e.g. GPU, automatically.
         image = to_tensor(image)
