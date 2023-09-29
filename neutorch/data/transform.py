@@ -347,7 +347,8 @@ class Gamma(IntensityTransform):
     def transform(self, patch: Patch):
         # gamma = random.random() * 2. - 1.
         gamma = random.uniform(-1., 1.)
-        patch.image **= 2.** gamma
+        #patch.image **= 2.** gamma
+        patch.image = np.power(patch.image, 2.** gamma, out=patch.image, casting="unsafe") 
         return patch
 
 class GaussianBlur2D(IntensityTransform):

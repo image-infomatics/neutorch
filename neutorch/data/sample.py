@@ -888,6 +888,7 @@ if __name__ == '__main__':
     )
     
     for idx in tqdm(range(PATCH_NUM)):
+        
         patch = sample.random_patch
         #patch = Label2AffinityMap(patch) 
         image = patch.image
