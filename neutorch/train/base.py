@@ -250,6 +250,7 @@ class TrainerBase(ABC):
             # image.to(self.device)
             # self.model.to(self.device)
             #            predict = self.model(image)
+            #breakpoint() 
             predict = self.model(image)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()

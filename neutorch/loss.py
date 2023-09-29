@@ -25,6 +25,7 @@ def gunpowder_balance(target: torch.Tensor, mask: torch.Tensor=None, thresh: flo
 
     wpos = 1. / (2. * fpos)
     wneg = 1. / (2. * fneg)
+    #breakpoint()  
     return (lpos * wpos + lneg * wneg).type(torch.float32)
 
 
@@ -50,7 +51,9 @@ class BinomialCrossEntropyWithLogits(nn.Module):
         loss = self.bce(pred, target)
         if self.rebalance: 
             rebalance_weight = gunpowder_balance(target, mask)
-            loss *= rebalance_weight
+            #breakpoint() 
+            #loss *= rebalance_weight
+            #breakpoint()  
         cost = self._reduce_loss(loss, mask=mask)
         return cost
 

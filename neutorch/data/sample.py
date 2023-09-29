@@ -77,6 +77,7 @@ class AbstractSample(ABC):
             Flip(),
             Transpose(),
             # MissAlignment(),
+            Label2AffinityMap(), 
         ])
 
     @cached_property
@@ -93,7 +94,7 @@ class AbstractSample(ABC):
 #             forbbiden_distance_to_boundary: tuple = None,
 #         ):
 #         """sample patches inside blocks of volume
-#         This will reduce the cost of reading and decompression by avoiding patches cross blocks.
+#         This will reduce the cost of reading and decompression by avoiding patches cross blocks
 
 #         Args:
 #             images (List[AbstractVolume]): image volumes.
@@ -227,7 +228,7 @@ class Sample(AbstractSample):
         
         if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
             print(f'center: {center}, start: {start}, bbox: {bbox}')
-            breakpoint()
+        
         # print(f'start: {(bz, by, bx)}, patch size: {self.output_patch_size}')
         assert image_patch.shape[-1] == image_patch.shape[-2], f'image patch shape: {image_patch.shape}'
         assert image_patch.shape[-3:] == self.patch_size_before_transform.tuple, \
@@ -242,7 +243,7 @@ class Sample(AbstractSample):
     @property
     def random_patch(self):
         patch = self.patch_from_center(self.random_patch_center)
-        breakpoint()
+        #breakpoint() 
         print(f'transforms: {self.transform}') 
         print(f'patch size before transform: {patch.shape}')
         # print(f'transforms: {self.transform}') 
@@ -250,9 +251,9 @@ class Sample(AbstractSample):
         # skip the transform in validation mode
         if self.is_train:
             self.transform(patch)
-        # print(f'patch size after transform: {patch.shape}')
-        # breakpoint()
-        self.transform(patch)
+        #print(f'patch size after transform: {patch.shape}')
+        #breakpoint() 
+        #self.transform(patch)
         print(f'patch size after transform: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'
@@ -594,6 +595,7 @@ class SemanticSample(Sample):
             Flip(),
             Transpose(),
             # MissAlignment(),
+            Label2AffinityMap(),  
         ])
 
 
@@ -783,27 +785,27 @@ class SelfSupervisedSample(Sample):
         image = load_chunk_or_volume(image_paths[0], **kwargs)
             # print(f'image path: {image_path} with size {image.shape}')
         return cls([image], image, output_patch_size)
-
+    
     @cached_property
     def transform(self):
         return Compose([
-            #NormalizeTo01(probability=1.),
-            #AdjustContrast(),
-            #AdjustBrightness(),
-            #Gamma(),
-            #OneOf([
-                #Noise(),
-                #GaussianBlur2D(),
-            #]),
+            NormalizeTo01(probability=1.),
+            AdjustContrast(),
+            AdjustBrightness(),
+            Gamma(),
+            OneOf([
+                Noise(),
+                GaussianBlur2D(),
+            ]),
             #RandomPixelDropping(), 
-            #MaskBox(),
+            MaskBox(),
             #MaskBox2D(), 
             #Rotate2D(),
             #Flip(),
             #FlipAffMap(probability=1.),
             #RotateAffMap(probability=1.),
             #Transpose(),
-            Label2AffinityMap(),
+            Label2AffinityMap(probability=1.),
         ])
 
 
@@ -887,6 +889,7 @@ if __name__ == '__main__':
     
     for idx in tqdm(range(PATCH_NUM)):
         patch = sample.random_patch
+        #patch = Label2AffinityMap(patch) 
         image = patch.image
         label = patch.label
         if image.shape[-3:] != DEFAULT_PATCH_SIZE.tuple:
