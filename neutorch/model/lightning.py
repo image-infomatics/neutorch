@@ -10,7 +10,7 @@ from neutorch.loss import BinomialCrossEntropyWithLogits
 
 
 class LitIsoRSUNet(pl.LightningModule):
-    def __init__(self, cfg: CfgNode, model: torch.nn.Module = None) -> None:
+    def __init__(self, cfg: CfgNode = None, model: torch.nn.Module = None) -> None:
         super().__init__()
         self.cfg = cfg
 

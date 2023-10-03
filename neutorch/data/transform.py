@@ -24,7 +24,7 @@ DEFAULT_PROBABILITY = .5
 DEFAULT_SHRINK_SIZE = (0, 0, 0, 0, 0, 0)
 # DEFAULT_SHRINK_SIZE = None
 
-
+# consider inherite from torchvision.transforms?
 class AbstractTransform(ABC):
     def __init__(self, 
             probability: float = DEFAULT_PROBABILITY,
