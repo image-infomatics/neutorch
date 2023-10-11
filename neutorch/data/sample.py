@@ -296,8 +296,9 @@ class Sample(AbstractSample):
         return center
 
     def __len__(self):
-        patch_num = np.prod(self.center_stop - self.center_start + 1)
-        return patch_num
+        # patch_num = np.prod(self.center_stop - self.center_start + 1)
+        # return patch_num
+        return 1024
 
     def patch_from_center(self, center: Cartesian):
         start = center - self.patch_size_before_transform // 2
