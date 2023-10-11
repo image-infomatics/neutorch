@@ -1,4 +1,4 @@
-
+from functools import cached_property
 from typing import List
 
 import torch
@@ -26,12 +26,15 @@ class Wasp(L.LightningDataModule):
         self.batch_size = batch_size
         self.dataset_type = eval(dataset_type)
 
-        # define the variable first
-        self.training_dataset = None
-        self.validation_dataset = None
-
-    def prepare_data(self):
-        self.training_dataset = self.dataset_type.from_config_v5(
+        # # define the variable first
+        # self.training_dataset = None
+        # self.validation_dataset = None
+        assert self.training_dataset is not None
+        assert self.validation_dataset is not None
+    
+    @cached_property
+    def training_dataset(self):
+        return self.dataset_type.from_config_v5(
             self.sample_config_files, 
             mode='training', 
             inputs = self.inputs,
@@ -39,7 +42,9 @@ class Wasp(L.LightningDataModule):
             output_patch_size=self.output_patch_size
         )
 
-        self.validation_dataset = self.dataset_type.from_config_v5(
+    @cached_property
+    def validation_dataset(self):
+        return self.dataset_type.from_config_v5(
             self.sample_config_files, 
             mode='validation',
             inputs = self.inputs,
