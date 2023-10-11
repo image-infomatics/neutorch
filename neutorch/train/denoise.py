@@ -11,6 +11,7 @@ import lightning.pytorch as pl
 from neutorch.data.dataset import VolumeWithMask
 from ..model.lightning import LitIsoRSUNet
 
+from neutorch.data.dataset import load_cfg
 
 class DenoiseModel(LitIsoRSUNet):
     def __init__(self, cfg: CfgNode, model: torch.nn.Module = None) -> None:
@@ -33,7 +34,6 @@ class DenoiseModel(LitIsoRSUNet):
 @click.option('--strategy', '-s', 
     type=click.Choice(['ddp', 'ddp_spawn', 'auto']), default='auto')
 def main(config_file: str, devices: int, accelerator: str, strategy: str):
-    from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
 
     training_dataset = VolumeWithMask.from_config(cfg, mode='training')
@@ -64,7 +64,7 @@ def main(config_file: str, devices: int, accelerator: str, strategy: str):
     )
 
     trainer.fit(
-        model = LitIsoRSUNet(cfg), 
+        model = DenoiseModel(cfg), 
         train_dataloaders = training_dataloader,
         val_dataloaders = validation_dataloader,
     )
