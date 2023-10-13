@@ -315,7 +315,7 @@ class AffinityMapDataset(DatasetBase):
         samples = []
         for sample_name in sample_names[iter_start : iter_stop]:
             sample_node = sample_configs[sample_name]
-            sample = AffinityMapSampleWithMask.from_config_node(
+            sample = AffinityMapSample.from_config_node(
                 sample_node, output_patch_size,
                 num_classes=cfg.model.out_channels,
             )

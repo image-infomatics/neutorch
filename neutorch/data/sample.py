@@ -880,7 +880,7 @@ if __name__ == '__main__':
     PATCH_NUM = 100
     DEFAULT_PATCH_SIZE=Cartesian(64, 64, 64)
     OUT_DIR = os.path.expanduser('~/dropbox/patches/')
-    cfg = load_cfg('./seg_affs_baug.yaml')
+    cfg = load_cfg('./seg_affs.yaml')
 
     sample = SemanticSample.from_explicit_dict(
         cfg.dataset.validation.human, 
