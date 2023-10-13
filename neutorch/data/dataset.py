@@ -329,24 +329,62 @@ class BoundaryAugmentationDataset(DatasetBase):
         super.__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
-        """Construct a semantic dataset with chunk or volume."""
-        if is_train:
-            name2chunks = cfg.dataset.training
-        else:
-            name2chunks = cfg.dataset.validation
+    def from_config(cls, cfg: CfgNode, mode: str, **kwargs):
+        """Construct a semantic dataset with chunk or volume
+
+        Args:
+            cfg (CfgNode): configuration in YAML file 
+            mode (str): training mode or validation mode.
+        """
+        output_patch_size = Cartesian.from_collection(cfg.train.patch_size)
+        sample_names = cfg.dataset[mode]
+
+        sample_configs = CfgNode()
+        for sample_config_path in cfg.samples:
+            sample_cfg_node = load_cfg(sample_config_path, freeze=False)
+            sample_config_dir = os.path.dirname(sample_config_path)
+            for sample_node in sample_cfg_node.values():
+                sample_node.dir = os.path.join(sample_config_dir, sample_node.dir)
+
+            sample_configs.update(sample_cfg_node)
+
+        sample_num = len(sample_names)
+        iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
-        for type_name2paths in name2chunks.values():
-            paths = [x for x in type_name2paths.values()][0]
-            sample = AffinityMapSampleWithMask.from_explicit_paths(
-                    paths,
-                    output_patch_size=cfg.train.patch_size,
-                    num_classes=cfg.model.out_channels,
-                    **kwargs)
+        for sample_name in sample_names[iter_start : iter_stop]:
+            sample_node = sample_configs[sample_name]
+            sample = AffinityMapSample.from_config_node(
+                sample_node, output_patch_size,
+                num_classes=cfg.model.out_channels,
+            )
             samples.append(sample)
 
         return cls( samples )
+    
+#class BoundaryAugmentationDataset(DatasetBase): 
+    #def __initi__(self, samples: list):
+        #super.__init__(samples)
+
+    #@classmethod
+    #def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+    #    """Construct a semantic dataset with chunk or volume."""
+    #    if is_train:
+    #        name2chunks = cfg.dataset.training
+    #    else:
+    #        name2chunks = cfg.dataset.validation
+
+    #    samples = []
+    #    for type_name2paths in name2chunks.values():
+    #        paths = [x for x in type_name2paths.values()][0]
+    #        sample = AffinityMapSampleWithMask.from_explicit_paths(
+    #                paths,
+    #                output_patch_size=cfg.train.patch_size,
+    #                num_classes=cfg.model.out_channels,
+    #                **kwargs)
+    #        samples.append(sample)
+
+    #    return cls( samples )
 
     
 if __name__ == '__main__':
