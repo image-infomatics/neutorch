@@ -9,8 +9,8 @@ dataset:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",]
     s3vol02299:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
-    s3vol02794:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02794/affs_03_160k.h5",]
+      #s3vol02794:
+      #images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02794/affs_03_160k.h5",]
     s3vol03290:
       images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",]
     s3vol03700:
