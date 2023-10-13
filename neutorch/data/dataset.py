@@ -339,7 +339,7 @@ class BoundaryAugmentationDataset(DatasetBase):
         samples = []
         for type_name2paths in name2chunks.values():
             paths = [x for x in type_name2paths.values()][0]
-            sample = AffinityMapSample.from_explicit_paths(
+            sample = AffinityMapSampleWithMask.from_explicit_paths(
                     paths,
                     output_patch_size=cfg.train.patch_size,
                     num_classes=cfg.model.out_channels,
