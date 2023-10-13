@@ -13,12 +13,12 @@ import torch
 import torch.distributed as dist
 
 class BoundaryAugTrainer(TrainerBase):
-    def __init__(self, cfg: CfgNode,
-                 device: torch.DeviceObjType=None,
-                 local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
+    def __init__(self, cfg: CfgNode
+                 #device: torch.DeviceObjType=None,
+                 #local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
         ) -> None:
         assert isinstance(cfg, CfgNode)
-        super().__init__(cfg, device=device)
+        super().__init__(cfg) #device=device)
         #self.cfg = cfg
 
     @cached_property
@@ -38,21 +38,21 @@ class BoundaryAugTrainer(TrainerBase):
     default='./config.yaml', 
     help = 'configuration file containing all the parameters.'
 )
-@click.option('--local-rank', '-r',
-    type=click.INT, default=int(os.getenv('LOCAL_RANK', -1)),
-    help='rank of local process. It is used to assign batches and GPU devices.'
-)
-def main(config_file: str, local_rank: int):  
-    if local_rank != -1:
-        dist.init_process_group(backend="nccl", init_method='env://')
-        print(f'local rank of processes: {local_rank}')
-        torch.cuda.set_device(local_rank)
-        device=torch.device("cuda", local_rank)
-    else:
-        setup()
+#@click.option('--local-rank', '-r',
+#    type=click.INT, default=int(os.getenv('LOCAL_RANK', -1)),
+#    help='rank of local process. It is used to assign batches and GPU devices.'
+#)
+def main(config_file: str): # local_rank: int):  
+    #if local_rank != -1:
+    #    dist.init_process_group(backend="nccl", init_method='env://')
+    #    print(f'local rank of processes: {local_rank}')
+    #    torch.cuda.set_device(local_rank)
+    #    device=torch.device("cuda", local_rank)
+    #else:
+    #    setup()
 
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = BoundaryAugTrainer(cfg, device=device)
+    trainer = BoundaryAugTrainer(cfg)#, device=device)
     trainer()
-    cleanup()
+    #cleanup()
