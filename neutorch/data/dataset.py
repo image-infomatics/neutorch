@@ -330,12 +330,13 @@ class BoundaryAugmentationDataset(DatasetBase):
     
     @classmethod
     def from_config(cls, cfg: CfgNode, mode: str, **kwargs):
-        """Construct a semantic dataset with chunk or volume
-
+        """Construct a semantic dataset with chunk or volume.
+        
         Args:
             cfg (CfgNode): configuration in YAML file 
             mode (str): training mode or validation mode.
         """
+
         output_patch_size = Cartesian.from_collection(cfg.train.patch_size)
         sample_names = cfg.dataset[mode]
 
