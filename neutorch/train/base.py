@@ -269,7 +269,7 @@ class TrainerBase(ABC):
         iter_idx = self.cfg.train.iter_start
         
         for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
-            image, label  = next(iter(self.training_data_loader))
+            image, label = next(iter(self.training_data_loader))
             target = self.label_to_target(label)
 
             # iter_idx += 1
@@ -308,7 +308,7 @@ class TrainerBase(ABC):
 
             if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
 
-                    # only save model on master
+                # only save model on master
                 fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
                 #print(f'save model to {fname}')
                 if iter_idx >= self.cfg.train.start_saving:
