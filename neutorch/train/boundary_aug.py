@@ -5,7 +5,7 @@ import click
 from yacs.config import CfgNode
 
 from neutorch.data.dataset import BoundaryAugmentationDataset, AffinityMapDataset
-from .base import TrainerBase, setup, cleanup
+from neutorch.train.base import TrainerBase, setup, cleanup
 
 from .base import TrainerBase
 
@@ -13,12 +13,12 @@ import torch
 import torch.distributed as dist
 
 class BoundaryAugTrainer(TrainerBase):
-    def __init__(self, cfg: CfgNode
+    def __init__(self, cfg: CfgNode,
                  device: torch.DeviceObjType=None,
                  #local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
         ) -> None:
         assert isinstance(cfg, CfgNode)
-        super().__init__(cfg) #device=device)
+        super().__init__(cfg, device=device)
         #self.cfg = cfg
 
     @cached_property
@@ -48,12 +48,9 @@ def main(config_file: str): # local_rank: int):
     #    print(f'local rank of processes: {local_rank}')
     #    torch.cuda.set_device(local_rank)
     #    device=torch.device("cuda", local_rank)
-    #else:
-        #setup
-    setup()
 
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
-    trainer = BoundaryAugTrainer(cfg)#, device=device)
+    trainer = BoundaryAugTrainer(cfg, device=device)
     trainer()
     cleanup()

@@ -27,7 +27,7 @@ def cleanup():
     dist.destroy_process_group()
 
 class TrainerBase(ABC):
-    def __init__(self, cfg: CfgNode #, 
+    def __init__(self, cfg: CfgNode, 
             device: torch.DeviceObjType = None,
             #local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
             ) -> None:
