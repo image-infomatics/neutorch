@@ -28,7 +28,7 @@ def cleanup():
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
-            device: torch.DeviceObjType = None,
+            #device: torch.DeviceObjType = None,
             #local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
             ) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
@@ -40,12 +40,12 @@ class TrainerBase(ABC):
             random.seed(cfg.system.seed)
         
         self.cfg = cfg
-        self.device = device
+        # self.device = device
         #self.local_rank = local_rank
-        if cfg.system.gpus < 0:
-            self.num_gpus = torch.cuda.device_count()
-        else:
-            self.num_gpus = cfg.system.gpus
+        #if cfg.system.gpus < 0:
+        #    self.num_gpus = torch.cuda.device_count()
+        #else:
+        #    self.num_gpus = cfg.system.gpus
         self.patch_size=Cartesian.from_collection(cfg.train.patch_size)
 
     @cached_property
@@ -113,11 +113,11 @@ class TrainerBase(ABC):
        
         model.to('cuda')
 
-        if self.num_gpus > 1:
-            print(f'use {self.num_gpus} gpus!')
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[self.local_rank],
-                output_device=self.local_rank)
+        #if self.num_gpus > 1:
+        #    print(f'use {self.num_gpus} gpus!')
+        #    model = torch.nn.parallel.DistributedDataParallel(
+        #        model, device_ids=[self.local_rank],
+        #        output_device=self.local_rank)
         
         #if torch.cuda.is_available():
         #    gpu_num = torch.cuda.device_count()
@@ -334,5 +334,5 @@ class TrainerBase(ABC):
                     log_tensor(writer, 'evaluate/target', validation_target, 'image', iter_idx)
         
         writer.close()
-        cleanup()
+        #cleanup()
 
