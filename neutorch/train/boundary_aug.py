@@ -4,7 +4,7 @@ from functools import cached_property
 import click
 from yacs.config import CfgNode
 
-from neutorch.data.dataset import BoundaryAugmentationDataset
+from neutorch.data.dataset import BoundaryAugmentationDataset, AffinityMapDataset
 from .base import TrainerBase, setup, cleanup
 
 from .base import TrainerBase
@@ -13,38 +13,21 @@ import torch
 import torch.distributed as dist
 
 class BoundaryAugTrainer(TrainerBase):
-<<<<<<< HEAD
-    def __init__(self, cfg: CfgNode,
-                 device: torch.DeviceObjType=None,
-                 local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
-        ) -> None:
-        assert isinstance(cfg, CfgNode)
-        super().__init__(cfg, device=device)
-=======
     def __init__(self, cfg: CfgNode
                  #device: torch.DeviceObjType=None,
                  #local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
         ) -> None:
         assert isinstance(cfg, CfgNode)
         super().__init__(cfg) #device=device)
->>>>>>> f005cb2d379110cd9863c9d4c408b97ad5290883
         #self.cfg = cfg
 
     @cached_property
     def training_dataset(self):
-<<<<<<< HEAD
         return AffinityMapDataset.from_config(self.cfg, mode='training')
        
     @cached_property
     def validation_dataset(self):
         return AffinityMapDataset.from_config(self.cfg, mode='validation')
-=======
-        return BoundaryAugmentationDataset.from_config(self.cfg, mode='training')
-       
-    @cached_property
-    def validation_dataset(self):
-        return BoundaryAugmentationDataset.from_config(self.cfg, mode='validation')
->>>>>>> f005cb2d379110cd9863c9d4c408b97ad5290883
     
     def label_to_target(self, label: torch.Tensor):
         return label
@@ -55,24 +38,6 @@ class BoundaryAugTrainer(TrainerBase):
     default='./config.yaml', 
     help = 'configuration file containing all the parameters.'
 )
-<<<<<<< HEAD
-@click.option('--local-rank', '-r',
-    type=click.INT, default=int(os.getenv('LOCAL_RANK', -1)),
-    help='rank of local process. It is used to assign batches and GPU devices.'
-)
-def main(config_file: str, local_rank: int):  
-    if local_rank != -1:
-        dist.init_process_group(backend="nccl", init_method='env://')
-        print(f'local rank of processes: {local_rank}')
-        torch.cuda.set_device(local_rank)
-        device=torch.device("cuda", local_rank)
-    else:
-        setup()
-
-    from neutorch.data.dataset import load_cfg
-    cfg = load_cfg(config_file)
-    trainer = BoundaryAugTrainer(cfg, device=device)
-=======
 #@click.option('--local-rank', '-r',
 #    type=click.INT, default=int(os.getenv('LOCAL_RANK', -1)),
 #    help='rank of local process. It is used to assign batches and GPU devices.'
@@ -89,6 +54,5 @@ def main(config_file: str): # local_rank: int):
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
     trainer = BoundaryAugTrainer(cfg)#, device=device)
->>>>>>> f005cb2d379110cd9863c9d4c408b97ad5290883
     trainer()
     #cleanup()
