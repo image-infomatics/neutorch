@@ -14,7 +14,7 @@ import torch.distributed as dist
 
 class BoundaryAugTrainer(TrainerBase):
     def __init__(self, cfg: CfgNode
-                 #device: torch.DeviceObjType=None,
+                 device: torch.DeviceObjType=None,
                  #local_rank: int = int(os.getenv('LOCAL_RANK', -1)) 
         ) -> None:
         assert isinstance(cfg, CfgNode)
@@ -49,10 +49,11 @@ def main(config_file: str): # local_rank: int):
     #    torch.cuda.set_device(local_rank)
     #    device=torch.device("cuda", local_rank)
     #else:
-    #    setup()
+        #setup
+    setup()
 
     from neutorch.data.dataset import load_cfg
     cfg = load_cfg(config_file)
     trainer = BoundaryAugTrainer(cfg)#, device=device)
     trainer()
-    #cleanup()
+    cleanup()
