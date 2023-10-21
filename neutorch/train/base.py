@@ -268,7 +268,7 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         
-        for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter.stop):
+        for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
             image, label  = next(iter(self.training_data_loader))
             target = self.label_to_target(label)
 
