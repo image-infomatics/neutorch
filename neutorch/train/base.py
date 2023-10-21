@@ -27,9 +27,9 @@ def cleanup():
     dist.destroy_process_group()
 
 class TrainerBase(ABC):
-    def __init__(self, cfg: CfgNode, 
-            device: torch.DeviceObjType = None,
-            local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
+    def __init__(self, cfg: CfgNode #, 
+            #device: torch.DeviceObjType = None,
+            #local_rank: int = int(os.getenv('LOCAL_RANK', -1)),
             ) -> None:
         if isinstance(cfg, str) and os.path.exists(cfg):
             with open(cfg) as file:
@@ -40,12 +40,12 @@ class TrainerBase(ABC):
             random.seed(cfg.system.seed)
         
         self.cfg = cfg
-        self.device = device
-        self.local_rank = local_rank
-        if cfg.system.gpus < 0:
-            self.num_gpus = torch.cuda.device_count()
-        else:
-            self.num_gpus = cfg.system.gpus
+        #self.device = device
+        #self.local_rank = local_rank
+        #if cfg.system.gpus < 0:
+        #    self.num_gpus = torch.cuda.device_count()
+        #else:
+        #    self.num_gpus = cfg.system.gpus
         self.patch_size=Cartesian.from_collection(cfg.train.patch_size)
 
     @cached_property
@@ -92,38 +92,38 @@ class TrainerBase(ABC):
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
                            
-        if 'preload' in self.cfg.train:
-            fname = self.cfg.train.preload
-        else:
-            fname = os.path.join(self.cfg.train.output_dir, 
-                f'model_{self.cfg.train.iter_start}.chkpt')
+        #if 'preload' in self.cfg.train:
+        #    fname = self.cfg.train.preload
+        #else:
+        #    fname = os.path.join(self.cfg.train.output_dir, 
+        #        f'model_{self.cfg.train.iter_start}.chkpt')
             
-        model = torch.nn.SyncBatchNorm.convert_sync_batchmore(model)
+        #model = torch.nn.SyncBatchNorm.convert_sync_batchmore(model)
 
-        if os.path.exists(fname) and self.local_rank==0:
-            model = load_chkpt(model, fname)
+        #if os.path.exists(fname) and self.local_rank==0:
+        #    model = load_chkpt(model, fname)
         
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping
-        if self.num_gpus > 1:
-            print(f'use {self.num_gpus} gpus!')
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[self.local_rank],
-                output_device=self.local_rank)
+        #if self.num_gpus > 1:
+        #    print(f'use {self.num_gpus} gpus!')
+        #    model = torch.nn.parallel.DistributedDataParallel(
+        #        model, device_ids=[self.local_rank],
+        #        output_device=self.local_rank)
        
-        model.to('cuda')
-        #if torch.cuda.is_available():
-        #    gpu_num = torch.cuda.device_count()
-        #    print("Let's use", gpu_num, " GPUs!")
-        #    model = torch.nn.parallel.DataParallel(
-        #            model,
-        #            device_ids=list(range(torch.cuda.device_count())),
-        #    )
+        #model.to('cuda')
+        if torch.cuda.is_available():
+            gpu_num = torch.cuda.device_count()
+            print("Let's use", gpu_num, " GPUs!")
+            model = torch.nn.parallel.DataParallel(
+                    model,
+                    device_ids=list(range(torch.cuda.device_count())),
+            )
         
-        #model = load_chkpt(
-        #    model,
-        #    self.cfg.train.output_dir,
-        #    self.cfg.train.iter_start)
+        model = load_chkpt(
+            model,
+            self.cfg.train.output_dir,
+            self.cfg.train.iter_start)
         
         return model
 
@@ -155,79 +155,79 @@ class TrainerBase(ABC):
     def validation_dataset(self):
         pass
     
-    @cached_property
-    def LOCAL_RANK(self):
-        return int(os.getenv('LOCAL_RANK', -1))
+    #@cached_property
+    #def LOCAL_RANK(self):
+    #    return int(os.getenv('LOCAL_RANK', -1))
        
     @cached_property
     def training_data_loader(self):
-        sampler = torch.utils.data.distributed.DistributedSampler(
-            self.training_dataset,
-            shuffle = False,
-        )
+        #sampler = torch.utils.data.distributed.DistributedSampler(
+        #    self.training_dataset,
+        #    shuffle = False,
+        #)
 
-        if self.cfg.system.cpus > 0:
-            prefetch_factor = None
-            multiprocessing_context='spawn'
-        else:
-            prefetch_factor = None
-            multiprocessing_context=None
+        #if self.cfg.system.cpus > 0:
+            #prefetch_factor = None
+            #multiprocessing_context='spawn'
+        #else:
+            #prefetch_factor = None
+            #multiprocessing_context=None
         
-        dataloader = torch.utils.data.DataLoader(
+        #dataloader = torch.utils.data.DataLoader(
+            #self.training_dataset,
+             #shuffle=False, 
+            #num_workers = self.cfg.system.cpus,
+            #prefetch_factor = self.cfg.system.cpus,
+            #collate_fn=collate_batch,
+            #worker_init_fn=worker_init_fn,
+            #batch_size=self.batch_size,
+            #multiprocessing_context='spawn',
+            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
+            #sampler=sampler
+        #)
+
+        #return dataloader
+        training_data_loader = DataLoader(
             self.training_dataset,
-             shuffle=False, 
-            num_workers = self.cfg.system.cpus,
-            prefetch_factor = self.cfg.system.cpus,
+            num_workers=0,
+            prefetch_factor=None,
+            drop_last=False,
+            # multiprocessing_context='spawn', 
             collate_fn=collate_batch,
             worker_init_fn=worker_init_fn,
             batch_size=self.batch_size,
-            multiprocessing_context='spawn',
-            # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
-            sampler=sampler
-        )
-
-        return dataloader
-        #training_data_loader = DataLoader(
-        #    self.training_dataset,
-        #    num_workers=0,
-        #    prefetch_factor=None,
-        #    drop_last=False,
-        #    # multiprocessing_context='spawn', 
-        #    collate_fn=collate_batch,
-        #    worker_init_fn=worker_init_fn,
-        #    batch_size=self.batch_size,
-        #) 
-        #return training_data_loader
+        ) 
+        return training_data_loader
 
     
     @cached_property
     def validation_data_loader(self):
-        sampler = torch.utils.data.distributed.DistributedSampler(
-            self.validation_dataset,
-            shuffle = False,
-        )
-        dataloader = torch.utils.data.DataLoader(
-            self.validation_dataset,
-            shuffle=False, 
-            num_workers = self.cfg.system.cpus,
-            prefetch_factor = self.cfg.system.cpus,
-            collate_fn=collate_batch,
-            batch_size=self.batch_size,
-            multiprocessing_context='spawn',
-            pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
-            sampler=sampler
-        )
-
-        return dataloader 
-        #validation_data_loader = DataLoader(
+        #sampler = torch.utils.data.distributed.DistributedSampler(
         #    self.validation_dataset,
-        #    num_workers=0,
-        #    prefetch_factor=None,
-        #    drop_last=False,
+        #    shuffle = False,
+        #)
+        #dataloader = torch.utils.data.DataLoader(
+        #    self.validation_dataset,
+        #    shuffle=False, 
+        #    num_workers = self.cfg.system.cpus,
+        #    prefetch_factor = self.cfg.system.cpus,
         #    collate_fn=collate_batch,
         #    batch_size=self.batch_size,
-        #) 
-        #return validation_data_loader
+        #    multiprocessing_context='spawn',
+        #   pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
+        #    sampler=sampler
+        #)
+
+        #return dataloader 
+        validation_data_loader = DataLoader(
+            self.validation_dataset,
+            num_workers=0,
+            prefetch_factor=None,
+            drop_last=False,
+            collate_fn=collate_batch,
+            batch_size=self.batch_size,
+        ) 
+        return validation_data_loader
 
     @cached_property
     def validation_data_iter(self):
@@ -257,10 +257,10 @@ class TrainerBase(ABC):
             image, label = next(iter(self.training_data_loader))
             target = self.label_to_target(label)
 
-            #iter_idx += 1
-            #if iter_idx > self.cfg.train.iter_stop:
-            #    print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
-            #    return
+            iter_idx += 1
+            if iter_idx > self.cfg.train.iter_stop:
+                print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
+                return
                 
 
             ping = time()
@@ -297,9 +297,8 @@ class TrainerBase(ABC):
                     # only save model on master
                 fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
                 print(f'save model to {fname}')
-                if iter_idx >= self.cfg.train.start_saving:
-                    print(f'save model to {fname}')
-                    save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
+                #if iter_idx >= self.cfg.train.start_saving:
+                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(self.validation_data_iter)
@@ -317,5 +316,5 @@ class TrainerBase(ABC):
                     log_tensor(writer, 'evaluate/target', validation_target, 'image', iter_idx)
         
         writer.close()
-        cleanup()
+        #cleanup()
 
