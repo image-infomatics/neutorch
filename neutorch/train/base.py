@@ -253,8 +253,8 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         
-        for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter.stop):
-            image, label = next(iter(self.training_data_loader))
+        #for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter.stop):
+        for image, label in self.training_data_loader:
             target = self.label_to_target(label)
 
             iter_idx += 1
@@ -270,7 +270,7 @@ class TrainerBase(ABC):
             #            predict = self.model(image)
             #breakpoint() 
             predict = self.model(image)
-            predict = self.post_processing(predict)
+            #predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -291,7 +291,7 @@ class TrainerBase(ABC):
                 log_tensor(writer, 'train/prediction', predict.detach(), 'image', iter_idx)
                 log_tensor(writer, 'train/target', target, 'image', iter_idx)
 
-            if iter_idx % self.cfg.train.validation_interval == 0 and self.is_main_process and iter_idx > 0:
+            if iter_idx % self.cfg.train.validation_interval == 0 and iter_idx > 0:
 
                     #if self.LOCAL_RANK <= 0:
                     # only save model on master
