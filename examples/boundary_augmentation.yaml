@@ -2,36 +2,60 @@ system:
   cpus: 1
   gpus: 1
   seed: 1
-  
+
+samples: [
+  "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/samples.yaml",
+]
+
 dataset:
-  training:
-    s3vol01700:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",]
-    s3vol02299:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
+  training: [
+    "s1gt1",
+    "vol_01700",
+    "vol_02299",
+    "vol_03290",
+    "vol_03700",
+    "vol_04900",
+    "vol_05250",
+    "vol_05450",
+  ]
+  
+  validation: [
+    "s1gt2",
+    "1_test_3072-3584_5120-5632_8196-8708",
+    "",
+    "",
+    "",
+  ]
+
+# dataset:
+#  training:
+#    s3vol01700:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",]
+#    s3vol02299:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",]
       #s3vol02794:
       #images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02794/affs_03_160k.h5",]
-    s3vol03290:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",]
-    s3vol03700:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",]
-    s3vol04900:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",]
-    s3vol05250:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",]
-    s3vol05450:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
+#    s3vol03290:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",]
+#    s3vol03700:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",]
+#    s3vol04900:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",]
+#    s3vol05250:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",]
+#    s3vol05450:
+#     images: ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
 
-  validation:
-    s3test1:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/aff_zyx_3072-3584_5120-5632_8196-8708.h5",]
-    s3test2:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/aff_zyx_5120-5632_5632-6144_10240-10752.h5",] 
-    s3test3:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/aff_zyx_2560-3072_5632-6144_8704-9216.h5",] 
-    s3test4:
-      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",]
-  
+#validation:
+#    s3test1:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/3/aff_zyx_3072-3584_5120-5632_8196-8708.h5",]
+#    s3test2:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/aff_zyx_5120-5632_5632-6144_10240-10752.h5",] 
+#    s3test3:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/aff_zyx_2560-3072_5632-6144_8704-9216.h5",] 
+#    s3test4:
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",]
+
 model:
   in_channels: 3
   out_channels: 3
