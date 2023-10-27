@@ -301,6 +301,7 @@ class AffinityMapDataset(DatasetBase):
         sample_names = cfg.dataset[mode]
 
         sample_configs = CfgNode()
+        #breakpoint() 
         for sample_config_path in cfg.samples:
             sample_cfg_node = load_cfg(sample_config_path, freeze=False)
             sample_config_dir = os.path.dirname(sample_config_path)
