@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractproperty
 from functools import cached_property
 from time import time
-# from glob import glob
+from glob import glob
 
 import numpy as np
 from yacs.config import CfgNode
@@ -23,8 +23,8 @@ from neutorch.data.dataset import worker_init_fn
 def setup():
     dist.init_process_group('nccl')
 
-def cleanup():
-    dist.destroy_process_group()
+#def cleanup():
+#    dist.destroy_process_group()
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
@@ -111,7 +111,7 @@ class TrainerBase(ABC):
         #        model, device_ids=[self.local_rank],
         #        output_device=self.local_rank)
        
-        model.to('cuda')
+        #model.to('cuda')
 
         #if self.num_gpus > 1:
         #    print(f'use {self.num_gpus} gpus!')
@@ -277,7 +277,7 @@ class TrainerBase(ABC):
             #target = self.label_to_target(label)
         
         for image, label in self.training_data_loader:
-            target = self.label_to_target
+            target = self.label_to_target(label)
 
             iter_idx += 1
             if iter_idx > self.cfg.train.iter_stop:
