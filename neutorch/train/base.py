@@ -272,6 +272,7 @@ class TrainerBase(ABC):
         iter_idx = self.cfg.train.iter_start
         
         #for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
+            #breakpoint() 
             #image, label = next(iter(self.training_data_loader))
             #target = self.label_to_target(label)
         

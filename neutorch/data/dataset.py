@@ -386,9 +386,10 @@ class BoundaryAugmentationDataset(DatasetBase):
                 image = load_chunk_or_volume(image_path)
                 breakpoint()
                 assert image.shape[-3:] == label.shape[-3:]
+                #breakpoint() 
                 images.append(image)
             
-            breakpoint()
+            #breakpoint()
             sample = AffinityMapSample( 
                 images=images,
                 label=label,
