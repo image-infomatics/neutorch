@@ -376,7 +376,6 @@ class BoundaryAugmentationDataset(DatasetBase):
             label_samples = label_valid
 
         assert len(image_samples) == len(label_samples)
-        # iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
         for image_sample, label_sample in zip(image_samples, label_samples):
@@ -385,7 +384,6 @@ class BoundaryAugmentationDataset(DatasetBase):
                 images=image_sample,
                 label=label_sample,
                 output_patch_size = output_patch_size,
-                forbidden_distance = None,
                 num_classes=3,
             )
 
