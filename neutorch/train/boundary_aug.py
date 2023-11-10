@@ -23,11 +23,11 @@ class BoundaryAugTrainer(TrainerBase):
 
     @cached_property
     def training_dataset(self):
-        return BoundaryAugmentationDataset.from_config(training_data, mode='training')
+        return BoundaryAugmentationDataset.from_config(self.cfg, mode='training')
        
     @cached_property
     def validation_dataset(self):
-        return BoundaryAugmentationDataset.from_config(validation_data, mode='validation')
+        return BoundaryAugmentationDataset.from_config(self.cfg, mode='validation')
     
     def label_to_target(self, label: torch.Tensor):
         return label

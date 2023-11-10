@@ -380,7 +380,8 @@ class BoundaryAugmentationDataset(DatasetBase):
 
         samples = []
         for image_sample, label_sample in zip(image_samples, label_samples):
-            sample = AffinityMapSample(
+            #breakpoint() 
+            sample = AffinityMapSample( 
                 images=image_sample,
                 label=label_sample,
                 output_patch_size = output_patch_size,
@@ -399,8 +400,7 @@ class BoundaryAugmentationDataset(DatasetBase):
     @classmethod
     def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
         """ #Construct a semantic dataset with chunk or volume.
-        """
-        if is_train:
+"""if is_train:
             name2chunks = cfg.dataset.training
         else:
             name2chunks = cfg.dataset.validation

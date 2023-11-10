@@ -174,7 +174,8 @@ class Sample(AbstractSample):
             assert forbbiden_distance_to_boundary[-idx] >= self.patch_size_before_transform[-idx] // 2
         
         self.center_start = forbbiden_distance_to_boundary[:3]
-        self.center_stop = tuple(s - d for s, d in zip(
+        #breakpoint() 
+        self.center_stop = tuple(s - d for s, d in zip( 
             images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
 
         self.center_start = Cartesian.from_collection(self.center_start)
