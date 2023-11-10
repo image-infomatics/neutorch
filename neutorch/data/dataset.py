@@ -401,11 +401,7 @@ class BoundaryAugmentationDataset(DatasetBase):
     @classmethod
     def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
         """ #Construct a semantic dataset with chunk or volume.
-<<<<<<< HEAD
 """if is_train:
-=======
-""" if is_train:
->>>>>>> 57b7925467dd89d95797014509093bc2e3323245
             name2chunks = cfg.dataset.training
         else:
             name2chunks = cfg.dataset.validation
