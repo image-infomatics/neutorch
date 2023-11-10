@@ -13,7 +13,7 @@ import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
-# from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader
 from neutorch.data.patch import collate_batch
 from neutorch.loss import BinomialCrossEntropyWithLogits, MeanSquareErrorLoss
 from neutorch.model.io import load_chkpt, log_tensor, save_chkpt
