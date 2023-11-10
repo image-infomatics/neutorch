@@ -18,7 +18,7 @@ dataset:
     "vol_05250",
     "vol_05450",
   ]
-  
+
   validation: [
     "s1gt2",
     "1_test_3072-3584_5120-5632_8196-8708",
@@ -48,7 +48,7 @@ dataset:
 
 #validation:
 #    s3test1:
-#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/3/aff_zyx_3072-3584_5120-5632_8196-8708.h5",]
+#      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/aff_zyx_3072-3584_5120-5632_8196-8708.h5",]
 #    s3test2:
 #      images: ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/aff_zyx_5120-5632_5632-6144_10240-10752.h5",] 
 #    s3test3:

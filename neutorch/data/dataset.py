@@ -12,6 +12,35 @@ from neutorch.data.transform import *
 
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
+#training data
+affs_train = [["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]] 
+
+label_train = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/label_v4.h5", 
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/label_v2.h5", 
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/label_v3.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/label_v4.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/label_v3.h5", 
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/label_v4.h5"]
+
+#validation data
+affs_valid = [["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/aff_zyx_3072-3584_5120-5632_8196-8708.h5",], 
+                        ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/aff_zyx_5120-5632_5632-6144_10240-10752.h5",], 
+                        ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/aff_zyx_2560-3072_5632-6144_8704-9216.h5",], 
+                        ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",]]
+
+label_valid = ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/seg_zyx_3072-3584_5120-5632_8196-8708.h5", \
+                         "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/seg_zyx_5120-5632_5632-6144_10240-10752.h5", \
+                         "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/seg_zyx_2560-3072_5632-6144_8704-9216.h5", \
+                         "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/seg_zyx_2560-3584_5120-6144_8192-9216.h5", ]
+
+
 def get_iter_range(sample_num: int) -> tuple[int, int]:
     # multiprocess data loading 
     worker_info = torch.utils.data.get_worker_info()
@@ -145,7 +174,7 @@ class SemanticDataset(DatasetBase):
         super().__init__(samples)
     
     @classmethod
-    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
+    def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs): 
         """Construct a semantic dataset with chunk or volume
 
         Args:
@@ -324,13 +353,53 @@ class AffinityMapDataset(DatasetBase):
 
         return cls( samples )
     
+class BoundaryAugmentationDataset(DatasetBase):
+    def __init__(self, samples: list):
+        super().__init__(samples)
+    
+    @classmethod
+    def from_config(cls, cfg: CfgNode, mode: str, **kwargs):
+        """Construct a semantic dataset with chunk or volume
+
+        Args:
+            cfg (CfgNode): configuration in YAML file 
+            mode (str): training mode or validation mode.
+        """
+
+        output_patch_size = Cartesian(128, 128, 128) #patch_size for output
+
+        if mode == "training": 
+            image_samples = affs_train
+            label_samples = label_train
+        elif mode == "validation":
+            image_samples = affs_valid
+            label_samples = label_valid
+
+        assert len(image_samples) == len(label_samples)
+        # iter_start, iter_stop = get_iter_range(sample_num)
+
+        samples = []
+        for image_sample, label_sample in zip(image_samples, label_samples):
+            sample = AffinityMapSample(
+                images=image_sample,
+                label=label_sample,
+                output_patch_size = output_patch_size,
+                num_classes=3, 
+            )
+
+            samples.append(sample)
+
+        return cls( samples )
+    
+"""
 class BoundaryAugmentationDataset(DatasetBase): 
     def __initi__(self, samples: list):
         super.__init__(samples)
 
     @classmethod
     def from_config(cls, cfg: CfgNode, is_train: bool, **kwargs):
-        """Construct a semantic dataset with chunk or volume."""
+        """ #Construct a semantic dataset with chunk or volume.
+        """
         if is_train:
             name2chunks = cfg.dataset.training
         else:
@@ -347,7 +416,7 @@ class BoundaryAugmentationDataset(DatasetBase):
             samples.append(sample)
 
         return cls( samples )
-
+"""
     
 if __name__ == '__main__':
 
