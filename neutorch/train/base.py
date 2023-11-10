@@ -92,16 +92,16 @@ class TrainerBase(ABC):
     def model(self):
         model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
                            
-        if 'preload' in self.cfg.train:
-            fname = self.cfg.train.preload
-        else:
-            fname = os.path.join(self.cfg.train.output_dir, 
-                f'model_{self.cfg.train.iter_start}.chkpt')
+        #if 'preload' in self.cfg.train:
+        #    fname = self.cfg.train.preload
+        #else:
+        #    fname = os.path.join(self.cfg.train.output_dir, 
+        #        f'model_{self.cfg.train.iter_start}.chkpt')
             
-        model = torch.nn.SyncBatchNorm.convert_sync_batchmore(model)
+        #model = torch.nn.SyncBatchNorm.convert_sync_batchmore(model)
 
-        if os.path.exists(fname): #and self.local_rank==0:
-            model = load_chkpt(model, fname)
+        #if os.path.exists(fname): #and self.local_rank==0:
+        #    model = load_chkpt(model, fname)
         
         # note that we have to wrap the nn.DataParallel(model) before 
         # loading the model since the dictionary is changed after the wrapping
@@ -119,21 +119,20 @@ class TrainerBase(ABC):
         #        model, device_ids=[self.local_rank],
         #        output_device=self.local_rank)
         
-        #if torch.cuda.is_available():
-        #    gpu_num = torch.cuda.device_count()
-        #    print("Let's use", gpu_num, " GPUs!")
-        #    model = torch.nn.parallel.DataParallel(
-        #            model,
-        #            device_ids=list(range(torch.cuda.device_count())),
-        #    )
+        if torch.cuda.is_available():
+            gpu_num = torch.cuda.device_count()
+            print("Let's use", gpu_num, " GPUs!")
+            model = torch.nn.parallel.DataParallel(
+                    model,
+                    device_ids=list(range(torch.cuda.device_count())),
+            )
 
-        model = model.to('cuda')
+        #model = model.to('cuda')
         
-        #model = load_chkpt(
-            #model,
-            #self.cfg.train.output_dir,
-            
-            #self.cfg.train.iter_start)
+        model = load_chkpt(
+            model,
+            self.cfg.train.output_dir,
+            self.cfg.train.iter_start)
         
         return model
 
@@ -175,6 +174,7 @@ class TrainerBase(ABC):
        
     @cached_property
     def training_data_loader(self):
+        """
         sampler = torch.utils.data.distributed.DistributedSampler(
             self.training_dataset,
             shuffle = False,
@@ -199,23 +199,25 @@ class TrainerBase(ABC):
             # pin_memory = True, # only dense tensor can be pinned. To-Do: enable it.
             sampler=sampler
         )
-
-        return dataloader
-        #training_data_loader = DataLoader(
-        #    self.training_dataset,
-        #    num_workers=0,
-        #    prefetch_factor=None,
-        #    drop_last=False,
-        #    # multiprocessing_context='spawn', 
-        #    collate_fn=collate_batch,
-        #    worker_init_fn=worker_init_fn,
-        #    batch_size=self.batch_size,
-        #) 
-        #return training_data_loader
+        """
+        #return dataloader
+    
+        training_data_loader = DataLoader(
+            self.training_dataset,
+            num_workers=0,
+            prefetch_factor=None,
+            drop_last=False,
+            # multiprocessing_context='spawn', 
+            collate_fn=collate_batch,
+            worker_init_fn=worker_init_fn,
+            batch_size=self.batch_size,
+        ) 
+        return training_data_loader
 
     
     @cached_property
     def validation_data_loader(self):
+        """
         sampler = torch.utils.data.distributed.DistributedSampler(
             self.validation_dataset,
             shuffle = False,
@@ -233,16 +235,17 @@ class TrainerBase(ABC):
         )
 
         return dataloader 
+        """
     
-        # validation_data_loader = DataLoader(
-        #    self.validation_dataset,
-        #    num_workers=0,
-        #    prefetch_factor=None,
-        #    drop_last=False,
-        #    collate_fn=collate_batch,
-        #    batch_size=self.batch_size,
-        #) 
-        #return validation_data_loader
+        validation_data_loader = DataLoader(
+            self.validation_dataset,
+            num_workers=0,
+            prefetch_factor=None,
+            drop_last=False,
+            collate_fn=collate_batch,
+            batch_size=self.batch_size,
+        ) 
+        return validation_data_loader
 
     @cached_property
     def validation_data_iter(self):
@@ -268,14 +271,17 @@ class TrainerBase(ABC):
         accumulated_loss = 0.
         iter_idx = self.cfg.train.iter_start
         
-        for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
-            image, label = next(iter(self.training_data_loader))
-            target = self.label_to_target(label)
+        #for iter_idx in range(self.cfg.train.iter_start, self.cfg.train.iter_stop):
+            #image, label = next(iter(self.training_data_loader))
+            #target = self.label_to_target(label)
+        
+        for image, label in self.training_data_loader:
+            target = self.label_to_target
 
-            # iter_idx += 1
-            # if iter_idx > self.cfg.train.iter_stop:
-            #     print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
-            #    return
+            iter_idx += 1
+            if iter_idx > self.cfg.train.iter_stop:
+                print('exceeds the maximum iteration: ', self.cfg.train.iter_stop)
+                return
                 
 
             ping = time()
@@ -284,8 +290,9 @@ class TrainerBase(ABC):
             # self.model.to(self.device)
             #            predict = self.model(image)
             #breakpoint() 
+            #predict = self.model(image)
+            #predict = self.post_processing(predict)
             predict = self.model(image)
-            predict = self.post_processing(predict)
             loss = self.loss_module(predict, target)
             self.optimizer.zero_grad()
             loss.backward()
@@ -310,13 +317,15 @@ class TrainerBase(ABC):
 
                 # only save model on master
                 fname = os.path.join(self.cfg.train.output_dir, f'model_{iter_idx}.chkpt')
-                #print(f'save model to {fname}')
-                if iter_idx >= self.cfg.train.start_saving:
-                    print(f'save model to {fname}')
-                    save_chkpt(
-                        self.model, self.cfg.train.output_dir, \
-                        iter_idx, self.optimizer
-                    )
+                print(f'save model to {fname}')
+                save_chkpt(self.model, self.cfg.train.output_dir, iter_idx, self.optimizer)
+                
+                #if iter_idx >= self.cfg.train.start_saving:
+                #    print(f'save model to {fname}')
+                #    save_chkpt(
+                #        self.model, self.cfg.train.output_dir, \
+                #        iter_idx, self.optimizer
+                #    )
 
                 print('evaluate prediction: ')
                 validation_image, validation_label = next(iter(self.validation_data_iter))
