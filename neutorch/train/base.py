@@ -23,8 +23,8 @@ from neutorch.data.dataset import worker_init_fn
 def setup():
     dist.init_process_group('nccl')
 
-#def cleanup():
-#    dist.destroy_process_group()
+def cleanup():
+    dist.destroy_process_group()
 
 class TrainerBase(ABC):
     def __init__(self, cfg: CfgNode, 
