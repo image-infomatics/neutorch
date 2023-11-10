@@ -369,23 +369,28 @@ class BoundaryAugmentationDataset(DatasetBase):
         output_patch_size = Cartesian(128, 128, 128) #patch_size for output
 
         if mode == "training": 
-            image_samples = affs_train
-            label_samples = label_train
+            image_paths = affs_train
+            label_path = label_train
         elif mode == "validation":
-            image_samples = affs_valid
-            label_samples = label_valid
+            image_path = affs_valid
+            label_paths = label_valid
 
-        assert len(image_samples) == len(label_samples)
+        assert len(image_path) == len(label_path)
         # iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
-        for image_sample, label_sample in zip(image_samples, label_samples):
-            #breakpoint() 
+        for image_sample, label_sample in zip(image_path, label_path):
+
+            label = load_chunk_or_volume(label_path)
+            images = []
+            for image_path in image_paths:
+                image = load_chunk_or_volume(image_path)
+                images.append(image)
+            
             sample = AffinityMapSample( 
-                images=image_sample,
-                label=label_sample,
+                images=images,
+                label=label,
                 output_patch_size = output_patch_size,
-                forbidden_distance = None,
                 num_classes=3,
             )
 
