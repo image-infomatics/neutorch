@@ -384,9 +384,8 @@ class BoundaryAugmentationDataset(DatasetBase):
             images = []
             for image_path in image_paths:
                 image = load_chunk_or_volume(image_path)
-                breakpoint()
+                #breakpoint()
                 assert image.shape[-3:] == label.shape[-3:]
-                #breakpoint() 
                 images.append(image)
             
             #breakpoint()
