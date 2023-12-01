@@ -158,11 +158,13 @@ class Sample(AbstractSample):
         
         self.images = images
         self.label = label
-        
+       
+        #breakpoint()
         assert isinstance(self.output_patch_size, Cartesian)
         # for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
         #     assert ls >= ps, f'output patch size: {self.output_patch_size}, label shape: {label.shape}'
-
+        
+        #breakpoint()
         if forbbiden_distance_to_boundary is None:
             forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
         assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
@@ -180,7 +182,9 @@ class Sample(AbstractSample):
 
         self.center_start = Cartesian.from_collection(self.center_start)
         self.center_stop = Cartesian.from_collection(self.center_stop)
-
+        
+        self.center_start += label.voxel_offset
+        self.center_stop += label.voxel_offset 
         # for cs, cp in zip(self.center_start, self.center_stop):
         #     assert cp > cs, \
         #         f'center start: {self.center_start}, center stop: {self.center_stop}'
@@ -203,30 +207,33 @@ class Sample(AbstractSample):
    
     @property
     def random_patch_center(self): 
+        breakpoint() 
         center_start = self.center_start
         center_stop = self.center_stop
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
-        if cx > 7198: #For good regions
-            pass
-        else:
-            center = Cartesian(cz, cy, cx)
-            return center
+        #if cx > 7198: #For good regions
+            #pass
+        #else:
+        center = Cartesian(cz, cy, cx)
+        return center
 
     def __len__(self):
         patch_num = np.prod(self.center_stop - self.center_start + 1)
         return patch_num
 
     def patch_from_center(self, center: Cartesian):
+        #breakpoint() 
         start = center - self.patch_size_before_transform // 2
         bbox = BoundingBox.from_delta(start, self.patch_size_before_transform)
         
         image = random.choice(self.images)
-        bbox += image.bbox.start
+        #bbox += image.bbox.start
         image_patch = image.cutout(bbox)
         label_patch = self.label.cutout(bbox)
         
+        #breakpoint()
         if image_patch.shape[-3:] != self.patch_size_before_transform.tuple:
             print(f'center: {center}, start: {start}, bbox: {bbox}')
         
