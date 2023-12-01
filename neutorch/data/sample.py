@@ -231,6 +231,10 @@ class Sample(AbstractSample):
         image = random.choice(self.images)
         #bbox += image.bbox.start
         image_patch = image.cutout(bbox)
+        
+        #if self.label.cutout(bbox).shape[1] != 133:
+            #breakpoint()
+
         label_patch = self.label.cutout(bbox)
         
         #breakpoint()
