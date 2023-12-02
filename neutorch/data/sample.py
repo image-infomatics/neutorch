@@ -163,6 +163,7 @@ class Sample(AbstractSample):
         # for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
         #     assert ls >= ps, f'output patch size: {self.output_patch_size}, label shape: {label.shape}'
 
+        
         if forbbiden_distance_to_boundary is None:
             forbbiden_distance_to_boundary = self.patch_size_before_transform // 2 
         assert len(forbbiden_distance_to_boundary) == 3 or len(forbbiden_distance_to_boundary)==6
@@ -208,11 +209,9 @@ class Sample(AbstractSample):
         cz = random.randrange(center_start[0], center_stop[0])
         cy = random.randrange(center_start[1], center_stop[1])
         cx = random.randrange(center_start[2], center_stop[2])
-        if cx > 7198: #For good regions
-            pass
-        else:
-            center = Cartesian(cz, cy, cx)
-            return center
+        
+        center = Cartesian(cz, cy, cx)
+        return center
 
     def __len__(self):
         patch_num = np.prod(self.center_stop - self.center_start + 1)

@@ -60,12 +60,12 @@ class PatchBoundingBoxGeneratorInChunk(AbstractPatchBoundingBoxGenerator):
         self.center_stop = Cartesian.from_collection(
             tuple(s - d for s, d in zip(
             volume_bbox.shape[-3:], forbbiden_distance_to_boundary[-3:]
-        )))
+random_patch_center        )))
         assert self.center_stop > self.center_start, \
             f'center start: {self.center_start}, center stop: {self.center_stop}'
 
     @property
-    def random_patch_center(self):
+    def (self):
         center_start = self.center_start
         center_stop = self.center_stop
         cz = randrange(center_start[0], center_stop[0])
