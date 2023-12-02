@@ -10,7 +10,7 @@ samples: [
 
 dataset:
   training: [
-    "vol_01700",
+          #"vol_01700",
     "vol_02299",
     "vol_03290",
     "vol_03700",

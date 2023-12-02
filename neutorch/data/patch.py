@@ -16,6 +16,7 @@ class Patch(object):
             image (Chunk): image
             label (Chunk): label
         """
+        #breakpoint() 
         assert image.shape[-3:] == label.shape[-3:], \
             f'image shape: {image.shape}, label shape: {label.shape}'
         assert image.voxel_offset == label.voxel_offset
