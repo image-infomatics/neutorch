@@ -174,9 +174,10 @@ class Sample(AbstractSample):
             # otherwise, the patch will go outside of the volume
             assert forbbiden_distance_to_boundary[idx] >= self.patch_size_before_transform[idx] // 2
             assert forbbiden_distance_to_boundary[-idx] >= self.patch_size_before_transform[-idx] // 2
-        
+       
+        #breakpoint()
         self.center_start = forbbiden_distance_to_boundary[:3]
-        #breakpoint() 
+        breakpoint() 
         self.center_stop = tuple(s - d for s, d in zip( 
             images[0].shape[-3:], forbbiden_distance_to_boundary[-3:]))
 
@@ -207,7 +208,7 @@ class Sample(AbstractSample):
    
     @property
     def random_patch_center(self): 
-        breakpoint() 
+        #breakpoint() 
         center_start = self.center_start
         center_stop = self.center_stop
         cz = random.randrange(center_start[0], center_stop[0])
