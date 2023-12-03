@@ -382,14 +382,17 @@ class BoundaryAugmentationDataset(DatasetBase):
         # iter_start, iter_stop = get_iter_range(sample_num)
 
         samples = []
-        for image_paths, label_path in zip(image_sample_paths, label_sample_paths):          
-            breakpoint() 
+        for image_fname, label_path in zip(image_sample_paths, label_sample_paths):          
+            # breakpoint() 
             label = load_chunk_or_volume(label_path, **kwargs) 
             images = []
             #breakpoint() 
-            for image_path in image_paths:
+            for image_path in image_fname:
                 image = load_chunk_or_volume(image_path, **kwargs)
-                assert image.shape[-3:] == label.shape[-3:]
+                assert image.shape[-3:] == label.shape[-3:], \
+                    f'image shape: {image.shape}, label shape: {label.shape}, file name: {image_path}'
+                assert image.voxel_offset == label.voxel_offset, \
+                    f'image voxel offset: {image.voxel_offset}, label voxel offset: {label.voxel_offset}, file name: {image_path}'
                 images.append(image)
     
             sample = AffinityMapSample( 
