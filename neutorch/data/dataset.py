@@ -19,9 +19,19 @@ affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04000/affs_03_160k.h5",], 
-              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",], 
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/affs_160k.h5",],              
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/affs_03_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_04831/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_06431/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07580/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07800/affs_160k.h5",],
+              #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07855/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07955/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170/affs_160k.h5",],
               ] 
 
 label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
@@ -32,7 +42,17 @@ label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
                #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04000/label_v3.h5", 
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/label_v4.h5",
                #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05250/label_v3.h5", 
-               #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/label_v4.h5"
+               #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/label_v4.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_04831/label_v5.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_06431/label_v2.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/label_v9.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07580/label_v2.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07800/label_v2.h5",
+               #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07855/"
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07955/label_v1.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/label_v2.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/label_v2.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170/label_v12.h5",
                ]
 
 #validation data
