@@ -404,13 +404,15 @@ class BoundaryAugmentationDataset(DatasetBase):
 
         assert len(image_sample_paths) == len(label_sample_paths)
         # iter_start, iter_stop = get_iter_range(sample_num)
-
+        
+        """
         for image_fname, label_path in zip(image_sample_paths, label_sample_paths):
             label = load_chunk_or_volume(label_path, **kwargs) 
             for image_path in image_fname:
                 image = load_chunk_or_volume(image_path, **kwargs)
                 print(f'image shape: {image.shape}, label shape: {label.shape}, file name: {image_path}')
                 #print(f'image voxel offset: {image.voxel_offset}, label voxel offset: {label.voxel_offset}, file name: {image_path}')
+        """
 
         samples = []
         for image_fname, label_path in zip(image_sample_paths, label_sample_paths):          
