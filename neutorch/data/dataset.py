@@ -13,7 +13,7 @@ from neutorch.data.transform import *
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
 #training data
-affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",], 
+affs_train = [ #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",], 
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",], 
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",], 
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/affs_03_160k.h5",], 
@@ -22,7 +22,7 @@ affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_05450/affs_160k.h5",]
               ] 
 
-label_train = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
+label_train = [ #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/label_v4.h5", 
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/label_v2.h5", 
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03700/label_v3.h5",
@@ -385,8 +385,8 @@ class BoundaryAugmentationDataset(DatasetBase):
             label = load_chunk_or_volume(label_path, **kwargs) 
             for image_path in image_fname:
                 image = load_chunk_or_volume(image_path, **kwargs)
-                f'image shape: {image.shape}, label shape: {label.shape}, file name: {image_path}'
-                f'image voxel offset: {image.voxel_offset}, label voxel offset: {label.voxel_offset}, file name: {image_path}'
+                print(f'image shape: {image.shape}, label shape: {label.shape}, file name: {image_path}')
+                print(f'image voxel offset: {image.voxel_offset}, label voxel offset: {label.voxel_offset}, file name: {image_path}')
 
         samples = []
         """
