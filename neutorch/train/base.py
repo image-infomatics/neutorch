@@ -338,7 +338,7 @@ class TrainerBase(ABC):
                     validation_predict = self.post_processing(validation_predict)
                     per_voxel_loss = validation_loss.tolist() / self.voxel_num
                     print(f'iter {iter_idx}: validation loss: {round(per_voxel_loss, 3)}')
-                    writer.add_scaflar('Loss/validation', per_voxel_loss, iter_idx)
+                    writer.add_scalar('Loss/validation', per_voxel_loss, iter_idx)
                     log_tensor(writer, 'evaluate/image', validation_image, 'image', iter_idx)
                     log_tensor(writer, 'evaluate/prediction', validation_predict, 'image', iter_idx)
                     log_tensor(writer, 'evaluate/target', validation_target, 'image', iter_idx)
