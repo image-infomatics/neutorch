@@ -841,15 +841,15 @@ class Label2AffinityMap(SpatialTransform):
         assert patch.label.shape[0] == 1 
         #assert patch.label.shape[1] == 1 
         assert patch.label.ndim == 5
-        breakpoint() 
+        #breakpoint() 
         seg = patch.label.array[0,0,...]
         seg = seg.astype(np.uint64)
         remove_contact_xy(seg)
         seg = seg.astype(np.uint64)
-        breakpoint()  
+        #breakpoint()  
         affs_ref = seg_to_affs(seg)
         #breakpoint() 
-        patch.label.array =  np.expand_dims(affs_ref, axis=0)
+        patch.label.array = np.expand_dims(affs_ref, axis=0)
         patch.label.voxel_offset += Cartesian(1,1,1)
         # print(f'patch shape after Label2AffinityMap: {patch.shape}')
         return patch
