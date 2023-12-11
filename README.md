@@ -1,4 +1,4 @@
-<img src="https://github.com/flatironinstitute/neutorch/blob/main/data/logo.svg" width="400">
+<img src="https://github.com/flatironinstitute/neutorch/blob/main/data/logo.svg" width="200">
 
 --------------
 Neuron segmentation and synapse detection using PyTorch
