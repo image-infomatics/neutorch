@@ -10,12 +10,17 @@ from neutorch.loss import BinomialCrossEntropyWithLogits
 
 
 class LitIsoRSUNet(pl.LightningModule):
-    def __init__(self, cfg: CfgNode = None, model: torch.nn.Module = None) -> None:
+    def __init__(self, 
+            cfg: CfgNode = None, 
+            model: torch.nn.Module = None,
+            learning_rate: float = 0.001) -> None:
         super().__init__()
         self.cfg = cfg
 
+        self.learning_rate = learning_rate
+
         if model is None:
-            model = Model(self.cfg.model.in_channels, self.cfg.model.out_channels)
+            model = Model(cfg.model.in_channels, cfg.model.out_channels)
         self.model = model
     
     def label_to_target(self, label: torch.Tensor):
@@ -50,5 +55,5 @@ class LitIsoRSUNet(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(
             self.model.parameters(), 
-            lr=self.cfg.train.learning_rate
+            lr=self.learning_rate
         )

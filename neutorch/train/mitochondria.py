@@ -6,6 +6,7 @@ import click
 import lightning.pytorch as pl
 
 from neutorch.model.lightning import LitIsoRSUNet
+from neutorch.model.IsoRSUNet import Model
 from neutorch.data.module import Wasp as WaspDataModule
 
 from neutorch.data.dataset import load_cfg
@@ -23,7 +24,12 @@ from neutorch.data.dataset import load_cfg
     help='accelerator to use, [auto, cpu, cuda, hpu, ipu, mps, tpu]')
 @click.option('--strategy', '-s', 
     type=click.Choice(['ddp', 'ddp_spawn', 'auto']), default='auto')
-def main(config_file: str, devices: int, accelerator: str, strategy: str):
+@click.option('--chkpt-file', '-k',
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, readable=True, resolve_path=True),
+    default= None,
+    help = 'trained model checkpoint file'
+)
+def main(config_file: str, devices: int, accelerator: str, strategy: str, chkpt_file: str):
     cfg = load_cfg(config_file)
 
     datamodule = WaspDataModule(
@@ -42,8 +48,17 @@ def main(config_file: str, devices: int, accelerator: str, strategy: str):
         strategy=strategy
     )
 
+    
+    if chkpt_file is not None:
+        model = LitIsoRSUNet.load_from_checkpoint(
+            chkpt_file,
+            model=Model(cfg.model.in_channels, cfg.model.out_channels),
+        )
+    else:
+        model = LitIsoRSUNet(cfg)
+
     trainer.fit(
-        model = LitIsoRSUNet(cfg), 
+        model = model, 
         datamodule=datamodule,
     )
 
