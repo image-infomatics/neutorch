@@ -32,6 +32,8 @@ affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/affs_160k.h5",],
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/affs_160k.h5",],
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/affs_160k.h5",],
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/affs_160k.h5",]
               ] 
 
 label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
@@ -53,6 +55,8 @@ label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/label_v2.h5",
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/label_v2.h5",
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/label_v2.h5",
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/label_v2.h5", 
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/label_v2.h5"
                ]
 
 #validation data
