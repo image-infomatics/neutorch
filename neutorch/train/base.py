@@ -150,7 +150,7 @@ class TrainerBase(ABC):
 
     @cached_property
     def loss_module(self):
-        return BinomialCrossEntropyWithLogits()
+        return BinomialCrossEntropyWithLogits(self.model)
         #return MeanSquareErrorLoss(pass)
 
 

@@ -736,6 +736,7 @@ class AffinityMapSample(SemanticSample):
             # Perspective2D(),
             # RotateScale(probability=1.),
             # DropSection(),
+            RandomPixelDropping(), 
             Rotate2D(probability=1.),
             Flip(),
             Transpose(),
