@@ -23,3 +23,4 @@ if self.num_gpus > 1:
 		output_device=self.local_rank)
 
 model.to('cuda')
+

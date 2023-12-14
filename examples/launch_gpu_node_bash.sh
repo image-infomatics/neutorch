@@ -12,3 +12,4 @@ srun -p gpu --gpus 2  --cpus-per-gpu=$CORES --pty bash -i
 
 
 
+

@@ -2,3 +2,4 @@
 
 rm model_*.chkpt
 rm event*
+

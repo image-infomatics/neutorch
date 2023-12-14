@@ -32,3 +32,4 @@ torchrun \
     
 
 #/mnt/home/jwu/code/neutorch/neutorch/train/whole_brain_affinity_map.py -c whole_brain_affs.yaml
+

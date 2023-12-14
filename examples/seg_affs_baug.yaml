@@ -57,3 +57,4 @@ train:
   #validation_interval: 5000
   training_interval: 2 
   validation_interval: 4
+
