@@ -13,7 +13,7 @@ from neutorch.data.transform import *
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 
 #training data
-affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",], 
+affs_train = [["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/affs_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02299/affs_03_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_02400/affs_03_160k.h5",], 
               #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_03290/affs_03_160k.h5",], 
@@ -32,8 +32,8 @@ affs_train = [ ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/affs_160k.h5",],
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/affs_160k.h5",],
               ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/affs_160k.h5",],
-              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/affs_160k.h5",],
-              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/affs_160k.h5",]
+              ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/affs_160k.h5",] #,
+              #["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/affs_160k.h5",]
               ] 
 
 label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5", 
@@ -55,20 +55,23 @@ label_train = [ "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_017
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/label_v2.h5",
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/label_v2.h5",
                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/label_v2.h5",
-               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/label_v2.h5", 
-               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/label_v2.h5"
+               "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/label_v2.h5" #, 
+               #"/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/label_v2.h5"
                ]
 
 #validation data
 affs_valid = [["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/aff_zyx_3072-3584_5120-5632_8196-8708.h5",], 
                 ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/aff_zyx_5120-5632_5632-6144_10240-10752.h5",], 
                 ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/aff_zyx_2560-3072_5632-6144_8704-9216.h5",], 
-                ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",]]
+                ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/aff_zyx_2560-3584_5120-6144_8192-9216.h5",],
+                ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/affs_160k.h5",] 
+                ]
 
 label_valid = ["/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/seg_zyx_3072-3584_5120-5632_8196-8708.h5", \
             "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/seg_zyx_5120-5632_5632-6144_10240-10752.h5", \
             "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/seg_zyx_2560-3072_5632-6144_8704-9216.h5", \
-            "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/seg_zyx_2560-3584_5120-6144_8192-9216.h5",]
+            "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/seg_zyx_2560-3584_5120-6144_8192-9216.h5", \
+            "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/label_v2.h5", ]
 
 
 def get_iter_range(sample_num: int) -> tuple[int, int]:
