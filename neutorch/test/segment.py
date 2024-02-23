@@ -22,7 +22,7 @@ class segment_methodology():
     @classmethod
     def affinity_methodology():
         segmentations = []
-        threshold = [0, 1]
+        
         for affinity_path in affinity_paths: 
             affinities = load_chunk_or_volume(affinity_path, **kwargs) 
             """ affinity path -> h5 file is this correct? """
@@ -31,4 +31,3 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
-    """ Insert some stuff for this """
