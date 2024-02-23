@@ -20,14 +20,19 @@ class segment_methodology():
     def __init__(self, affinity_paths: list):
 
     @classmethod
-    def affinity_methodology():
+    def affinity_methodology(selfpaths):
         segmentations = []
         
-        for affinity_path in affinity_paths: 
-            affinities = load_chunk_or_volume(affinity_path, **kwargs) 
+        threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
+        for path in paths: 
+            affinities = load_chunk_or_volume(path, **kwargs) 
             """ affinity path -> h5 file is this correct? """
             segmentation = waterz.agglormerate(affinities, threshold)
             segmentations.append(segmentation) 
 
+        return segmentations
+
 if __name__ == '__main__':
 
+    seg = affinity_methodology(affinity_paths)
+    print(seg)
