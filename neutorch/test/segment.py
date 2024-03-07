@@ -22,7 +22,10 @@ affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5"
                   "/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5"]
 
 class segment_methodology():
-    def __init__(self, affinity_paths: list):
+    def __init__(self, 
+                 affinity_paths: list):
+        super().__init__()
+        self.affinity_paths = affinity_paths
 
     @classmethod
     def affinity_methodology(self, paths):
