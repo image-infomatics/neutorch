@@ -34,7 +34,7 @@ class segment_methodology():
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
         for path in paths: 
             affinities = load_chunk_or_volume(path, **kwargs) 
-            segmentation = waterz.agglormerate(affinities, threshold)
+            segmentation = waterz.agglormerate(affinities, threshold, gt=None, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
         return segmentations
