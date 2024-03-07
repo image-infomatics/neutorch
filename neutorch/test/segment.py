@@ -28,13 +28,13 @@ class segment_methodology():
         self.affinity_paths = affinity_paths
 
     @classmethod
-    def affinity_methodology(self, paths):
+    def affinity_methodology(self, paths, **kwargs):
         segmentations = []
         
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
         for path in paths: 
             affinities = load_chunk_or_volume(path, **kwargs) 
-            segmentation = waterz.agglormerate(affinities, threshold)
+            segmentation = waterz.agglomerate(affinities, threshold)
             segmentations.append(segmentation) 
 
         return segmentations
