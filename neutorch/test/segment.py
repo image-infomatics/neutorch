@@ -41,5 +41,6 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
-    seg = affinity_methodology(affinity_paths)
-    print(seg)
+    seg = segment_methodology(affinity_paths) 
+
+
