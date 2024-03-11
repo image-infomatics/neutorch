@@ -31,10 +31,10 @@ class segment_methodology():
     def affinity_methodology(self, paths, **kwargs):
         segmentations = []
         
-        threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
+        thresholds = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
         for path in paths: 
             affinities = load_chunk_or_volume(path, **kwargs) 
-            segmentation = waterz.agglomerate(affinities, threshold)
+            segmentation = waterz.agglomerate(affs=affinities, thresholds=thresholds, gt=None, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
         return segmentations
@@ -42,5 +42,5 @@ class segment_methodology():
 if __name__ == '__main__':
 
     seg = segment_methodology.affinity_methodology(affinity_paths) 
-
+    print(seg)
 

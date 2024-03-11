@@ -678,7 +678,7 @@ class AffinityMapSample(SemanticSample):
             num_classes: int=3,
             **kwargs,
             ):
-        label = load_chunk_or_volume(label_path, **kwargs)
+        label = load_chunk_or_volume(label_path, **)
         # print(f'label path: {label_path} with size {label.shape}')
 
         images = []
