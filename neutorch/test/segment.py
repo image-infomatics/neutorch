@@ -1,4 +1,4 @@
-import waterz
+import waterz as wz
 import numpy as np
 
 from chunkflow.lib.cartesian_coordinate import Cartesian 
@@ -28,29 +28,41 @@ class segment_methodology():
     def __init__(self, 
                  affinity_paths: list,
                  ground_truth_paths: list):
-       
+    
         super().__init__()
         self.affinity_paths = affinity_paths
         self.ground_truth_paths = ground_truth_paths
 
     @classmethod
-    def affinity(self, affinity_paths, ground_truth_paths, **kwargs):
+    def agglomerate(self, affinity_paths, ground_truth_paths, **kwargs):
         segmentations = []
         
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
         for aff, gt in zip(affinity_paths, ground_truth_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
             affinities = load_chunk_or_volume(aff, **kwargs) 
-            segmentation = waterz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
+            segmentation = wz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=False, return_region_graph=False)
+            segmentations.append(segmentation) 
+
+        return segmentations
+    
+    @classmethod
+    def evaluate(self, affinity_paths, ground_truth_paths, **kwargs):
+        segmentations = []
+        
+        threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
+        for aff, gt in zip(affinity_paths, ground_truth_paths): 
+            groundtruth = load_chunk_or_volume(gt, **kwargs) 
+            affinities = load_chunk_or_volume(aff, **kwargs) 
+            breakpoint() 
+            segmentation = wz.evaluate(groundtruth, affinities)
             segmentations.append(segmentation) 
 
         return segmentations
 
 if __name__ == '__main__':
 
-    segmentation = segment_methodology.affinity(affinity_paths, ground_truth_paths) 
+    segmentation = segment_methodology.agglomerate(affinity_paths, ground_truth_paths) 
     for seg in segmentation:
         print(seg)
-
-
-
+        seg

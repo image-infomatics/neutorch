@@ -86,8 +86,8 @@ train:
   learning_rate: 0.001
   #training_interval: 2000
   #validation_interval: 5000 
-  training_interval: 1000
-  validation_interval: 2000
+  training_interval: 2000
+  validation_interval: 4000
 
 
 
