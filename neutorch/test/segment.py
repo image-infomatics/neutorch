@@ -18,12 +18,6 @@ affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5",
                   "/mnt/home/mpaez/ceph/affsmaptrain/train9/affstrain9_vol1.h5" ]
 """
 
-affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5"]
-
-ground_truth_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
-                      "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
-
 class segment_methodology():
     def __init__(self, 
                  affinity_paths: list,
@@ -41,7 +35,7 @@ class segment_methodology():
         for aff, gt in zip(affinity_paths, ground_truth_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
             affinities = load_chunk_or_volume(aff, **kwargs) 
-            segmentation = wz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=False, return_region_graph=False)
+            segmentation = wz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
         return segmentations
@@ -54,7 +48,6 @@ class segment_methodology():
         for aff, gt in zip(affinity_paths, ground_truth_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
             affinities = load_chunk_or_volume(aff, **kwargs) 
-            breakpoint() 
             segmentation = wz.evaluate(groundtruth, affinities)
             segmentations.append(segmentation) 
 
@@ -62,7 +55,16 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
+    affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5"]
+
+    ground_truth_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
+                      "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
+
     segmentation = segment_methodology.agglomerate(affinity_paths, ground_truth_paths) 
+    
     for seg in segmentation:
-        print(seg)
-        seg
+        seg 
+
+
+
