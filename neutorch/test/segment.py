@@ -31,14 +31,14 @@ class segment_methodology():
         self.affinity_paths = affinity_paths
 
     @classmethod
-    def affinity_methodology(self, affinity_paths, ground_truth_paths):
+    def affinity_methodology(self, affinity_paths, ground_truth_paths, **kwargs):
         segmentations = []
         
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
         for aff, gt in zip(affinity_paths, ground_truth_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
             affinities = load_chunk_or_volume(aff, **kwargs) 
-            segmentation = waterz.agglormerate(affinities, threshold, gt=groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
+            segmentation = waterz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
         return segmentations
