@@ -24,15 +24,17 @@ affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5"
 ground_truth_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
                       "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
 
-class segment_methodology(affinity_paths, ground_truth_paths):
+class segment_methodology():
     def __init__(self, 
-                 affinity_paths: list):
+                 affinity_paths: list,
+                 ground_truth_paths: list):
+       
         super().__init__()
         self.affinity_paths = affinity_paths
         self.ground_truth_paths = ground_truth_paths
 
     @classmethod
-    def affinity_methodology(self, affinity_paths, ground_truth_paths, **kwargs):
+    def affinity(self, affinity_paths, ground_truth_paths, **kwargs):
         segmentations = []
         
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
@@ -46,9 +48,9 @@ class segment_methodology(affinity_paths, ground_truth_paths):
 
 if __name__ == '__main__':
 
-    segmentation = segment_methodology.affinity_methodology(affinity_paths, ground_truth_paths) 
+    segmentation = segment_methodology.affinity(affinity_paths, ground_truth_paths) 
     for seg in segmentation:
-        seg
+        print(seg)
 
 
 
