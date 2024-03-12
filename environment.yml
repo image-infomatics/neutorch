@@ -147,7 +147,7 @@ dependencies:
     - fastremap==1.13.2
     - fill-voids==2.0.1
     - flatbuffers==2.0
-    - fpzip==1.1.4
+    - fp==1.1.4
     - fvcore==0.1.5.post20220512
     - gast==0.5.3
     - gevent==21.1.2
