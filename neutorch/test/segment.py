@@ -35,6 +35,7 @@ class segment_methodology():
         for aff, gt in zip(affinity_paths, ground_truth_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
             affinities = load_chunk_or_volume(aff, **kwargs) 
+            breakpoint() 
             segmentation = wz.agglomerate(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
