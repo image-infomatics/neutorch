@@ -1,4 +1,4 @@
-import waterz as wz
+import waterz as wz 
 import numpy as np
 
 from chunkflow.lib.cartesian_coordinate import Cartesian 
@@ -37,8 +37,12 @@ class segment_methodology():
             affinities = load_chunk_or_volume(aff, **kwargs) 
 
             assert affinities.shape[-3:] == groundtruth.shape[-3:]
+            
+            aff_thresholds = [0.005, 0.995]
+            seg_thresholds = [0.1, 0.3, 0.6]
 
-            segmentation = wz.waterz(affinities, threshold, groundtruth, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
+            segmentations = waterz.waterz(affinities, seg_thresholds, merge_function='aff50_his256',                                
+              aff_threshold=aff_thresholds, gt=seg_gt)  
             segmentations.append(segmentation) 
 
         return segmentations
