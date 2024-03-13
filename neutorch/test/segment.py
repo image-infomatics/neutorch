@@ -28,46 +28,49 @@ class segment_methodology():
         self.ground_truth_paths = ground_truth_paths
 
     @classmethod
-    def agglomerate(self, affinity_paths, ground_truth_paths, **kwargs):
+    def agglomerate(self, affs_paths, gt_paths, **kwargs):
         segmentations = []
         
-        threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
-        for aff, gt in zip(affinity_paths, ground_truth_paths): 
+        aff_thresholds = [0.005, 0.995]
+        seg_thresholds = [0.1, 0.3, 0.6]
+
+        for aff, gt in zip(affs_paths, gt_paths): 
             groundtruth = load_chunk_or_volume(gt, **kwargs) 
-            affinities = load_chunk_or_volume(aff, **kwargs) 
+            affinity = load_chunk_or_volume(aff, **kwargs) 
 
-            assert affinities.shape[-3:] == groundtruth.shape[-3:]
+            assert affinity.shape[-3:] == groundtruth.shape[-3:]
 
-            segmentation = wz.waterz()
+            segmentation = wz.waterz(aff, seg_thresholds, merge_function='aff50_his256',                                
+              aff_threshold=aff_thresholds, gt=groundtruth)
             segmentations.append(segmentation) 
 
         return segmentations
     
     @classmethod
-    def evaluate(self, affinity_paths, ground_truth_paths, **kwargs):
+    def evaluate(self, affs_paths, gt_paths, **kwargs):
         segmentations = []
         
         threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
-        for aff, gt in zip(affinity_paths, ground_truth_paths): 
-            groundtruth = load_chunk_or_volume(gt, **kwargs) 
-            affinities = load_chunk_or_volume(aff, **kwargs) 
+        for aff, gt in zip(affs_paths, gt_paths): 
+            ground_truth = load_chunk_or_volume(gt, **kwargs) 
+            affinity = load_chunk_or_volume(aff, **kwargs) 
 
-            assert affinities.shape[-3:] == groundtruth.shape[-3:]
+            assert affinity.shape[-3:] == ground_truth.shape[-3:]
 
-            segmentation = wz.evaluate(groundtruth, affinities)
+            segmentation = wz.evaluate(ground_truth, affinity)
             segmentations.append(segmentation) 
 
         return segmentations
 
 if __name__ == '__main__':
 
-    affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
+    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
                   "/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5"]
 
-    ground_truth_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
+    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
                       "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
 
-    segmentation = segment_methodology.agglomerate(affinity_paths, ground_truth_paths) 
+    segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
     for seg in segmentation:
         seg 
