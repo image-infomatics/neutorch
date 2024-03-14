@@ -34,15 +34,15 @@ class segment_methodology():
         aff_thresholds = [0.005, 0.995]
         seg_thresholds = [0.1, 0.3, 0.6]
 
-        for aff, gt in zip(affs_paths, gt_paths): 
-            groundtruth = load_chunk_or_volume(gt, **kwargs) 
-            affinity = load_chunk_or_volume(aff, **kwargs) 
+        for aff_path, gt_path in zip(affs_paths, gt_paths): 
+            seg_gt = load_chunk_or_volume(gt_path, **kwargs) 
+            affinities = load_chunk_or_volume(aff_path, **kwargs) 
+            affinities /= 255.0 
+            
+            assert affinities.shape[-3:] == seg_gt.shape[-3:]
 
-            assert affinity.shape[-3:] == groundtruth.shape[-3:]
-
-            segmentation = wz.waterz(aff, seg_thresholds, merge_function='aff50_his256',                                
-              aff_threshold=aff_thresholds, gt=groundtruth)
-            segmentations.append(segmentation) 
+            seg = wz.waterz(affinities, seg_thresholds, merge_function='aff50_his256', aff_threshold=aff_thresholds, gt=seg_gt)
+            segmentations.append(seg) 
 
         return segmentations
     
