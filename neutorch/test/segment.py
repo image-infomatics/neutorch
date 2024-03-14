@@ -32,11 +32,11 @@ class segment_methodology():
         segmentations = []
         
         # aff_thresholds = [0.005, 0.995]
-        seg_thresholds = [0.1, 0.3, 0.6]
+        seg_thresholds = [0.1, 0.2, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
         for aff_path, gt_path in zip(affs_paths, gt_paths): 
             affs = load_chunk_or_volume(aff_path, **kwargs) 
-            gt = load_chunk_or_volume(gt_paths, **kwargs) 
+            gt = load_chunk_or_volume(gt_path, **kwargs) 
 
             assert affs.shape[-3:] == gt.shape[-3:]
 
@@ -44,6 +44,7 @@ class segment_methodology():
                                           fragments=None, aff_threshold_low=0.0001, 
                                           aff_threshold_high=0.9999, return_merge_history=True, 
                                           return_region_graph=False)
+            
             segmentations.append(segmentation) 
 
         return segmentations
@@ -75,7 +76,7 @@ if __name__ == '__main__':
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
     for seg in segmentation:
-        seg 
+        [x for x in seg] # segment
 
 
 
