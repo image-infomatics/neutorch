@@ -31,18 +31,20 @@ class segment_methodology():
     def agglomerate(self, affs_paths, gt_paths, **kwargs):
         segmentations = []
         
-        aff_thresholds = [0.005, 0.995]
+        # aff_thresholds = [0.005, 0.995]
         seg_thresholds = [0.1, 0.3, 0.6]
 
         for aff_path, gt_path in zip(affs_paths, gt_paths): 
-            seg_gt = load_chunk_or_volume(gt_path, **kwargs) 
-            affinities = load_chunk_or_volume(aff_path, **kwargs) 
-            affinities /= 255.0 
-            
-            assert affinities.shape[-3:] == seg_gt.shape[-3:]
+            affs = load_chunk_or_volume(aff_path, **kwargs) 
+            gt = load_chunk_or_volume(gt_paths, **kwargs) 
 
-            seg = wz.waterz(affinities, seg_thresholds, merge_function='aff50_his256', aff_threshold=aff_thresholds, gt=seg_gt)
-            segmentations.append(seg) 
+            assert affs.shape[-3:] == gt.shape[-3:]
+
+            segmentation = wz.agglomerate(affs, seg_thresholds, gt=gt, 
+                                          fragments=None, aff_threshold_low=0.0001, 
+                                          aff_threshold_high=0.9999, return_merge_history=True, 
+                                          return_region_graph=False)
+            segmentations.append(segmentation) 
 
         return segmentations
     
@@ -50,14 +52,14 @@ class segment_methodology():
     def evaluate(self, affs_paths, gt_paths, **kwargs):
         segmentations = []
         
-        threshold = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] 
-        for aff, gt in zip(affs_paths, gt_paths): 
-            ground_truth = load_chunk_or_volume(gt, **kwargs) 
-            affinity = load_chunk_or_volume(aff, **kwargs) 
+        seg_thresholds = [0.1, 0.3, 0.6]
+        for aff_path, gt_path in zip(affs_paths, gt_paths): 
+            affs = load_chunk_or_volume(aff_path, **kwargs) 
+            gt = load_chunk_or_volume(gt_paths, **kwargs) 
 
-            assert affinity.shape[-3:] == ground_truth.shape[-3:]
+            assert affs.shape[-3:] == gt.shape[-3:]
 
-            segmentation = wz.evaluate(ground_truth, affinity)
+            # segmentation = wz.evaluate(ground_truth, affinity)
             segmentations.append(segmentation) 
 
         return segmentations
