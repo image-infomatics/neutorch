@@ -40,7 +40,7 @@ class segment_methodology():
 
             assert affs.shape[-3:] == gt.shape[-3:]
 
-            segmentation = wz.agglomerate(affs, seg_thresholds, gt=gt, 
+            segmentation = wz.agglomerate(affs.array, seg_thresholds, gt=gt.array, 
                                           fragments=None, aff_threshold_low=0.0001, 
                                           aff_threshold_high=0.9999, return_merge_history=True, 
                                           return_region_graph=False)
