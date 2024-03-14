@@ -67,10 +67,10 @@ class segment_methodology():
 if __name__ == '__main__':
 
     affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5"]
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5"]
 
     gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
-                      "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
 
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
