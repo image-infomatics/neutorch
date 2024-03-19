@@ -6,18 +6,6 @@ from chunkflow.chunk import Chunk
 from chunkflow.volume import load_chunk_or_volume
 from chunkflow.volume import PrecomputedVolume, AbstractVolume
 
-"""                  
-affinity_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/train1/affstrain1_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train2/affstrain2_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train3/affstrain3_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train4/affstrain4_vol1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train5/affstrain5_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train6/affstrain6_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train7/affstrain7_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train8/affstrain8_vol1.h5", 
-                  "/mnt/home/mpaez/ceph/affsmaptrain/train9/affstrain9_vol1.h5" ]
-"""
-
 class segment_methodology():
     def __init__(self, 
                  affinity_paths: list,
@@ -39,7 +27,7 @@ class segment_methodology():
             gt = load_chunk_or_volume(gt_path, **kwargs) 
 
             assert affs.shape[-3:] == gt.shape[-3:]
-            #breakpoint()
+
             segmentation = wz.agglomerate(affs.array, seg_thresholds, gt=gt.array, 
                                           fragments=None, aff_threshold_low=0.0001, 
                                           aff_threshold_high=0.9999, return_merge_history=True, 
@@ -60,23 +48,20 @@ class segment_methodology():
 
             assert affs.shape[-3:] == gt.shape[-3:]
 
-            # segmentation = wz.evaluate(ground_truth, affinity)
+            segmentation = wz.evaluate(affs.array, gt.array)
             segmentations.append(segmentation) 
 
         return segmentations
 
 if __name__ == '__main__':
 
-    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5"]
-
-    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v3_filled.h5",
-                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v3_filled.h5"]
+    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5"]
+    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v1.h5"]
 
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
     for seg in segmentation:
-        [x for x in seg] # segment
+        [x for x in seg] 
 
 
 
