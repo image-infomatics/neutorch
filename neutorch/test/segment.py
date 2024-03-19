@@ -39,7 +39,7 @@ class segment_methodology():
             gt = load_chunk_or_volume(gt_path, **kwargs) 
 
             assert affs.shape[-3:] == gt.shape[-3:]
-
+            #breakpoint()
             segmentation = wz.agglomerate(affs.array, seg_thresholds, gt=gt.array, 
                                           fragments=None, aff_threshold_low=0.0001, 
                                           aff_threshold_high=0.9999, return_merge_history=True, 
@@ -70,8 +70,8 @@ if __name__ == '__main__':
     affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/experim/affstrain1_vol1.h5",
                   "/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5"]
 
-    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5", 
-                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/affs_160k.h5"]
+    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v3_filled.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v3_filled.h5"]
 
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
