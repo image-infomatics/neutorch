@@ -27,6 +27,8 @@ class segment_methodology():
             gt = load_chunk_or_volume(gt_path, **kwargs) 
 
             assert affs.shape[-3:] == gt.shape[-3:]
+            
+            breakpoint()
 
             segmentation = wz.agglomerate(affs.array, seg_thresholds, gt=gt.array, 
                                           fragments=None, aff_threshold_low=0.0001, 
