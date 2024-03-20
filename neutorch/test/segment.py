@@ -23,12 +23,9 @@ class segment_methodology():
         for aff_path, gt_path in zip(affs_paths, gt_paths): 
             affs = load_chunk_or_volume(aff_path, **kwargs) 
             gt = load_chunk_or_volume(gt_path, **kwargs) 
-
-            assert affs.shape[-3:] == gt.shape[-3:]
             
             breakpoint()
-
-            gt_array = gt.array.astype('float32')
+            gt_array = gt.array.astype(np.uint32)
             assert affs.shape[-3:] == gt.shape[-3:]
             assert affs.array.dtype == gt_array.dtype
 
