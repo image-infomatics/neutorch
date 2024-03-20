@@ -27,7 +27,6 @@ class segment_methodology():
             affs_array = affs.array.astype(np.float32)
             gt_array = gt.array.astype(np.uint32)
             assert affs.shape[-3:] == gt.shape[-3:]
-            #assert affs_array.dtype == gt_array.dtype
 
             segmentation = wz.agglomerate(affs_array, seg_thresholds, gt=gt_array, 
                                           fragments=None, aff_threshold_low=0.0001, 
@@ -46,10 +45,9 @@ class segment_methodology():
             affs = load_chunk_or_volume(aff_path, **kwargs) 
             gt = load_chunk_or_volume(gt_path, **kwargs) 
 
-            affs_array = affs.array.astype(np.uint32)
+            affs_array = affs.array.astype(np.float32)
             gt_array = gt.array.astype(np.uint32)
             assert affs.shape[-3:] == gt.shape[-3:]
-            assert affs_array.dtype == gt_array.dtype
 
             segmentation = wz.agglomerate(affs_array, gt_array)
             segmentations.append(segmentation) 
@@ -64,7 +62,6 @@ if __name__ == '__main__':
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
 
     for seg in segmentation:
-        breakpoint() 
         [x for x in seg] 
 
 
