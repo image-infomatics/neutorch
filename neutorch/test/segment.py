@@ -16,10 +16,9 @@ class segment_methodology():
         self.ground_truth_paths = ground_truth_paths
 
     @classmethod
-    def agglomerate(self, affs_paths, gt_paths, **kwargs):
+    def agglomerate(self, affs_paths, gt_paths, thresholds, **kwargs):
         segmentations = []
         
-        seg_thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
         for aff_path, gt_path in zip(affs_paths, gt_paths): 
             affs = load_chunk_or_volume(aff_path, **kwargs) 
             gt = load_chunk_or_volume(gt_path, **kwargs) 
@@ -28,7 +27,7 @@ class segment_methodology():
             gt_array = gt.array.astype(np.uint32)
             assert affs.shape[-3:] == gt.shape[-3:]
 
-            segmentation = wz.agglomerate(affs_array, seg_thresholds, gt=gt_array, 
+            segmentation = wz.agglomerate(affs_array, thresholds, gt=gt_array, 
                                           fragments=None, aff_threshold_low=0.0001, 
                                           aff_threshold_high=0.9999, return_merge_history=True, 
                                           return_region_graph=False)
@@ -59,7 +58,9 @@ if __name__ == '__main__':
     affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5",]
     gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v1.h5",]
 
-    segmentation = segment_methodology.agglomerate(affs_paths, gt_paths) 
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+    segmentation = segment_methodology.agglomerate(affs_paths, gt_paths, thresholds) 
 
     for seg in segmentation:
         [x for x in seg] 
