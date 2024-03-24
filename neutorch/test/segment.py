@@ -55,20 +55,20 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
-    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_96000_affs01700.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_96000_affs04900.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07338.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07580.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07800.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs09300.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs12350.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs13170_2.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs31.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs32.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs33.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs41.h5"
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_96000_affs1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_96000_affs2.h5",
+    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_28000_affs01700.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_28000_affs04900.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07338.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07580.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07800.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs09300.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs12350.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs13170_2.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_28000_affs31.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_28000_affs32.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_28000_affs33.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_28000_affs41.h5"
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_28000_affs1.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_28000_affs2.h5",
                   ]
     
     gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/seg_v2.h5",
