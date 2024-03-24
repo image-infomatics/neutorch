@@ -55,8 +55,37 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
-    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample2/affstrain2_28000_vol3.h5",]
-    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v1.h5",]
+    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_96000_affs01700.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_96000_affs04900.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07338.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07580.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs07800.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs09300.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs12350.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_96000_affs13170_2.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs31.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs32.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs33.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/58_bmembrane/train2_96000_affs41.h5"
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_96000_affs1.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_96000_affs2.h5",
+                  ]
+    
+    gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/seg_v2.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/mito_seg_zyx_4900-5156_3000-3256_6240-6496.h5"
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07580/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07800/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_09300/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_12350/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/31_test_3072-3584_5120-5632_8196-8708/seg_zyx_3072-3584_5120-5632_8196-8708.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/32_test_5120-5632_5632-6144_10240-10752/seg_zyx_5120-5632_5632-6144_10240-10752",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/33_test_2560-3072_5632-6144_8704-9216/seg_zyx_2560-3072_5632-6144_8704-9216.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/58_broken_membrane/41_test_2560-3584_5120-6144_8192-9216/seg_zyx_2560-3584_5120-6144_8192-9216.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/seg_v1.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/seg_v2.h5",
+                ]
 
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
