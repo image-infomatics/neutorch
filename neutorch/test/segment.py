@@ -92,9 +92,13 @@ if __name__ == '__main__':
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths, thresholds) 
-
+    
+    results = []
     for seg in segmentation:
-        [x for x in seg] 
-
-
+        result = [x for x in seg] 
+            
+        data1 = result[0][1]
+        results.append(data1)
+    
+    breakpoint()
 
