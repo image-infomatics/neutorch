@@ -93,10 +93,33 @@ if __name__ == '__main__':
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     segmentation = segment_methodology.agglomerate(affs_paths, gt_paths, thresholds) 
-
-    for seg in segmentation:
-        [x for x in seg] 
-
-    "plots"
     
+    results = []
+    for seg in segmentation:
+        result = [x for x in seg] 
+            
+        data1 = result[0][1]
+        results.append(data1)
+    
+    x = np.array(thresholds) #threshold values
 
+    v_rand_split = np.zeros(len(x))
+    v_rand_merge = np.zeros(len(x))
+    v_info_split = np.zeros(len(x))
+    v_info_merge = np.zeros(len(x))
+
+    for i in range(len(results)):
+        v_rand_split[i] = results[i]['V_Rand_split']
+        v_rand_merge[i] = results[i]['V_Rand_merge']
+        v_info_split[i] = results[i]['V_Info_split']
+        v_info_merge[i] = results[i]['V_Info_merge']
+
+    plt.plot(x, v_rand_split , label = "V_Rand_split") 
+    plt.plot(x, v_rand_merge, label = "V_Rand_merge") 
+    plt.legend()
+    plt.show()
+
+    plt.plot(x, v_info_split, label = "V_Info_split") 
+    plt.plot(x, v_info_merge, label = "V_Info_merge") 
+    plt.legend() 
+    plt.show()
