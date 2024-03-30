@@ -1,5 +1,6 @@
 import waterz as wz
 import numpy as np
+import matplotlib.pyplot as plt
 
 from chunkflow.lib.cartesian_coordinate import Cartesian 
 from chunkflow.chunk import Chunk
@@ -74,7 +75,7 @@ if __name__ == '__main__':
                   ]
     
     gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/seg_v2.h5",
-                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/mito_seg_zyx_4900-5156_3000-3256_6240-6496.h5",
+                "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/mito_seg_zyx_4900-5156_3000-3256_6240-6496.h5"
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/seg_v1.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07580/seg_v1.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07800/seg_v1.h5",
@@ -96,5 +97,6 @@ if __name__ == '__main__':
     for seg in segmentation:
         [x for x in seg] 
 
-
+    "plots"
+    
 
