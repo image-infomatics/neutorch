@@ -103,16 +103,11 @@ if __name__ == '__main__':
     
     results = []
     for seg in segmentation:
-        data = [x for x in seg] 
-    
-        data1 = data[0][1]
-        results.append(data1)
-
-    """
-    cfg_file = '/mnt/home/jwu/wasp/jwu/15_rna_granule_net/11/results.txt'
-    with open(cfg_file, "w") as file:
-        cfg = CfgNode.load_cfg(file)
-    cfg.freeze()
-    """
+        datas = [x for x in seg] 
+        
+        result = []
+        for data in datas: 
+            result.append(data)
+        results.append(result)
      
     print(results)
