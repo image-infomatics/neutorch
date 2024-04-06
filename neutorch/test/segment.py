@@ -108,8 +108,6 @@ if __name__ == '__main__':
         data1 = data[0][1]
         results.append(data1)
 
-    breakpoint()
-
     """
     cfg_file = '/mnt/home/jwu/wasp/jwu/15_rna_granule_net/11/results.txt'
     with open(cfg_file, "w") as file:
