@@ -114,7 +114,5 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(results)
     df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data.csv', index=False)
-    # with open("/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_results_ver1.txt", "w") as file:
-    #     file.write(results)
     
 
