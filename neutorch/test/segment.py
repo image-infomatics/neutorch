@@ -62,6 +62,8 @@ if __name__ == '__main__':
     import os
     from tqdm import tqdm
     from PIL import Image
+    import numpy as np
+    import pandas as pd
     from neutorch.data.dataset import load_cfg
     
     affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_28000_affs01700.h5",
@@ -107,7 +109,12 @@ if __name__ == '__main__':
         
         result = []
         for data in datas: 
-            result.append(data)
+            result.append(data[1])
         results.append(result)
-     
-    print(results)
+
+    df = pd.DataFrame(results)
+    df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data.csv', index=False)
+    # with open("/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_results_ver1.txt", "w") as file:
+    #     file.write(results)
+    
+
