@@ -13,14 +13,13 @@ class segment_methodology():
                  affinity_paths: list,
                  ground_truth_paths: list,
                  thresholds: list):
-    
         super().__init__()
         self.affinity_paths = affinity_paths
         self.ground_truth_paths = ground_truth_paths
         self.thresholds = thresholds
 
     @classmethod
-    def use_agglomerate(self, affs_paths, gt_paths, thresholds, **kwargs):
+    def agglomerate(self, affs_paths, gt_paths, thresholds, **kwargs):
         segmentations = []
         
         for aff_path, gt_path in zip(affs_paths, gt_paths): 
@@ -100,13 +99,12 @@ if __name__ == '__main__':
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_13170_2/label_v2.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/label_v2.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/label_v2.h5",
-    ]
+                ]
     
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     assert len(affs_paths) == len(gt_paths)
-    # breakpoint()
-    segmentation = segment_methodology.use_agglomerate(affs_paths, gt_paths, thresholds) 
+    segmentation = segment_methodology.agglomerate(affs_paths, gt_paths, thresholds) 
     
     results = []
     for seg in segmentation:
@@ -118,7 +116,5 @@ if __name__ == '__main__':
         results.append(result)
 
     df = pd.DataFrame(results)
-    breakpoint() 
-    # df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data_ver1.csv')
-    
-
+    # breakpoint() 
+    df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data_ver1.csv')
