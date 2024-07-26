@@ -58,23 +58,19 @@ class segment_methodology():
 
 if __name__ == '__main__':
 
-    import os
-    from tqdm import tqdm
-    from PIL import Image
     import numpy as np
     import pandas as pd
-    from neutorch.data.dataset import load_cfg
 
-    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_28000_affs01700.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_28000_affs04900.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07338.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07580.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs07800.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs09300.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs12350.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_28000_affs13170_2.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_28000_affs1.h5",
-                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_28000_affs2.h5",
+    affs_paths = ["/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_chkpt28000_affs_vol01700.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample3/train2_chkpt28000_affs_vol04900.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol07338.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol07580.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol07800.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol09300.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol12350.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample2/train2_chkpt28000_affs_vol13170_2.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_chkpt28000_affs_s1gt1.h5",
+                  "/mnt/home/mpaez/ceph/affsmaptrain/sample1/train2_chkpt28000_affs_s1gt2.h5",
                   ]
     
     gt_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/seg_v2.h5",
@@ -116,5 +112,3 @@ if __name__ == '__main__':
         results.append(result)
 
     df = pd.DataFrame(results)
-    # breakpoint() 
-    df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data_ver1.csv')
