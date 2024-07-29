@@ -95,7 +95,8 @@ if __name__ == '__main__':
         results.append(result)
 
     # df = pd.DataFrame(results)
-    breakpoint() 
+    print(results)
+    breakpoint()
     # df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data_ver1.csv')
     
 
