@@ -1,12 +1,8 @@
-import waterz as wz
 import numpy as np
+from waterz import agglomerate
 import matplotlib.pyplot as plt
 
-from chunkflow.lib.cartesian_coordinate import Cartesian 
-from chunkflow.chunk import Chunk
 from chunkflow.volume import load_chunk_or_volume
-from chunkflow.volume import PrecomputedVolume, AbstractVolume
-from yacs.config import CfgNode
 
 class segment_methodology():
     def __init__(self, 
@@ -31,10 +27,8 @@ class segment_methodology():
             gt_array = gt.array.astype(np.uint32)
             assert affs.shape[-3:] == gt.shape[-3:]
 
-            segmentation = wz.agglomerate(affs=affs_array, thresholds=thresholds, gt=gt_array, fragments=None, aff_threshold_low=0.0001, 
-                                          aff_threshold_high=0.9999, return_merge_history=True, 
-                                          return_region_graph=False)
-            
+            breakpoint()
+            segmentation = agglomerate(affs=affs_array, thresholds=thresholds, gt=gt_array, fragments=None, aff_threshold_low=0.0001, aff_threshold_high=0.9999, return_merge_history=True, return_region_graph=False)
             segmentations.append(segmentation) 
 
         return segmentations
@@ -64,7 +58,8 @@ if __name__ == '__main__':
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt1/seg_v1.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/11_wasp_sample1/s1gt2/seg_v2.h5",
                 ]
-
+    
+    """ Note: needs to be old affinity maps """
     label_paths = ["/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_01700/label_v3.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/13_wasp_sample3/vol_04900/label_v4.h5",
                 "/mnt/ceph/users/neuro/wasp_em/jwu/40_gt/12_wasp_sample2/vol_07338/label_v9.h5",
@@ -81,9 +76,7 @@ if __name__ == '__main__':
 
     assert len(affs_paths) == len(gt_paths) 
 
-    segmentation = segment_methodology.use_agglomerate(affinity_paths=affs_paths,  
-                                                        thresholds=thresholds,
-                                                        ground_truth_paths=gt_paths) 
+    segmentation = segment_methodology.use_agglomerate(affinity_paths=affs_paths, thresholds=thresholds, ground_truth_paths=gt_paths) 
     
     results = []
     for seg in segmentation:
@@ -94,9 +87,6 @@ if __name__ == '__main__':
             result.append(data[1])
         results.append(result)
 
-    # df = pd.DataFrame(results)
     print(results)
-    breakpoint()
-    # df.to_csv('/mnt/home/mpaez/ceph/affsmaptrain/evaluate/model_data_ver1.csv')
     
 
