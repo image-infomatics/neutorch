@@ -214,7 +214,7 @@ class SemanticDataset(DatasetBase):
         assert isinstance(target_chunk, Chunk)
         # label = (label > 0).to(torch.float32)
         return target_chunk
-    
+
 
 class OrganelleDataset(SemanticDataset):
     def __init__(self, samples: List[AbstractSample], 

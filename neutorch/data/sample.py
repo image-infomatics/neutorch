@@ -31,7 +31,40 @@ def load_chunks_or_volumes(paths: List[str]):
         image_vol = load_chunk_or_volume(image_path)
         inputs.append(image_vol)
     return inputs 
- 
+
+
+def cv_name_to_cvs(cv_name: str):
+    if cv_name not in cfg:
+        return None
+
+    cvs = []
+    if '|' in cfg[cv_name]:
+        # we separate multiple chunks with |
+        # the chunks should be picked randomly while sampling
+        fnames = cfg[cv_name].split('|')
+        cvs = []
+        for fname in fnames:
+            # remove the spaces
+            fname = fname.strip()
+            cv_path = os.path.join(sample_dir, fname)
+            print(f'loading {cv_path}')
+            cv = load_chunk_or_volume(cv_path)
+            if cv is None:
+                print(f'can not find file: {cv_path}')
+                return None
+            cvs.append(cv)
+    elif cfg[cv_name] == '':
+        print(f'sample directory {sample_dir} do not have this label, skipping.')
+        return None
+    else:  
+        cv_path = os.path.join(sample_dir, cfg[cv_name])
+        print(f'loading {cv_path}')
+        cv = load_chunk_or_volume(cv_path)
+        if cv is None:
+            return None
+        cvs.append(cv)
+    return cvs
+
 
 class AbstractSample(ABC):
     def __init__(self, output_patch_size: Cartesian, 
@@ -141,7 +174,7 @@ class Sample(AbstractSample):
         """Image sample with ground truth annotations
 
         Args:
-            inputs (List[Chunk]): different versions of image chunks normalized to 0-1
+            inputs (List[Chunk | PrecomputedVolume]): different versions of image chunks normalized to 0-1
             label (np.ndarray): training label
             patch_size (Cartesian): output patch size. this should be the patch_size before transform. 
                 the patch is expected to be shrinked to be the output patch size.
@@ -154,7 +187,8 @@ class Sample(AbstractSample):
                 direction is defined separately.
             is_train (bool): train mode or validation mode. We'll skip the transform in validation mode. 
         """
-        super().__init__(output_patch_size=output_patch_size, 
+        super().__init__(
+            output_patch_size=output_patch_size, 
             is_train=is_train)
         assert len(input_cvs) > 0
         assert input_cvs[0] is not None
@@ -235,37 +269,6 @@ class Sample(AbstractSample):
 
         sample_dir = os.path.join(sample_dir, cfg.dir)
 
-        def cv_name_to_cvs(cv_name: str):
-            if cv_name not in cfg:
-                return None
-
-            cvs = []
-            if '|' in cfg[cv_name]:
-                # we separate multiple chunks with |
-                # the chunks should be picked randomly while sampling
-                fnames = cfg[cv_name].split('|')
-                cvs = []
-                for fname in fnames:
-                    # remove the spaces
-                    fname = fname.strip()
-                    cv_path = os.path.join(sample_dir, fname)
-                    print(f'loading {cv_path}')
-                    cv = load_chunk_or_volume(cv_path)
-                    if cv is None:
-                        print(f'can not find file: {cv_path}')
-                        return None
-                    cvs.append(cv)
-            elif cfg[cv_name] == '':
-                print(f'sample directory {sample_dir} do not have this label, skipping.')
-                return None
-            else:  
-                cv_path = os.path.join(sample_dir, cfg[cv_name])
-                print(f'loading {cv_path}')
-                cv = load_chunk_or_volume(cv_path)
-                if cv is None:
-                    return None
-                cvs.append(cv)
-            return cvs
         
         label_cvs = []
         for cv_name in labels:
