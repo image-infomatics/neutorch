@@ -42,8 +42,6 @@ class Patch(object):
     def has_mask(self):
         return self.mask is not None
 
-
-
     def shrink(self, size: tuple):
         self.image.shrink(size)
         self.label.shrink(size)
