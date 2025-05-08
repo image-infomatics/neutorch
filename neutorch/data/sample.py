@@ -13,7 +13,7 @@ from yacs.config import CfgNode
 from chunkflow.lib.cartesian_coordinate import BoundingBox, Cartesian, BoundingBoxes
 from chunkflow.chunk import Chunk
 from chunkflow.volume import load_chunk_or_volume
-from chunkflow.lib.synapses import Synapses
+from chunkflow.synapses import Synapses
 from chunkflow.volume import PrecomputedVolume, AbstractVolume, \
     get_candidate_block_bounding_boxes_with_different_voxel_size
 
@@ -25,46 +25,13 @@ from neutorch.data.transform import *
 DEFAULT_PATCH_SIZE = Cartesian(128, 128, 128)
 DEFAULT_NUM_CLASSES = 1
 
+
 def load_chunks_or_volumes(paths: List[str]):
     inputs = []
     for image_path in paths:
         image_vol = load_chunk_or_volume(image_path)
         inputs.append(image_vol)
     return inputs 
-
-
-def cv_name_to_cvs(cv_name: str):
-    if cv_name not in cfg:
-        return None
-
-    cvs = []
-    if '|' in cfg[cv_name]:
-        # we separate multiple chunks with |
-        # the chunks should be picked randomly while sampling
-        fnames = cfg[cv_name].split('|')
-        cvs = []
-        for fname in fnames:
-            # remove the spaces
-            fname = fname.strip()
-            cv_path = os.path.join(sample_dir, fname)
-            print(f'loading {cv_path}')
-            cv = load_chunk_or_volume(cv_path)
-            if cv is None:
-                print(f'can not find file: {cv_path}')
-                return None
-            cvs.append(cv)
-    elif cfg[cv_name] == '':
-        print(f'sample directory {sample_dir} do not have this label, skipping.')
-        return None
-    else:  
-        cv_path = os.path.join(sample_dir, cfg[cv_name])
-        print(f'loading {cv_path}')
-        cv = load_chunk_or_volume(cv_path)
-        if cv is None:
-            return None
-        cvs.append(cv)
-    return cvs
-
 
 class AbstractSample(ABC):
     def __init__(self, output_patch_size: Cartesian, 
@@ -242,6 +209,12 @@ class Sample(AbstractSample):
     #         data = json.load(jf)
     #     return cls.from_dict(data, patch_size=patch_size)
 
+    @classmethod
+    def from_config_v6(cls, cfg: CfgNode | str):
+        if isinstance(cfg, str):
+            cfg = CfgNode.load_cfg(cfg)
+     
+
    
     @classmethod
     def from_config_v1(cls, cfg: CfgNode, output_patch_size: Cartesian):
@@ -268,7 +241,37 @@ class Sample(AbstractSample):
         # assert len(labels) == 1
 
         sample_dir = os.path.join(sample_dir, cfg.dir)
+        def cv_name_to_cvs(cv_name: str):
+            if cv_name not in cfg:
+                return None
 
+            cvs = []
+            if '|' in cfg[cv_name]:
+                # we separate multiple chunks with |
+                # the chunks should be picked randomly while sampling
+                fnames = cfg[cv_name].split('|')
+                cvs = []
+                for fname in fnames:
+                    # remove the spaces
+                    fname = fname.strip()
+                    cv_path = os.path.join(sample_dir, fname)
+                    print(f'loading {cv_path}')
+                    cv = load_chunk_or_volume(cv_path)
+                    if cv is None:
+                        print(f'can not find file: {cv_path}')
+                        return None
+                    cvs.append(cv)
+            elif cfg[cv_name] == '':
+                print(f'sample directory {sample_dir} do not have this label, skipping.')
+                return None
+            else:  
+                cv_path = os.path.join(sample_dir, cfg[cv_name])
+                print(f'loading {cv_path}')
+                cv = load_chunk_or_volume(cv_path)
+                if cv is None:
+                    return None
+                cvs.append(cv)
+            return cvs
         
         label_cvs = []
         for cv_name in labels:
@@ -972,10 +975,11 @@ if __name__ == '__main__':
     from tqdm import tqdm
     from PIL import Image
     from neutorch.data.dataset import load_cfg
-    
+       
     PATCH_NUM = 100
-    DEFAULT_PATCH_SIZE=Cartesian(32, 64, 64)
-    OUT_DIR = os.path.expanduser('~/dropbox/patches/')
+    DEFAULT_PATCH_SIZE=Cartesian(1, 64, 64)
+    OUT_DIR = os.path.expanduser('/tmp/patches/')
+    cfg = load_cfg('/home/jwu/projects/63_hcs-image-analysis/42-incucyte-images/sample.yaml')
     cfg = load_cfg('./config_mito.yaml')
 
     sample = SemanticSample.from_explicit_dict(
@@ -1004,3 +1008,18 @@ if __name__ == '__main__':
         lbl.save(os.path.join(OUT_DIR, f'{idx}_label.jpg'))
 
     
+#if __name__ == '__main__':
+#    import os
+#    from tqdm import tqdm
+#    sample  = Sample.from_config_v6('/home/jwu/projects/63_hcs-image-analysis/42-incucyte-images/sample.yaml')
+#    
+#    patch = sample.random_patch
+#
+#    import stackview
+#    stackview.slice(
+#        patch.image[0,0,:,:,:],
+#        continuous_update=True,
+#    )
+#    stackview.insight(
+#        patch.label[0,0,:,:,:],
+#    )
