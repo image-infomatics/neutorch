@@ -84,9 +84,9 @@ class AbstractSample(ABC):
             MaskBox(),
             # Perspective2D(),
             # RotateScale(probability=1.),
-            DropSection(probability=0.5),
-            Flip(),
-            Transpose(),
+            # DropSection(probability=0.5),
+            # Flip(),
+            # Transpose(),
             # MissAlignment(),
         ])
 
@@ -134,7 +134,7 @@ class AbstractSample(ABC):
 class Sample(AbstractSample):
     def __init__(self, 
             input_cvs: List[Chunk | PrecomputedVolume],
-            label_cvs: List[Chunk | PrecomputedVolume],
+            label_cv: Chunk | PrecomputedVolume,
             output_patch_size: Cartesian, 
             forbbiden_distance_to_boundary: tuple = None,
             is_train: bool = True) -> None:
@@ -170,7 +170,7 @@ class Sample(AbstractSample):
             # label = label.array
         
         self.input_cvs = input_cvs
-        self.label_cvs = label_cvs
+        self.label_cv = label_cv
         
         assert isinstance(self.output_patch_size, Cartesian)
         # for ps, ls in zip(self.output_patch_size, label.shape[-3:]):
@@ -190,16 +190,18 @@ class Sample(AbstractSample):
         if isinstance(input_cvs[0], list):
             input_shape = input_cvs[0][0].shape
         else:
-            breakpoint()
             input_shape = input_cvs[0].shape
         self.center_start = forbbiden_distance_to_boundary[:3]
         self.center_stop = tuple(s - d for s, d in zip(
             input_shape[-3:], forbbiden_distance_to_boundary[-3:]))
 
+        # print(f'transform: {self.transform}')
+        # print(f'transform shrink size: {self.transform.shrink_size}')
+        # print(f'center start: {self.center_start}, center stop: {self.center_stop}')
+
         self.center_start = Cartesian.from_collection(self.center_start)
         self.center_stop = Cartesian.from_collection(self.center_stop)
-
-        # for cs, cp in zip(self.center_start, self.center_stop):
+        # breakpoint()
         #     assert cp > cs, \
         #         f'center start: {self.center_start}, center stop: {self.center_stop}'
 
@@ -210,11 +212,22 @@ class Sample(AbstractSample):
     #     return cls.from_dict(data, patch_size=patch_size)
 
     @classmethod
-    def from_config_v6(cls, cfg: CfgNode | str):
+    def from_config_v6(cls, cfg: CfgNode | str, 
+                       output_patch_size: Cartesian = DEFAULT_PATCH_SIZE, 
+                       **kwargs):
         if isinstance(cfg, str):
             cfg = CfgNode.load_cfg(cfg)
-     
+    
+        images = []
+        for image_fname in cfg.images:
+            image_path = os.path.join(cfg.dir, image_fname)
+            image_vol = load_chunk_or_volume(image_path)
+            images.append(image_vol)
 
+        label_path = os.path.join(cfg.dir, cfg.label)
+        label = load_chunk_or_volume(label_path)
+
+        return cls(images, label, output_patch_size=output_patch_size, **kwargs)
    
     @classmethod
     def from_config_v1(cls, cfg: CfgNode, output_patch_size: Cartesian):
@@ -289,7 +302,10 @@ class Sample(AbstractSample):
             input_cvs.append(cvs)
         
         return cls(input_cvs, label_cvs, output_patch_size)
-        
+
+    @cached_property
+    def voxel_num(self):
+        return len(self.label)
 
     @property
     def random_patch_center(self):
@@ -302,9 +318,9 @@ class Sample(AbstractSample):
         return center
 
     def __len__(self):
-        # patch_num = np.prod(self.center_stop - self.center_start + 1)
-        # return patch_num
-        return 1024
+        patch_num = np.prod(self.center_stop - self.center_start + 1)
+        return patch_num
+        # return 1024
 
     def patch_from_center(self, center: Cartesian):
         start = center - self.patch_size_before_transform // 2
@@ -314,21 +330,8 @@ class Sample(AbstractSample):
         # this should be fixed later! 
         # input_patches = []
         assert len(self.input_cvs) == 1
-        assert len(self.label_cvs) == 1
         input_cv = self.input_cvs[0]
-        label_cv = self.label_cvs[0]
-
-        assert isinstance(input_cv, list)
-        assert isinstance(label_cv, list)
-
-        # if isinstance(input_cv, list):
-        if len(input_cv) > 1:
-            input_cv = random.choice(input_cv)
-        else:
-            input_cv = input_cv[0]
-
-        assert len(label_cv) == 1
-        label_cv = label_cv[0] 
+        label_cv = self.label_cv
 
         assert isinstance(input_cv, Chunk) or isinstance(input_cv, AbstractVolume), f'got {type(input_cv)}'
         assert isinstance(label_cv, Chunk) or isinstance(label_cv, AbstractVolume), f'got {type(label_cv)}'
@@ -628,7 +631,7 @@ class PostSynapseReference(AbstractSample):
 class SemanticSample(Sample):
     def __init__(self, 
             inputs: List[Chunk | AbstractVolume ], 
-            label: Union[np.ndarray, Chunk], 
+            label: Chunk | AbstractVolume, 
             output_patch_size: Cartesian,
             num_classes: int = DEFAULT_NUM_CLASSES,
             forbbiden_distance_to_boundary: tuple = None) -> None:
@@ -679,10 +682,6 @@ class SemanticSample(Sample):
             image_paths, label_path, output_patch_size, num_classes=num_classes)
 
     @cached_property
-    def voxel_num(self):
-        return len(self.label)
-
-    @cached_property
     def class_counts(self):
         return np.bincount(self.label.flatten(), minlength=self.num_classes)
     
@@ -702,7 +701,7 @@ class SemanticSample(Sample):
             MaskBox(),
             # Perspective2D(),
             # RotateScale(probability=1.),
-            DropSection(probability=1.),
+            # DropSection(probability=1.),
             Flip(),
             Transpose(),
             # MissAlignment(),

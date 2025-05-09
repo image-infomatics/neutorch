@@ -1,7 +1,7 @@
 # def test_sample():
 
 #%% 
-
+from typing import List
 import os
 from tqdm import tqdm
 from chunkflow.lib.cartesian_coordinate import Cartesian
@@ -25,6 +25,7 @@ def load_chunks_or_volumes(paths: List[str]):
     return inputs 
 
 # %%
+
 for chunk_name, chunk_meta in cfg.items():
     print(chunk_name)
     images = []
@@ -35,7 +36,12 @@ for chunk_name, chunk_meta in cfg.items():
 
     label_path = os.path.join(chunk_meta['dir'], chunk_meta['label'])
     label = load_chunk_or_volume(label_path)
-    labels = [label]
 
+
+sample = SemanticSample(images, label, output_patch_size=DEFAULT_PATCH_SIZE) 
     
+# %%
+patch = sample.random_patch
+print(patch)
+breakpoint()
 # %%
