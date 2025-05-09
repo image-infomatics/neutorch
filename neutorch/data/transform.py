@@ -166,6 +166,9 @@ class DropSection(SpatialTransform):
     def __init__(self, probability: float = DEFAULT_PROBABILITY):
         super().__init__(probability=probability)
 
+    def __str__(self) -> str:
+        return 'DropSection'
+
     def transform(self, patch: Patch):
         z = random.randrange(1, patch.shape[-3])
         patch.image.array[..., z:-1, :, :] = patch.image[..., z+1:, :, :]
