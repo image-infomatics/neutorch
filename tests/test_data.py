@@ -26,22 +26,31 @@ def load_chunks_or_volumes(paths: List[str]):
 
 # %%
 
-for chunk_name, chunk_meta in cfg.items():
-    print(chunk_name)
-    images = []
-    for image_fname in chunk_meta['images']:
-        image_path = os.path.join(chunk_meta['dir'], image_fname)
-        image_vol = load_chunk_or_volume(image_path)
-        images.append(image_vol)
+# for chunk_name, chunk_meta in cfg.items():
+#     print(chunk_name)
+#     images = []
+#     for image_fname in chunk_meta['images']:
+#         image_path = os.path.join(chunk_meta['dir'], image_fname)
+#         image_vol = load_chunk_or_volume(image_path)
+#         images.append(image_vol)
 
-    label_path = os.path.join(chunk_meta['dir'], chunk_meta['label'])
-    label = load_chunk_or_volume(label_path)
+#     label_path = os.path.join(chunk_meta['dir'], chunk_meta['label'])
+#     label = load_chunk_or_volume(label_path)
 
 
-sample = SemanticSample(images, label, output_patch_size=DEFAULT_PATCH_SIZE) 
-    
-# %%
+# sample = SemanticSample(images, label, output_patch_size=DEFAULT_PATCH_SIZE) 
+
+#%%
+samples = []
+for node in cfg.values():
+    sample = SemanticSample.from_config_v6(
+        node, 
+        output_patch_size=DEFAULT_PATCH_SIZE)
+    samples.append(sample)
+
+sample = samples[0]
+
 patch = sample.random_patch
 print(patch)
-breakpoint()
+# breakpoint()
 # %%

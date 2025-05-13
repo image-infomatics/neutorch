@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod 
 import random
+import math
 from typing import List, Union
 from functools import cached_property
 from copy import deepcopy
@@ -46,6 +47,11 @@ class AbstractSample(ABC):
             output_patch_size = Cartesian.from_collection(output_patch_size)
         self.output_patch_size = output_patch_size
         self.is_train = is_train
+
+    def label_to_target(self, label: Chunk ) -> Chunk:
+        # convert label to target
+        # for example, convert label to one-hot encoding
+        return label
 
     @property
     @abstractmethod
@@ -358,7 +364,9 @@ class Sample(AbstractSample):
         assert input_patch.ndim == 4
         assert label_patch.ndim == 4
 
-        return Patch(input_patch, label_patch)
+        target_patch = self.label_to_target(label_patch)
+
+        return Patch(input_patch, target_patch)
     
     @property
     def random_patch(self):
@@ -379,7 +387,7 @@ class Sample(AbstractSample):
     @cached_property
     def sampling_weight(self):
         """voxel number of label"""
-        weight = int(np.product(tuple(e-b for b, e in zip(
+        weight = int(math.prod(tuple(e-b for b, e in zip(
             self.center_start, self.center_stop))))
         
         # if len(np.unique(self.label)) == 1:

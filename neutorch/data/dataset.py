@@ -85,6 +85,23 @@ class DatasetBase(torch.utils.data.Dataset):
         self.samples = samples
 
     @classmethod
+    def from_config_v6(cls,
+            sample_config_files: List[str],
+            output_patch_size: Cartesian = Cartesian(128, 128, 128),
+            ):
+        samples = []
+        for sample_config_file in sample_config_files:
+            sample_cfg = load_cfg(sample_config_file)
+            for sample_node in sample_cfg.values():
+                sample = Sample.from_config_v6(
+                    sample_node,
+                    output_patch_size=output_patch_size,
+                )
+                if sample is not None:
+                    samples.append(sample)
+        return cls(samples)
+
+    @classmethod
     def from_config_v5(cls, 
             sample_config_files: List[str], 
             mode: str = 'training',
@@ -181,7 +198,7 @@ class SemanticDataset(DatasetBase):
     def __init__(self, samples: list):
             #patch_size: Cartesian = DEFAULT_PATCH_SIZE):
         super().__init__(samples)
-    
+
     @classmethod
     def from_config(cls, cfg: CfgNode, is_train: bool = True, **kwargs):
         """Construct a semantic dataset with chunk or volume
