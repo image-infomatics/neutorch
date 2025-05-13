@@ -21,6 +21,7 @@ setup(
         neutrain-affs=neutorch.train.affinity_map:main
         neutrain-affs-vol=neutorch.train.whole_brain_affinity_map:main
         neutrain-ba=neutorch.train.boundary_aug:main
+        neutrain-semantic-2d=neutorch.train.semantic_2d:main
     ''',
     classifiers=[
         'Development Status :: 4 - Beta',

@@ -199,7 +199,7 @@ class Model(nn.Sequential):
 
 
 if __name__ == '__main__':
-    model = Model(1, 1, kernel_size=(3, 3, 3))
-    input = torch.rand((1,1, 64, 64, 64), dtype=torch.float32)
+    model = Model(1, 1, kernel_size=(1, 3, 3))
+    input = torch.rand((1,1, 1, 64, 64), dtype=torch.float32)
     logits = model(input)
     assert logits.shape[1] == 1
