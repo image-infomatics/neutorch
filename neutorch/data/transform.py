@@ -193,7 +193,7 @@ class DropSection(SpatialTransform):
 class MaskBox(IntensityTransform):
     def __init__(self,
             probability: float = DEFAULT_PROBABILITY,
-            max_box_size: Cartesian = Cartesian(16,16,16),
+            max_box_size: Cartesian = Cartesian(1,16,16),
             max_density: float = 0.1,
             max_box_num: int = None):
         """make some black cubes in image patch
@@ -227,7 +227,8 @@ class MaskBox(IntensityTransform):
         for _ in range(self.box_num(patch.shape)):
             box_size = tuple(random.randint(1, s) for s in self.max_box_size)
             # randint is inclusive
-            start = tuple(random.randrange(1, t-b) for t, b in zip(patch.shape[-3:], box_size))
+            start = tuple(random.randrange(0, t-b+1) for t, b in \
+                          zip(patch.shape[-3:], box_size))
             if random.random() > 0.5:
                 box = np.random.rand(*box_size)
             else:

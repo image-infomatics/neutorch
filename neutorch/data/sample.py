@@ -364,9 +364,7 @@ class Sample(AbstractSample):
         assert input_patch.ndim == 4
         assert label_patch.ndim == 4
 
-        target_patch = self.label_to_target(label_patch)
-
-        return Patch(input_patch, target_patch)
+        return Patch(input_patch, label_patch)
     
     @property
     def random_patch(self):
@@ -378,6 +376,7 @@ class Sample(AbstractSample):
         # skip the transform in validation mode
         if self.is_train:
             self.transform(patch)
+        patch.label = self.label_to_target(patch.label)
         # print(f'patch size after transform: {patch.shape}')
         assert patch.shape[-3:] == self.output_patch_size, \
             f'get patch shape: {patch.shape}, expected patch size {self.output_patch_size}'

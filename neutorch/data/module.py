@@ -27,7 +27,6 @@ class IncucyteSample(SemanticSample):
             (label.array == 2).astype(np.float32),
             (label.array == 3).astype(np.float32),
         ], axis=0)
-        breakpoint()
         assert target.ndim == 4
         assert target.shape[0] == 3, 'label should have 3 channels'
         target = Chunk(target)
@@ -37,8 +36,6 @@ class IncucyteSample(SemanticSample):
 class IncucyteDataModule(L.LightningDataModule):
     def __init__(self, 
             cfg: str | CfgNode,
-            inputs: List[str] = ['images'],
-            labels: List[str] = ['label'],
             dataset_type: str = 'SemanticDataset',
             ) -> None:
         super().__init__()
@@ -93,38 +90,49 @@ class IncucyteDataModule(L.LightningDataModule):
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         num_workers = self.cfg.data.num_workers
         if num_workers == 0:
-            multiprocessing_context=None,
-            persistent_workers = False
+            dataloader = torch.utils.data.DataLoader(
+                self.training_dataset,
+                batch_size=self.cfg.train.batch_size,
+                num_workers = num_workers,
+                # prefetch_factor=2,
+                drop_last=False,
+                persistent_workers=False,
+            )
         else:
-            multiprocessing_context='spawn'
-            persistent_workers = True
-        return torch.utils.data.DataLoader(
-            self.training_dataset,
-            batch_size=self.cfg.train.batch_size,
-            num_workers = num_workers,
-            # prefetch_factor=2,
-            drop_last=False,
-            multiprocessing_context=multiprocessing_context,
-            persistent_workers=persistent_workers,
-        )
+            dataloader = torch.utils.data.DataLoader(
+                self.training_dataset,
+                batch_size=self.cfg.train.batch_size,
+                num_workers = num_workers,
+                # prefetch_factor=2,
+                drop_last=False,
+                multiprocessing_context='spawn',
+                persistent_workers=True,
+            )
+        return dataloader
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         num_workers = self.cfg.data.num_workers
         if num_workers == 0:
-            multiprocessing_context=None
-            persistent_workers = False
+            dataloader = torch.utils.data.DataLoader(
+                self.validation_dataset,
+                batch_size=self.cfg.train.batch_size,
+                num_workers = num_workers,
+                # prefetch_factor=2,
+                drop_last=False,
+                persistent_workers=False,
+            )
         else:
-            multiprocessing_context='spawn'
-            persistent_workers = True
-        return torch.utils.data.DataLoader(
-            self.validation_dataset,
-            batch_size=self.cfg.train.batch_size,
-            num_workers = num_workers,
-            # prefetch_factor=2,
-            drop_last=False,
-            multiprocessing_context=multiprocessing_context,
-            persistent_workers=persistent_workers,
-        )
+            dataloader = torch.utils.data.DataLoader(
+                self.validation_dataset,
+                batch_size=self.cfg.train.batch_size,
+                num_workers = num_workers,
+                # prefetch_factor=2,
+                drop_last=False,
+                multiprocessing_context='spawn',
+                persistent_workers=True,
+            )
+        return dataloader
+
 
 class Wasp(L.LightningDataModule):
     def __init__(self, 
