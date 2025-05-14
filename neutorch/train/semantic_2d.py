@@ -34,11 +34,7 @@ def main(config_file: str, devices: int, accelerator: str,
          strategy: str, log_every_n_steps: int, chkpt_file: str):
     cfg = load_cfg(config_file)
 
-    datamodule = IncucyteDataModule(
-        cfg,
-        inputs = cfg.data.inputs,
-        labels = cfg.data.labels,
-    )
+    datamodule = IncucyteDataModule(cfg)
 
     # torch.distributed.init_process_group(backend="nccl")
     trainer = pl.Trainer(

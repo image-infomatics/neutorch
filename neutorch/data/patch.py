@@ -15,27 +15,27 @@ def expand_to_4d(arr: np.ndarray):
         raise ValueError(f'only support array dimension of 3,4,5, but get {arr.ndim}')
 
 class Patch(object):
-    def __init__(self, image: Chunk, target: Chunk,
+    def __init__(self, image: Chunk, label: Chunk,
             mask: Chunk = None):
-        """A patch of volume containing both image and target. 
+        """A patch of volume containing both image and label. 
 
         Args:
             image (Chunk): image
-            target (Chunk): target
+            label (Chunk): label
         """
-        assert image.shape[-3:] == target.shape[-3:], \
-            f'image shape: {image.shape}, target shape: {target.shape}'
-        assert image.voxel_offset == target.voxel_offset
+        assert image.shape[-3:] == label.shape[-3:], \
+            f'image shape: {image.shape}, label shape: {label.shape}'
+        assert image.voxel_offset == label.voxel_offset
         if mask is not None:
-            mask.shape == target.shape
+            mask.shape == label.shape
             assert mask.ndim == 3
             assert mask.voxel_offset == image.voxel_offset
         
         image.array = expand_to_4d(image.array)
-        target.array = expand_to_4d(target.array)
+        label.array = expand_to_4d(label.array)
         
         self.image = image
-        self.target = target  
+        self.label = label  
         self.mask = mask
 
     @cached_property
@@ -44,7 +44,7 @@ class Patch(object):
 
     def shrink(self, size: tuple):
         self.image.shrink(size)
-        self.target.shrink(size)
+        self.label.shrink(size)
         if self.has_mask:
             self.mask.shrink(size)
             
@@ -70,8 +70,7 @@ class Patch(object):
                 arr /= 255.
             return arr
         self.image.array = _normalize(self.image.array)
-        self.target.array = _normalize(self.target.array)
-
+        self.label.array = _normalize(self.label.array)
 
 
 def collate_batch(batch):

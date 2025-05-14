@@ -22,8 +22,8 @@ def pad_size(kernel_size: Tuple[int, int, int], mode: str):
         raise ValueError('invalide mode option, only support valid, same or full')
 
 class Conv(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, 
-            kernel_size: Tuple[int, int, int], 
+    def __init__(self, in_channels: int, out_channels: int,
+            kernel_size: Tuple[int, int, int],
             stride: int = 1, bias: bool = False):
         super().__init__()
         padding = pad_size(kernel_size, 'same')
@@ -37,8 +37,7 @@ class Conv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-
-def conv(in_channels: int, out_channels: int, 
+def conv(in_channels: int, out_channels: int,
          kernel_size: Tuple[int, int, int], stride: int = 1,
          bias: bool = False):
     padding = pad_size(kernel_size, 'same')
@@ -73,12 +72,44 @@ class ConvBlock(nn.Sequential):
         self.add_module('res', ResBlock(out_channels, kernel_size))
         self.add_module('post', BNReLUConv(out_channels, out_channels, kernel_size))
 
+class TrilinearUp(nn.Module):
+    """Caffe style trilinear upsampling.
+
+    Currently everything's hardcoded and only supports upsampling factor of 2.
+    Note that this implementation is isotropic compared with BilinearUp.
+    """
+    def __init__(self, channels: int):
+        super().__init__()
+        self.groups = channels
+        self._init_weights()
+
+    def _init_weights(self):
+        weight = torch.Tensor(self.groups, 1, 1, 4, 4)
+        width = weight.size(-1)
+        hight = weight.size(-2)
+        depth = weight.size(-3)
+        assert width == hight
+        f = float(math.ceil(width / 2.0))
+        c = float(width - 1) / (2.0 * f)
+        for w in range(width):
+            for h in range(hight):
+                for d in range(depth):
+                    weight[...,d,h,w] = (1 - abs(w/f - c)) * (1 - abs(h/f - c)) * (1 - abs(d/f - c))
+        self.register_buffer('weight', weight)
+
+    def forward(self, x):
+        x = nn.functional.conv_transpose3d(x, self.weight,
+            stride=(1,2,2), padding=(0,1,1), groups=self.groups
+        )
+        return x
+
+
 
 class UpBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: Tuple[int, int, int]):
         super().__init__()
         self.up = nn.Sequential(
-            nn.ConvTranspose3d(in_channels, out_channels, kernel_size=kernel_size, stride=2),
+            TrilinearUp(in_channels),
             conv(in_channels, out_channels, kernel_size),
         )
 
@@ -100,9 +131,9 @@ class UpConvBlock(nn.Module):
         return x
 
 
-class RSUNet(nn.Module):
-    """Residual Symmetric UNet
-    
+class Core(nn.Module):
+    """Core of Residual Symmetric UNet
+
     Residual: there are residual blocks in convolutional chain.
     Symmetric: the left and right side is the same
     UNet: 3D UNet
@@ -112,21 +143,21 @@ class RSUNet(nn.Module):
         assert len(width) > 1
         for w in width:
             assert w >= 1
-            
+
         depth = len(width) - 1
         self.in_channels = width[0]
         self.input_conv = ConvBlock(width[0], width[0], kernel_size)
         self.down_convs = nn.ModuleList()
         for d in range(depth):
             self.down_convs.append( nn.Sequential(
-                nn.MaxPool3d((2, 2, 2)),
+                nn.MaxPool3d((1, 2, 2)),
                 ConvBlock(width[d], width[d+1], kernel_size)
             ))
-        
+
         self.up_convs = nn.ModuleList()
         for d in reversed(range(depth)):
             self.up_convs.append(UpConvBlock(width[d+1], width[d], kernel_size))
-        
+
         self.out_channels = width[0]
         self._init_weights()
 
@@ -141,10 +172,10 @@ class RSUNet(nn.Module):
         for down_conv in self.down_convs:
             skip.append(x)
             x = down_conv(x)
-        
+
         for up_conv in self.up_convs:
             x = up_conv(x, skip.pop())
-        
+
         return x
 
 
@@ -184,17 +215,17 @@ class Model(nn.Sequential):
     """
     Residule Symmetric U-Net with down/upsampling in/output.
     """
-    def __init__(self, in_channels: int, out_channels: int, 
+    def __init__(self, in_channels: int, out_channels: int,
                  kernel_size: Tuple[int, int, int], width: list=WIDTH):
         super().__init__()
 
         # assert len(in_spec)==1, "model takes a single input"
         # in_channels = list(in_spec.values()[0][-4])
         # matches the RSUNet output
-        # out_channels = width[0] 
+        # out_channels = width[0]
 
         self.add_module('in', InputBlock(in_channels, width[0], kernel_size))
-        self.add_module('core', RSUNet(kernel_size=kernel_size, width=width))
+        self.add_module('core', Core(kernel_size=kernel_size, width=width))
         self.add_module('out', OutputBlock(width[0], out_channels, kernel_size))
 
 
@@ -203,3 +234,4 @@ if __name__ == '__main__':
     input = torch.rand((1,1, 1, 64, 64), dtype=torch.float32)
     logits = model(input)
     assert logits.shape[1] == 1
+    print(f'logits shape: {logits.shape}')
