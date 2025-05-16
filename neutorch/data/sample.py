@@ -324,9 +324,12 @@ class Sample(AbstractSample):
         return center
 
     def __len__(self):
-        patch_num = np.prod(self.center_stop - self.center_start + 1)
-        return patch_num
-        # return 1024
+        """this number is related with the saving frequency of 
+        checkpoint and tensorboard logger.
+        """
+        # patch_num = np.prod(self.center_stop - self.center_start + 1)
+        # return patch_num
+        return 1000
 
     def patch_from_center(self, center: Cartesian):
         start = center - self.patch_size_before_transform // 2
