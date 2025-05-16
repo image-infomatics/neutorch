@@ -43,8 +43,8 @@ class IncucyteDataModule(L.LightningDataModule):
         if isinstance(cfg, str):
             cfg = load_cfg(cfg)
         self.cfg = cfg
-        self.inputs = inputs
-        self.labels = labels
+        self.inputs = cfg.data.inputs
+        self.labels = cfg.data.labels
         self.dataset_type = eval(dataset_type)
 
         print('loading samples ...')
