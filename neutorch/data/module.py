@@ -33,6 +33,32 @@ class IncucyteSample(SemanticSample):
         target.set_properties(label.properties)
         return target
 
+class IncucyteNeuronSample(SemanticSample):
+    def __init__(self,
+            inputs: List[Chunk | AbstractVolume],
+            label: Chunk | AbstractVolume,
+            output_patch_size: Cartesian = Cartesian(1, 128, 128),
+            ) -> None:
+        super().__init__(
+            inputs,
+            label,
+            output_patch_size=output_patch_size,
+        )
+
+    def label_to_target(self, label: Chunk ) -> Chunk:
+        # convert label to target
+        target = np.concatenate([
+            (label.array <= 1).astype(np.float32),
+            (label.array == 2).astype(np.float32),
+            (label.array == 3).astype(np.float32),
+        ], axis=0)
+        assert target.ndim == 4
+        assert target.shape[0] == 3, 'label should have 3 channels'
+        target = Chunk(target)
+        target.set_properties(label.properties)
+        return target
+
+
 class IncucyteDataModule(L.LightningDataModule):
     def __init__(self, 
             cfg: str | CfgNode,
