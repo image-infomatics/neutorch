@@ -15,7 +15,7 @@ Convolutional Neural Network training for Neuron segmentation and synapse detect
 - [x] Training using whole terabyte or even petabyte of image volume.
 - [x] Training using multiple version of image datasets as data augmentation.
 - [x] Data augmentation without zero-filling. The loaded patches before transformation/augmentation could be larger than the final training patch size. This size expansion is determined according to the transformation used. This careful adjustment of patch size ensures that there is no zero padding in the transformation and the distribution is closer to original dataset.
-
+- [x] Sampling patch outside a predefined mask. The masked region could not be labeled manually due to a variaty of issues, such as dense neurite and image quality issue.
 # Install
     python setup.py install
 

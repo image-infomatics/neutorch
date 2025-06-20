@@ -1,6 +1,6 @@
+*lightning_logs/
 *.npy
 *.chkpt
-*.yaml
 *events.out.tfevents.*
 .secrets.baseline
 *.code-workspace

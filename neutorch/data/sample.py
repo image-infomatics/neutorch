@@ -717,6 +717,22 @@ class SemanticSample(Sample):
             # MissAlignment(),
         ])
 
+class IncucyteNeuronSample(SemanticSample):
+    def __init__(self, 
+            inputs: List[Chunk | AbstractVolume ], 
+            label: Chunk | AbstractVolume, 
+            output_patch_size: Cartesian,
+            num_classes: int = DEFAULT_NUM_CLASSES,
+            forbbiden_distance_to_boundary: tuple = None) -> None:
+        super().__init__(inputs, label, output_patch_size, forbbiden_distance_to_boundary)
+        # number of classes
+        self.num_classes = num_classes
+
+    @classmethod
+    def from_config(cls, cfg, output_patch_size = DEFAULT_PATCH_SIZE, **kwargs):
+        
+        return super().from_config_v6(cfg, output_patch_size, **kwargs)
+
 
 class OrganelleSample(SemanticSample):
     def __init__(self, 
